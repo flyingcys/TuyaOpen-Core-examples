@@ -1,0 +1,9 @@
+# tuyaopen-core-examples/linux 配置入口。
+# 用法（需要 kconfiglib：pip3 install --user kconfiglib）：
+#   cd <本目录> && KCONFIG_CONFIG=./.config menuconfig      # 交互配置
+#   cd <本目录> && KCONFIG_CONFIG=./.config olddefconfig    # 全默认生成
+# 生成的 .config 由 examples 的 CMake 自动读取（CONFIG_xxx=y 会归一化为 ON）。
+mainmenu "tuyaopen-core linux target"
+
+# core 的统一开关入口（符号与 CMake 开关一一对应、默认值一致）
+rsource "tuyaopen-core/Kconfig"

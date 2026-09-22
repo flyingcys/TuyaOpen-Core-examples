@@ -1,0 +1,3 @@
+dependencies:
+  tuyaopen-core:
+    git: https://github.com/flyingcys/TuyaOpen-Core.git

@@ -1,0 +1,3 @@
+# tuyaopen-core 开关默认值（有线绑定的 demo 需要二维码输出）
+CONFIG_ENABLE_WIRED=y
+CONFIG_ENABLE_QRCODE=y

@@ -1,0 +1,3 @@
+[submodule "linux/tuyaopen-core"]
+	path = linux/tuyaopen-core
+	url = https://github.com/flyingcys/TuyaOpen-Core.git
