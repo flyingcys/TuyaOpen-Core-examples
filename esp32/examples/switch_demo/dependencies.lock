@@ -1,0 +1,18 @@
+dependencies:
+  idf:
+    source:
+      type: idf
+    version: 5.4.0
+  tuyaopen-core:
+    component_hash: a16e9d905ecefeb2cda88bb11bb07870dc49ada3b50fc40431a4a1f2b45b4f2b
+    dependencies: []
+    source:
+      git: https://github.com/flyingcys/TuyaOpen-Core.git
+      path: .
+      type: git
+    version: 5be88d94627cd7de4d4667f50982100b3ba02a66
+direct_dependencies:
+- tuyaopen-core
+manifest_hash: 9e97b18c76be00341192110cd5957f94da211d20a9cf2b0bd1e071fe39654567
+target: esp32s3
+version: 2.0.0

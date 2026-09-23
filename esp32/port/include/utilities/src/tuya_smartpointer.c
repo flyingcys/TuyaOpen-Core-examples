@@ -55,7 +55,7 @@ SMARTPOINTER_T *tuya_smartpointer_create(void *data, const uint32_t data_len, co
     SP_CREATE_LOCK(sp_data);
 
     if (TRUE == malk) {
-        sp_data->data = (int8_t *)sp_data + sizeof(SMARTPOINTER_T);
+        sp_data->data = (uint8_t *)sp_data + sizeof(SMARTPOINTER_T);
         memcpy(sp_data->data,data,data_len);
     } else {
         sp_data->data = data;

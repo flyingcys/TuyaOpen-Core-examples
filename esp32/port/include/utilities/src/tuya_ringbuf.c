@@ -5,6 +5,10 @@
 
 #define RINGBUFF_FREE     tkl_system_free
 #define RINGBUFF_MALLOC   tkl_system_malloc
+#if defined(TUYA_PSARM_SUPPORT) && defined(TUYA_PSARM_SUPPORT)
+#define RINGBUFF_PSRAM_FREE     tkl_system_psram_free
+#define RINGBUFF_PSRAM_MALLOC   tkl_system_psram_malloc
+#endif
 
 #define GET_MIN(x, y)   ((x) < (y) ? (x) : (y))
 #define GET_MAX(x, y)   ((x) > (y) ? (x) : (y))
@@ -15,7 +19,6 @@
 */
 typedef struct {
     RINGBUFF_TYPE_E type;   ///< ringbuff type
-    uint8_t  reserved;      ///< Reserved
     uint32_t in;            ///< position of input
     uint32_t out;           ///< position of output
     uint32_t len;           ///< length of buff data
@@ -47,7 +50,15 @@ OPERATE_RET tuya_ring_buff_create(uint32_t len, RINGBUFF_TYPE_E type, TUYA_RINGB
         return OPRT_INVALID_PARM;
     }
     
+#if defined(TUYA_PSARM_SUPPORT) && defined(TUYA_PSARM_SUPPORT)
+    if(type & TY_RINGBUF_PSRAM_FLAG) {
+        rbuff = (__RINGBUFF_T *)RINGBUFF_PSRAM_MALLOC(RINGBUFF_SIZE+len);
+    } else {
+        rbuff = (__RINGBUFF_T *)RINGBUFF_MALLOC(RINGBUFF_SIZE+len);
+    }
+#else
     rbuff = (__RINGBUFF_T *)RINGBUFF_MALLOC(RINGBUFF_SIZE+len);
+#endif
     if(rbuff == NULL) {
         return OPRT_MALLOC_FAILED;
     }
@@ -66,7 +77,15 @@ OPERATE_RET tuya_ring_buff_free(TUYA_RINGBUFF_T ringbuff)
     if (rbuff == NULL) {
         return OPRT_INVALID_PARM;
     }
+#if defined(TUYA_PSARM_SUPPORT) && defined(TUYA_PSARM_SUPPORT)
+    if(rbuff->type & TY_RINGBUF_PSRAM_FLAG) {
+        RINGBUFF_PSRAM_FREE(rbuff);
+    } else {
+        RINGBUFF_FREE(rbuff);
+    }
+#else
     RINGBUFF_FREE(rbuff);
+#endif
 
     return OPRT_OK;
 }
@@ -209,7 +228,7 @@ uint32_t tuya_ring_buff_discard(TUYA_RINGBUFF_T ringbuff, uint32_t len)
     uint32_t used_len;
     __RINGBUFF_T *rbuff = (__RINGBUFF_T *)ringbuff;
 
-    if (rbuff == NULL || len == 0) {
+    if(rbuff == NULL || len == 0) {
         return 0;
     }
 

@@ -135,7 +135,6 @@ typedef enum {
     TUYA_WLAN_REASON_4WAYS_HANDSHAKE_TIMEOUT,        ///< Timeout of 4-way handshake
     TUYA_WLAN_REASON_INACTIVITY_DISCONNECT,          ///< Station disconnected to AP beacause of in activity
     TUYA_WLAN_REASON_DEAUTH_LEAVING,                 ///< Deauth the station because it was left
-    TUYA_WLAN_REASON_AP_UNABLE_TO_HANDLE_NEW_STA,    ///< Association denied because AP is unable to handle additional associated STAs
     TUYA_WLAN_REASON_MAX,
 } WF_DISCONN_REASON_E;
 
@@ -143,6 +142,7 @@ typedef enum {
 typedef enum {
     WFI_BEACON_CMD,
     WFI_GET_LAST_DISCONN_REASON,                     ///< Get WiFi last disconnect reason
+    WFI_AP_GET_STALIST_CMD,
 } WF_IOCTL_CMD_E;
 
 typedef struct {
@@ -150,8 +150,18 @@ typedef struct {
     uint8_t     channel;
     NW_MAC_S    mac;
     uint32_t      vsie_data_len;
-    int8_t     *vsie_data;
+    uint8_t     *vsie_data;
 } WF_IOCTL_BEACON_T;
+
+typedef struct {
+    NW_IP_S sta_ip;
+    NW_MAC_S sta_mac;
+} WF_STA_INFO_S;
+
+typedef struct {
+    WF_STA_INFO_S  *array;
+    uint32_t          num;
+} WF_STA_LIST_S;
 
 /**
  * @brief callback function: SNIFFER_CALLBACK
@@ -257,16 +267,6 @@ OPERATE_RET tkl_wifi_get_cur_channel(uint8_t *chan);
 OPERATE_RET tkl_wifi_set_sniffer(const BOOL_T en, const SNIFFER_CALLBACK cb);
 
 /**
- * @brief set wifi ip info.when wifi works in
- *        ap+station mode, wifi has two ips.
- *
- * @param[in]       wf     wifi function type
- * @param[in]       ip     the ip addr info
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tkl_wifi_set_ip(WF_IF_E wf, NW_IP_S *ip);
-
-/**
  * @brief get wifi ip info.when wifi works in
  *        ap+station mode, wifi has two ips.
  * 
@@ -277,13 +277,15 @@ OPERATE_RET tkl_wifi_set_ip(WF_IF_E wf, NW_IP_S *ip);
 OPERATE_RET tkl_wifi_get_ip(const WF_IF_E wf, NW_IP_S *ip);
 
 /**
- * @brief wifi set ip
+ * @brief set wifi ip info.when wifi works in
+ *        ap+station mode, wifi has two ips.
  *
  * @param[in]       wf     wifi function type
  * @param[in]       ip     the ip addr info
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tkl_wifi_set_ip(const WF_IF_E wf, NW_IP_S *ip);
+OPERATE_RET tkl_wifi_set_ip(WF_IF_E wf, NW_IP_S *ip);
+
 
 /**
  * @brief set wifi mac info.when wifi works in
@@ -351,7 +353,7 @@ OPERATE_RET tkl_wifi_set_country_code(const COUNTRY_CODE_E ccode);
  *
  * @return true on success. faile on failure
  */
-OPERATE_RET tkl_wifi_set_rf_calibrated(void);
+BOOL_T tkl_wifi_set_rf_calibrated(void);
 
 /**
  * @brief set wifi lowpower mode
@@ -421,6 +423,7 @@ OPERATE_RET tkl_wifi_send_mgnt(const uint8_t *buf, const uint32_t len);
  */
 OPERATE_RET tkl_wifi_register_recv_mgnt_callback(const BOOL_T enable, const WIFI_REV_MGNT_CB recv_cb);
 
+
 /**
  * @brief wifi ioctl
  *
@@ -429,6 +432,11 @@ OPERATE_RET tkl_wifi_register_recv_mgnt_callback(const BOOL_T enable, const WIFI
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
 OPERATE_RET tkl_wifi_ioctl(WF_IOCTL_CMD_E cmd,  void *args);
+
+
+
+OPERATE_RET tkl_wifi_get_all_sta_info(WF_STA_INFO_S **sta_ary, uint32_t *num);
+
 
 
 #ifdef __cplusplus

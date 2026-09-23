@@ -1,0 +1,54 @@
+# 连接层开关：有线、WiFi（含低功耗）、蓝牙
+
+menu "connectivity"
+
+    config ENABLE_WIRED
+        bool "ENABLE_WIRED: wired (Ethernet) support"
+        default n
+        help
+            Build tal_wired, the wired netmgr source and the wired TKL
+            implementation in port. Maps to CONFIG_ENABLE_WIRED.
+
+    config ENABLE_WIFI
+        bool "ENABLE_WIFI: WiFi support"
+        default n
+        help
+            Build tal_wifi, the WiFi netcfg/netmgr sources and the
+            wpa_supplicant based TKL implementation in port. Maps to
+            CONFIG_ENABLE_WIFI. Runtime needs wpa_supplicant.
+
+    rsource "tal_wifi_ulp/Kconfig"
+
+    config ENABLE_BLUETOOTH
+        bool "ENABLE_BLUETOOTH: BLE support"
+        default n
+        help
+            Build tal_bluetooth, the BLE cloud sources and the BlueZ based
+            TKL implementation in port (needs glib/bluez/dbus at build
+            time). Maps to CONFIG_ENABLE_BLUETOOTH.
+
+    if ENABLE_BLUETOOTH
+
+        config ENABLE_NIMBLE
+            bool "ENABLE_NIMBLE: bundle the NimBLE host stack"
+            default n
+            help
+                Compile the NimBLE sources bundled in tal_bluetooth instead
+                of relying on the port BLE stack only. Maps to
+                CONFIG_ENABLE_NIMBLE.
+
+        if ENABLE_NIMBLE
+            config TUYA_HS_BLE_HOST_TASK_PRIORITY
+                int "TUYA_HS_BLE_HOST_TASK_PRIORITY: bt host task priority"
+                range 0 100
+                default 9
+
+            config TUYA_HS_BLE_HOST_STACK_SIZE
+                int "TUYA_HS_BLE_HOST_STACK_SIZE: bt host task stack size"
+                range 0 10000
+                default 5120
+        endif
+
+    endif
+
+endmenu

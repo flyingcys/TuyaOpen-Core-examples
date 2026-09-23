@@ -1,0 +1,10 @@
+# 通用层开关：加密库、KV 存储、系统参数
+
+menu "core common"
+
+    rsource "libtls/Kconfig"
+    rsource "tal_kv/Kconfig"
+    rsource "tal_system/Kconfig"
+    rsource "common/qrcode/Kconfig"
+
+endmenu

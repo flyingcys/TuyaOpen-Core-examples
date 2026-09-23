@@ -1,0 +1,30 @@
+config ENABLE_AI_COMPONENTS
+    bool "enable ai components"
+    default n
+    help
+        Master switch for the tuya.ai component collection (ai_main, ai_agent,
+        ai_audio, ai_mcp, ai_video, utility). Leave off for projects that do
+        not need it so it is not compiled in. Maps to the CMake switch
+        CONFIG_ENABLE_AI_COMPONENTS.
+
+# 服务层（tuya_ai_service 及 svc_* 参数、ENABLE_TUYA_CODEC 系列）始终参与配置
+rsource "tuya_ai_service/Kconfig"
+
+if (ENABLE_AI_COMPONENTS)
+menu "configure ai components"
+    choice
+        prompt "choose ai language"
+        default ENABLE_AI_LANGUAGE_CHINESE
+
+        config ENABLE_AI_LANGUAGE_CHINESE
+            bool "Chinese"
+
+        config ENABLE_AI_LANGUAGE_ENGLISH
+            bool "English"
+    endchoice
+
+    rsource "ai_audio/Kconfig"
+    rsource "ai_mcp/Kconfig"
+    rsource "ai_video/Kconfig"
+endmenu
+endif

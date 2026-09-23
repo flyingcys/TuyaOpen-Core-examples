@@ -1,0 +1,27 @@
+# tuyaopen-core 统一 Kconfig 入口
+#
+# 作为子模块使用：宿主工程在自己的 Kconfig 里 rsource 本文件即可，例如
+#     rsource "third_party/tuyaopen-core/Kconfig"
+# （rsource 的路径相对本文件所在目录，宿主放在任何位置都可。）
+#
+# 生成的 .config 形如 CONFIG_ENABLE_WIFI=y，可直接传给本仓库的 CMake：
+#     cmake -DCONFIG_ENABLE_WIFI=y ...
+# TuyaOpenOptions.cmake 会把 y/1/on 归一化为 ON。
+# 布尔开关的默认值与 cmake/TuyaOpenOptions.cmake 中的 option() 保持一致。
+
+menu "tuyaopen-core"
+
+    rsource "core-common/Kconfig"
+    rsource "core-communication/Kconfig"
+    rsource "core-iot/Kconfig"
+    rsource "core-ai/Kconfig"
+    rsource "core-p2p/Kconfig"
+
+    config LITTLE_END
+        bool "LITTLE_END: target is little-endian"
+        default y
+        help
+            Target byte order, consumed by the pjproject port (mapped to
+            PJ_IS_LITTLE_ENDIAN). Leave on for the LINUX port.
+
+endmenu

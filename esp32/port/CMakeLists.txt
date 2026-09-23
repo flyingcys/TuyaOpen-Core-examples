@@ -1,20 +1,22 @@
 # tuyaopen-port（ESP32 TKL）构建。
-# 前置：先 add_subdirectory(tuyaopen-core)（开关与 tuyaopen-headers 就绪）。
-# 系统库（pthread 等）由 esp-idf 组件体系提供，此处不链接。
+# 前置：先处理 tuyaopen-core 组件（开关与 tuyaopen-headers 就绪）。
+# 布局对齐 linux port：include/（域头 + utilities 实现）+ src/（TKL 实现）。
+# 系统库与 esp-idf 组件依赖由组件包装（examples 的 components/tuyaopen-port）声明。
 if(TARGET tuyaopen-port)
     return()
 endif()
 
 set(PORT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
-set(PORT_CHIP_ROOT "${PORT_ROOT}")
 
 set(_port_srcs)
 file(GLOB_RECURSE _port_srcs CONFIGURE_DEPENDS
     "${PORT_ROOT}/include/*.c"
-    "${PORT_CHIP_ROOT}/*.c"
+    "${PORT_ROOT}/src/*.c"
 )
 if(_port_srcs)
     list(FILTER _port_srcs EXCLUDE REGEX "/CMakeFiles/")
+    # init/src 属 TuyaOpen auto-init 机制，本仓库无调用方，不编
+    list(FILTER _port_srcs EXCLUDE REGEX "/include/init/src/")
     list(REMOVE_DUPLICATES _port_srcs)
 endif()
 
@@ -28,7 +30,7 @@ endif()
 set(_port_incs)
 file(GLOB_RECURSE _port_hdrs CONFIGURE_DEPENDS
     "${PORT_ROOT}/include/*.h"
-    "${PORT_CHIP_ROOT}/*.h"
+    "${PORT_ROOT}/src/*.h"
 )
 if(_port_hdrs)
     list(FILTER _port_hdrs EXCLUDE REGEX "/CMakeFiles/")
@@ -52,7 +54,7 @@ else()
     if(_port_incs)
         target_include_directories(tuyaopen-port INTERFACE ${_port_incs})
     endif()
-    message(WARNING "tuyaopen-port has no C sources yet; fill in the ESP32 TKL implementation")
+    message(WARNING "tuyaopen-port has no C sources; no TKL implementation will be linked")
 endif()
 
 # port 头（含静态 tuya_kconfig.h）自注入 core 的环境基底
@@ -66,4 +68,3 @@ unset(_port_hdrs)
 unset(_port_hdr)
 unset(_port_hdr_dir)
 unset(PORT_ROOT)
-unset(PORT_CHIP_ROOT)

@@ -1,0 +1,5 @@
+add_subdirectory(tal_wifi)
+add_subdirectory(tal_wired)
+add_subdirectory(tal_bluetooth)
+add_subdirectory(tal_cellular)
+add_subdirectory(tal_wifi_ulp)

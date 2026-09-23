@@ -41,10 +41,10 @@ typedef struct {
     SYS_TICK_T          (*get_tick_count)           (void);
     SYS_TIME_T          (*get_millisecond)          (void);
     int               (*get_random)               (uint32_t range);
-    TUYA_RESET_REASON_E (*get_reset_reason)        (char** describe);
+    TUYA_RESET_REASON_E  (*get_reset_reason)         (char** describe);
     void                (*sleep)                    (const uint32_t num_ms);
     OPERATE_RET         (*cpu_sleep_mode_set)       (BOOL_T enable, TUYA_CPU_SLEEP_MODE_E mode);
-    OPERATE_RET         (*get_cpu_info)             (TUYA_CPU_INFO_T **cpu_ary, int *cpu_cnt);
+    OPERATE_RET         (*get_cpu_info) (TUYA_CPU_INFO_T **cpu_ary, int *cpu_cnt);
     //! output     
     void              (*log_output)               (const char *log, ...);
     OPERATE_RET         (*log_close)                (void);
@@ -117,7 +117,7 @@ typedef struct {
     int               (*fflush)                   (TUYA_FILE file);
     int               (*fileno)                   (TUYA_FILE file);
     int               (*fsync)                    (int fd);
-    int               (*faccess)                  (const char *filepath,IN int mode);
+    int               (*faccess)                  (const char *filepath,int mode);
     int               (*fgetsize)                 (const char *filepath);
     int               (*fgetc)                    (TUYA_FILE file);
     int               (*ftruncate)                (int fd, uint64_t length);

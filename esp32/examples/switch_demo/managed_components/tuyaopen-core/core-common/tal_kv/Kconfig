@@ -1,0 +1,13 @@
+# KV 存储层开关
+
+menu "configure tal_kv"
+
+    config ENABLE_FILE_SYSTEM
+        bool "ENABLE_FILE_SYSTEM: use the platform file system for kv"
+        default n
+        help
+            Use tkl_fs for kv persistence. Turn off to compile the bundled
+            littlefs in tal_kv instead (default). Maps to the CMake switch
+            CONFIG_ENABLE_FILE_SYSTEM.
+
+endmenu

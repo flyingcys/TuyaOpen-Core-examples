@@ -60,4 +60,28 @@
 #define AI_SESSION_MAX_NUM 2
 #endif
 
+#ifndef AI_HEARTBEAT_INTERVAL
+#define AI_HEARTBEAT_INTERVAL 120
+#endif
+
+#ifndef AI_MAX_FRAGMENT_LENGTH
+#define AI_MAX_FRAGMENT_LENGTH 8192
+#endif
+
+#ifndef AI_CLIENT_STACK_SIZE
+#define AI_CLIENT_STACK_SIZE 4096
+#endif
+
+#ifndef AI_PACKET_SECURITY_LEVEL
+#define AI_PACKET_SECURITY_LEVEL 4
+#endif
+
+#ifndef AI_VERSION
+#define AI_VERSION 2
+#endif
+
+#ifndef AI_SUB_VERSION
+#define AI_SUB_VERSION 1
+#endif
+
 #endif /* TUYA_KCONFIG_H */

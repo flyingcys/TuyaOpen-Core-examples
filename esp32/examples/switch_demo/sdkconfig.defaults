@@ -1,3 +1,17 @@
-# tuyaopen-core 开关默认值（有线绑定的 demo 需要二维码输出）
-CONFIG_ENABLE_WIRED=y
+# tuyaopen-core 开关（经 core 的 Kconfig.projbuild 进 menuconfig）
+CONFIG_ENABLE_WIFI=y
 CONFIG_ENABLE_QRCODE=y
+# 用 esp-idf 的 mbedtls，不编 core 自带副本（避免符号冲突）
+CONFIG_ENABLE_PLATFORM_MBEDTLS=y
+
+# 目标与分区
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# tuya_tls 需要的 mbedtls 能力
+CONFIG_MBEDTLS_THREADING_C=y
+CONFIG_MBEDTLS_THREADING_ALT=y
+CONFIG_MBEDTLS_PSK_MODES=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_PSK=y
