@@ -13,6 +13,91 @@
 
 #include "tuya_cloud_types.h"
 
+/**
+ * @brief Set timeout option of socket fd
+ *
+ * @param[in] fd: file descriptor
+ * @param[in] ms_timeout: timeout in ms
+ * @param[in] type: transfer type, receive or send
+ *
+ * @return OPRT_OK on success. Others on error
+ */
+OPERATE_RET tkl_net_set_timeout(const int fd, const int ms_timeout, const TUYA_TRANS_TYPE_E type);
+
+/**
+ * @brief Set buffer_size option of socket fd
+ *
+ * @param[in] fd: file descriptor
+ * @param[in] buf_size: buffer size in byte
+ * @param[in] type: transfer type, receive or send
+ *
+ * @return OPRT_OK on success. Others on error
+ */
+OPERATE_RET tkl_net_set_bufsize(const int fd, const int buf_size, const TUYA_TRANS_TYPE_E type);
+
+/**
+ * @brief Enable reuse option of socket fd
+ *
+ * @param[in] fd: file descriptor
+ *
+ * @return OPRT_OK on success. Others on error
+ */
+OPERATE_RET tkl_net_set_reuse(const int fd);
+
+/**
+ * @brief Disable nagle option of socket fd
+ *
+ * @param[in] fd: file descriptor
+ *
+ * @return OPRT_OK on success. Others on error
+ */
+OPERATE_RET tkl_net_disable_nagle(const int fd);
+
+/**
+ * @brief Enable broadcast option of socket fd
+ *
+ * @param[in] fd: file descriptor
+ *
+ * @return OPRT_OK on success. Others on error
+ */
+OPERATE_RET tkl_net_set_broadcast(const int fd);
+
+/**
+ * @brief Set keepalive option of socket fd to monitor the connection
+ *
+ * @param[in] fd: file descriptor
+ * @param[in] alive: enable or disable keepalive
+ * @param[in] idle: idle seconds before probing starts
+ * @param[in] intr: probe interval seconds
+ * @param[in] cnt: probe count
+ *
+ * @return OPRT_OK on success. Others on error
+ */
+OPERATE_RET tkl_net_set_keepalive(int fd, const BOOL_T alive, const uint32_t idle, const uint32_t intr,
+                                  const uint32_t cnt);
+
+/**
+ * @brief Get the local address a socket fd is bound to
+ *
+ * @param[in] fd: file descriptor
+ * @param[out] addr: local ip address in host byte order, may be NULL
+ * @param[out] port: local port in host byte order, may be NULL
+ *
+ * @return OPRT_OK on success. Others on error
+ */
+OPERATE_RET tkl_net_getsockname(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port);
+
+/**
+ * @brief Get the address of the peer connected to a socket fd
+ *
+ * @param[in] fd: file descriptor
+ * @param[out] addr: peer ip address in host byte order, may be NULL
+ * @param[out] port: peer port in host byte order, may be NULL
+ *
+ * @return OPRT_OK on success. Others on error
+ */
+OPERATE_RET tkl_net_getpeername(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port);
+
 #ifdef __cplusplus
 extern "C" {
 #endif

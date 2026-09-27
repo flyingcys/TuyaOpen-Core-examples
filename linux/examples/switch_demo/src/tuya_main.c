@@ -11,27 +11,18 @@
  */
 
 #include "cJSON.h"
-#include "netmgr.h"
+#include "mqtt_bind.h"
 #include "tal_api.h"
-#include "tkl_output.h"
+#include "tal_network.h"
+#include "tal_wired.h"
+#include "tal_api_ops.h"
 #include "tuya_config.h"
 #include "tuya_iot.h"
 #include "tuya_iot_dp.h"
+#include "tuya_lan.h"
 #include <assert.h>
-#if defined(ENABLE_WIFI) && (ENABLE_WIFI == 1)
-#include "netconn_wifi.h"
-#endif
-#if defined(ENABLE_WIRED) && (ENABLE_WIRED == 1)
-#include "netconn_wired.h"
-#endif
-#if defined(ENABLE_CELLULAR) && (ENABLE_CELLULAR == 1)
-#include "netconn_cellular.h"
-#endif
-#if defined(ENABLE_LIBLWIP) && (ENABLE_LIBLWIP == 1)
-#include "lwip_init.h"
-#endif
 
-#include "reset_netcfg.h"
+// #include "reset_netcfg.h"
 
 #if defined(ENABLE_QRCODE) && (ENABLE_QRCODE == 1)
 #include "qrencode_print.h"
@@ -55,7 +46,10 @@ tuya_iot_license_t license;
  */
 void user_log_output_cb(const char *str)
 {
-    tkl_log_output(str);
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->log_output) {
+        ops->log_output(str);
+    }
 }
 
 /**
@@ -115,6 +109,10 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
         qrcode_string_output(buffer, user_log_output_cb, 0);
 #endif
     } break;
+    /* 已激活设备连上云端 MQTT 后启动局域网服务（原由 netmgr 定时器在激活后带起） */
+    case TUYA_EVENT_MQTT_CONNECTED:
+        tuya_lan_enable();
+        break;
     /* RECV upgrade request */
     case TUYA_EVENT_UPGRADE_NOTIFY:
         user_upgrade_notify_on(client, event->value.asJSON);
@@ -202,18 +200,44 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
     }
 }
 
+/* 链路状态：由 port 层（tkl_wired）状态回调维护，core 经 user_network_check 拉取 */
+static volatile bool s_link_up = false;
+
+/**
+ * @brief port 链路状态回调：tkl_wired 注册后立即上报当前状态，
+ * 之后周期轮询、状态变化时再次回调
+ *
+ * @param stat 当前链路状态
+ * @return void
+ */
+static void __user_link_status_cb(WIRED_STAT_E stat)
+{
+    s_link_up = (TKL_WIRED_LINK_UP == stat);
+
+    /* 同步活动 IP：link up ≠ IP 就绪（tkl_wired 仅查 IFF_UP，不代表已获地址）。
+     * 出站 socket 的源地址绑定与 LAN 广播包里的本机 IP 均取自此值；取不到置 0 表示不绑定 */
+    TUYA_IP_ADDR_T addr = 0;
+    if (s_link_up) {
+        NW_IP_S ip = {0};
+        if (OPRT_OK == tal_wired_get_ip(&ip) && ip.ip[0] != '\0') {
+            addr = tal_net_str2addr(ip.ip);
+        }
+    }
+    tal_network_card_set_active_ip(addr);
+
+    PR_NOTICE("link status changed to %d, link %s", stat, s_link_up ? "UP" : "DOWN");
+}
+
 /**
  * @brief user defined network check callback, it will check the network every
- * 1sec, in this demo it alwasy return ture due to it's a wired demo
+ * 1sec by reading the link status maintained by the port layer
  *
  * @return true
  * @return false
  */
 bool user_network_check(void)
 {
-    netmgr_status_e status = NETMGR_LINK_DOWN;
-    netmgr_conn_get(NETCONN_AUTO, NETCONN_CMD_STATUS, &status);
-    return status == NETMGR_LINK_DOWN ? false : true;
+    return s_link_up;
 }
 
 void user_main(void)
@@ -225,7 +249,7 @@ void user_main(void)
     /* Before the log: every log line timestamps itself through the time
      * service, whose mutex this creates. */
     tal_time_service_init();
-    tal_log_init(TAL_LOG_LEVEL_DEBUG, 1024, (TAL_LOG_OUTPUT_CB)tkl_log_output);
+    tal_log_init(TAL_LOG_LEVEL_DEBUG, 1024, user_log_output_cb);
 
     PR_NOTICE("Application information:");
     PR_NOTICE("App version:         %s", PROJECT_VERSION);
@@ -238,7 +262,7 @@ void user_main(void)
     tal_sw_timer_init();
     tal_workq_init();
 
-    reset_netconfig_start();
+    // reset_netconfig_start();
 
     /* 直接使用编译期凭据（tuya_config.h 或 -D 注入） */
     license.uuid    = TUYA_OPENSDK_UUID;
@@ -255,32 +279,20 @@ void user_main(void)
                                 });
     assert(rt == OPRT_OK);
 
-#if defined(ENABLE_LIBLWIP) && (ENABLE_LIBLWIP == 1)
-    TUYA_LwIP_Init();
-#endif
+    /* 链路状态接入：port（tkl_wired）立即上报当前状态并轮询变化，
+     * 替代原 netmgr_init → netconn_wired_open 的状态回调注册 */
+    tal_wired_set_status_cb(__user_link_status_cb);
 
-    // network init
-    netmgr_type_e type = 0;
-#if defined(ENABLE_WIFI) && (ENABLE_WIFI == 1)
-    type |= NETCONN_WIFI;
-#endif
-#if defined(ENABLE_WIRED) && (ENABLE_WIRED == 1)
-    type |= NETCONN_WIRED;
-#endif
-#if defined(ENABLE_CELLULAR) && (ENABLE_CELLULAR == 1)
-    type |= NETCONN_CELLULAR;
-#endif
-    netmgr_init(type);
-
-#if defined(ENABLE_WIFI) && (ENABLE_WIFI == 1)
-    netmgr_conn_set(NETCONN_WIFI, NETCONN_CMD_NETCFG, &(netcfg_args_t){.type = NETCFG_TUYA_BLE | NETCFG_TUYA_WIFI_AP});
-#endif
+    /* token 获取 port：mqtt_bind 直连绑定，MQTT 连上后派发
+     * TUYA_EVENT_DIRECT_MQTT_CONNECTED 打印二维码，
+     * 替代原 netconn_wired_open 里的 token port 注册 */
+    tuya_iot_token_get_port_register(&client, mqtt_bind_token_get);
 
     PR_DEBUG("tuya_iot_init success");
     /* Start tuya iot task */
     tuya_iot_start(&client);
 
-    reset_netconfig_check();
+    // reset_netconfig_check();
 
     for (;;) {
         /* Loop to receive packets, and handles client keepalive */

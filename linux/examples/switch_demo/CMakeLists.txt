@@ -57,6 +57,34 @@ include(${TUYAOPEN_CORE_DIR}/tuyaopen-core.cmake)
 # 2) port：自包含子目录（自建 tuyaopen-port 并把头注入 tuyaopen-headers）
 add_subdirectory(${TUYAOPEN_PORT_DIR} ${CMAKE_BINARY_DIR}/tuyaopen-port)
 
+# 3) 应用自带组件：qrcode（原 core 模块随应用走，CONFIG_ENABLE_QRCODE 门控）
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/qrcode)
+
+# 4) 应用自带组件：tal_wired（原 core-communication 模块随应用走，CONFIG_ENABLE_WIRED 门控）
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tal_wired)
+
+# 5) 应用自带组件：tal_bluetooth（原 core-communication 模块随应用走，CONFIG_ENABLE_BLUETOOTH 门控）
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tal_bluetooth)
+
+# core 内源码（如 p2p 的 pj_tuyaos_local_ip.c）在 ENABLE_WIRED 下引 tal_wired.h，
+# 而 pjproject 注册早于本目录、无法走 target 依赖，头路径经 tuyaopen-headers 全局注入
+if(TARGET tal_wired)
+    target_include_directories(tuyaopen-headers INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tal_wired/include>
+    )
+endif()
+
+# core 内源码（iot-core/ble/ble_mgr.c）在 ENABLE_BLUETOOTH 下引 tal_bluetooth.h，
+# 头路径经 tuyaopen-headers 全局注入（ble/ 源码挂 tuyaopen-headers，无 target 依赖）
+if(TARGET tal_bluetooth)
+    target_include_directories(tuyaopen-headers INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tal_bluetooth/include>
+        # ble_netcfg.h 无条件引已删的 tkl_wifi.h（仅用 SSID/PASSWD 定长常量），
+        # 常量兼容替身见 ble_port_compat/tkl_wifi.h 头注
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ble_port_compat>
+    )
+endif()
+
 file(GLOB _switch_demo_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
 )
@@ -81,13 +109,36 @@ endif()
 # app 链接：一个组同时包 core 库与 port（解析 TAL/云服务与 TKL 的循环引用）；
 # 组外的 tuyaopen-port 提供头路径，tuyaopen-headers 提供开关宏注入与 port 头
 # （app 自己的源码也要看见 ENABLE_* 与 TKL 头）
-target_link_libraries(switch_demo PRIVATE
+set(_switch_demo_link
     -Wl,--start-group
     ${TUYAOPEN_CORE_LIBS}
     $<TARGET_FILE:tuyaopen-port>
-    -Wl,--end-group
-    tuyaopen-port
-    tuyaopen-headers)
+)
+# tal_wired 依赖组内 tuyaopen-port 的 tkl_wired_* 符号，进组保证解析顺序
+if(TARGET tal_wired)
+    list(APPEND _switch_demo_link $<TARGET_FILE:tal_wired>)
+endif()
+# tal_bluetooth 依赖组内 tuyaopen-port 的 tkl_ble_* 符号，进组保证解析顺序
+if(TARGET tal_bluetooth)
+    list(APPEND _switch_demo_link $<TARGET_FILE:tal_bluetooth>)
+endif()
+list(APPEND _switch_demo_link -Wl,--end-group tuyaopen-port tuyaopen-headers)
+target_link_libraries(switch_demo PRIVATE ${_switch_demo_link})
+unset(_switch_demo_link)
+
+# tal_wired / tal_bluetooth 头经各自 PUBLIC include 传递
+# （demo 源码 #include "tal_wired.h" / ble 触达的 tal_bluetooth.h 保持可达）
+if(TARGET tal_wired)
+    target_link_libraries(switch_demo PRIVATE tal_wired)
+endif()
+if(TARGET tal_bluetooth)
+    target_link_libraries(switch_demo PRIVATE tal_bluetooth)
+endif()
+
+# qrcode 无循环依赖，组外链接；开关关闭时目标不注册，跳过
+if(TARGET qrcode)
+    target_link_libraries(switch_demo PRIVATE qrcode)
+endif()
 
 if(ENABLE_ASAN)
     target_compile_options(switch_demo PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)

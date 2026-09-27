@@ -38,87 +38,13 @@ void *tkl_system_malloc(SIZE_T size);
 */
 void tkl_system_free(void* ptr);
 
-/**
- * @brief Allocate and clear the memory
- * 
- * @param[in]       nitems      the numbers of memory block
- * @param[in]       size        the size of the memory block
- *
- * @return the memory address calloced
- */
-void *tkl_system_calloc(size_t nitems, size_t size);
-
-/**
- * @brief Re-allocate the memory
- * 
- * @param[in]       nitems      source memory address
- * @param[in]       size        the size after re-allocate
- *
- * @return void
- */
-void *tkl_system_realloc(void* ptr, size_t size);
-
-/**
-* @brief Get system free heap size
-*
-* @param none
-*
-* @return heap size
-*/
-int tkl_system_get_free_heap_size(void);
-
-/**
-* @brief Alloc memory of system
-*
-* @param[in] size: memory size
-*
-* @note This API is used to alloc memory of system.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-VOID_T* tkl_system_psram_malloc(CONST SIZE_T size);
-
-/**
-* @brief Free memory of system
-*
-* @param[in] ptr: memory point
-*
-* @note This API is used to free memory of system.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-VOID_T tkl_system_psram_free(VOID_T* ptr);
-
-/**
- * @brief Allocate and clear the memory in psram
- *
- * @param[in]       nitems      the numbers of memory block
- * @param[in]       size        the size of the memory block
- */
-VOID_T *tkl_system_psram_calloc(size_t nitems, size_t size);
-
-/**
- * @brief Re-allocate the memory in psram
- *
- * @param[in]       nitems      source memory address
- * @param[in]       size        the size after re-allocate
- */
-VOID_T *tkl_system_psram_realloc(VOID_T* ptr, size_t size);
-
-/**
-* @brief Get free heap size in psram
-*
-* @param VOID
-*
-* @note This API is used for getting free heap size.
-*
-* @return size of free heap
-*/
-INT_T tkl_system_psram_get_free_heap_size(VOID_T);
+/* 实现收编于 port/src/tkl_api_ops.c：malloc/free 保持对外符号（tuya_transport
+ * 的 mbedtls_* 与 port 的 utilities 直调）；calloc/realloc/get_free_heap_size
+ * 仅 tal 层经 TAL_API_OPS_T 分发，为卡私有（static），声明已移除。
+ * 原无调用方的 tkl_system_memset/memcpy、tkl_system_psram_* 已一并删除。 */
 
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
 
-#endif 
-
+#endif
