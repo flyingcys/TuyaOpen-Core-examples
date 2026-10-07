@@ -17,8 +17,8 @@
 
 #include "tuya_cloud_types.h"
 
-/* ota 接口实现收编于 port/src/tkl_api_ops.c（ops 卡私有，经
- * TAL_API_OPS_T 分发），本文件仅保留类型依赖的 include。
+/* ota 接口实现独立收编于 port/src/tkl_ota.c（平台可选单元，ops 卡私有，
+ * 经 TAL_OTA_OPS_T 分发），本文件仅保留类型依赖的 include。
  * 原无实现亦无调用方的 tkl_ota_get_old_firmware_info 悬空声明已删。 */
 
 #ifdef __cplusplus

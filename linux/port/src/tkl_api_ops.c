@@ -3,9 +3,9 @@
  * @brief tal_api 平台 ops 卡组装 + OS 原语实现单文件收编（linux port）
  *
  * 原分散于 tkl_semaphore.c / tkl_mutex.c / tkl_thread.c / tkl_queue.c /
- * tkl_ota.c / tkl_memory.c / tkl_output.c / tkl_system.c 的实现收编到本文件，
- * 只保留实际被分发/调用的接口：
- * - log output / semaphore / thread / queue / ota 实现为 ops 卡私有（static），
+ * tkl_memory.c / tkl_output.c / tkl_system.c 的实现收编到本文件，只保留实际
+ * 被分发/调用的接口（OTA 独立成 port/src/tkl_ota.c + 独立卡）：
+ * - log output / semaphore / thread / queue 实现为 ops 卡私有（static），
  *   声明已从头文件移除，适配面收敛到一张卡；
  * - memory 的 calloc/get_free_heap_size 仅 tal 层经卡分发，转 static；
  *   malloc/free 保持对外符号（tuya_transport 的 mbedtls_* 与 port 的
@@ -28,7 +28,6 @@
 #include "tkl_mutex.h"
 #include "tkl_thread.h"
 #include "tkl_queue.h"
-#include "tkl_ota.h"
 #include "tkl_memory.h"
 #include "tkl_system.h"
 #include "tuya_mem_heap.h"
@@ -684,24 +683,6 @@ static OPERATE_RET tkl_thread_release(const TKL_THREAD_HANDLE thread)
 }
 
 /**
-* @brief Get the thread stack's watermark
-*
-* @param[in] thread: thread handle
-* @param[out] watermark: watermark in Bytes
-*
-* @note This API is used to get the thread stack's watermark.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-static OPERATE_RET tkl_thread_get_watermark(const TKL_THREAD_HANDLE thread, uint32_t *watermark)
-{
-    (void)thread;
-    *watermark = -1;
-
-    return OPRT_OK;
-}
-
-/**
 * @brief Set name of self thread
 *
 * @param[in] name: thread name
@@ -1190,118 +1171,10 @@ static void tkl_queue_free(const TKL_QUEUE_HANDLE handle)
 }
 
 /* ---------------------------------------------------------------------------
- * ota 实现（原 port/src/tkl_ota.c，ops 卡私有）
- * --------------------------------------------------------------------------- */
-static FILE *s_upgrade_fd = NULL;
-
-/**
-* @brief get ota ability
-*
-* @param[out] image_size:  max image size
-* @param[out] type:        ota type
-*
-* @note This API is used for get chip ota ability
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-static OPERATE_RET tkl_ota_get_ability(uint32_t *image_size, TUYA_OTA_TYPE_E *type)
-{
-    *image_size = -1;
-    *type = TUYA_OTA_FULL | TUYA_OTA_DIFF;
-
-    return OPRT_OK;
-}
-
-/**
-* @brief ota start notify
-*
-* @param[in] image_size:  image size
-* @param[in] type:        ota type
-* @param[in] path:        ota path
-*
-* @note This API is used for ota start notify
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-static OPERATE_RET tkl_ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path)
-{
-    (void)image_size;
-    (void)type;
-    (void)path;
-
-    FILE *p_upgrade_fd = (FILE *)s_upgrade_fd;
-
-    if (p_upgrade_fd) {
-        fclose(p_upgrade_fd);
-    }
-
-    char ota_path[255];
-
-    sprintf(ota_path, "./tuyadb/ota");
-    s_upgrade_fd = fopen(ota_path, "w+b");
-
-    if (NULL == s_upgrade_fd) {
-        printf("open upgrade file fail. upgrade fail %s\r\n", ota_path);
-        return OPRT_COM_ERROR;
-    }
-
-    return OPRT_OK;
-}
-
-/**
-* @brief ota data process
-*
-* @param[in] pack:       point to ota pack
-* @param[out] remain_len: ota pack remain len
-*
-* @note This API is used for ota data process
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-static OPERATE_RET tkl_ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_len)
-{
-    printf("Rev File Data Total_len %d, Offset:%u Len:%u\r\n", pack->total_len, pack->offset, pack->len);
-    FILE *p_upgrade_fd = (FILE *)s_upgrade_fd;
-    if (pack->offset + pack->len != pack->total_len) {
-        fwrite(pack->data, 1, pack->len - 100, p_upgrade_fd);
-        *remain_len = 100;
-    } else {
-        fwrite(pack->data, 1, pack->len, p_upgrade_fd);
-        *remain_len = 0;
-    }
-
-    return OPRT_OK;
-}
-
-/**
-* @brief ota end notify
-*
-* @param[in] reset:  ota reset
-*
-* @note This API is used for ota end notify
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-static OPERATE_RET tkl_ota_end_notify(BOOL_T reset)
-{
-    FILE *p_upgrade_fd = (FILE *)s_upgrade_fd;
-    fclose(p_upgrade_fd);
-
-    if (reset) {
-        printf("SOC Upgrade File Download Success\r\n");
-        // UserTODO
-        exit(1);
-    } else {
-        printf("SOC Upgrade File Download Fail.ret = %d\r\n", reset);
-    }
-
-    return OPRT_OK;
-}
-
-/* ---------------------------------------------------------------------------
  * 标准平台 ops 卡：由本文件收编的 TKL 实现组装，core 的 tal_api.c /
  * tal_thread.c / tal_system.c 经 extern 引用并完成 memory/system/semaphore/
- * mutex/thread/queue/ota 七组 tal_* 分发（log output 由应用回调经卡直取）。
+ * mutex/thread/queue 六组 tal_* 分发（log output 由应用回调经卡直取；
+ * OTA 见 port/src/tkl_ota.c 的独立卡）。
  * 移植新平台时在各自 port 中提供同名卡即可。
  * --------------------------------------------------------------------------- */
 TAL_API_OPS_T tal_api_ops_platform = {
@@ -1330,7 +1203,6 @@ TAL_API_OPS_T tal_api_ops_platform = {
     //! thread
     .thread_create = tkl_thread_create,
     .thread_release = tkl_thread_release,
-    .thread_get_watermark = tkl_thread_get_watermark,
     .thread_set_self_name = tkl_thread_set_self_name,
     .thread_is_self = tkl_thread_is_self,
     .thread_diagnose = tkl_thread_diagnose,
@@ -1339,9 +1211,4 @@ TAL_API_OPS_T tal_api_ops_platform = {
     .queue_post = tkl_queue_post,
     .queue_fetch = tkl_queue_fetch,
     .queue_free = tkl_queue_free,
-    //! ota
-    .ota_get_ability = tkl_ota_get_ability,
-    .ota_start_notify = tkl_ota_start_notify,
-    .ota_data_process = tkl_ota_data_process,
-    .ota_end_notify = tkl_ota_end_notify,
 };
