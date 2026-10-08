@@ -126,8 +126,17 @@ list(APPEND _switch_demo_link -Wl,--end-group tuyaopen-port tuyaopen-headers)
 target_link_libraries(switch_demo PRIVATE ${_switch_demo_link})
 
 # tal_kv 自测（独立可执行，链接与 switch_demo 相同的库）
+# 注：_switch_demo_link 里 tal_wired/tal_bluetooth 是 $<TARGET_FILE:> 裸路径，不会建立构建
+# 依赖；switch_demo 靠后面额外按目标名 link 才有依赖，自测必须显式 add_dependencies，
+# 否则干净目录下单独构建本目标会 "No rule to make target ...libtal_wired.a"（67 评审 B4）
 add_executable(tal_kv_selftest tal_kv_selftest.c)
 target_link_libraries(tal_kv_selftest PRIVATE ${_switch_demo_link})
+if(TARGET tal_wired)
+    add_dependencies(tal_kv_selftest tal_wired)
+endif()
+if(TARGET tal_bluetooth)
+    add_dependencies(tal_kv_selftest tal_bluetooth)
+endif()
 unset(_switch_demo_link)
 
 # tal_wired / tal_bluetooth 头经各自 PUBLIC include 传递
