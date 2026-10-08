@@ -1,7 +1,38 @@
 # tal_kv 设计（替换 tal_kv）
 
+> ⚠️ **本方案已于 2026-10-08 作废**，被下方"新方案"取代。作废原因：线性追加日志的四条已知限制
+> （区域写满即废、尾部撕裂不兜底、中段损坏截断其后记录、扩容需按写入总量评估）对产品不可接受。
+> 下方"历史方案"内容仅作记录，勿作为实现依据——照其验证步骤跑会失败。
+
+## 新方案（2026-10-08 定稿，已实现）
+
+**架构**：core 只留 4 接口透传，**实现全在 port**（iot-core 零 KV 逻辑）。
+
+| 层 | 内容 |
+|---|---|
+| core | `tal_kv.h`（`init/set/get/del` 4 接口 + `tal_kv_cfg_t`/`TAL_LV_KEY_LEN`）、`tal_kv_ops.h`（`TAL_KV_OPS_T` 四函数指针）、`tal_kv.c`（`TAL_KV_EXEC_OP` 透传，约 60 行） |
+| port（Linux） | `port/src/tkl_kv.c`：旧 littlefs 实现改造（`tkl_kv_init/set/get/del` + `tal_kv_ops_platform`）；配套恢复 `port/littlefs/`、`port/src/tkl_flash.c`、`port/include/system/lfs_config.h`（源自子模块 `8fa1d6a^` / 外层 `ecc0d10^`） |
+| port（其他平台） | 换平台 = 换一个 `tkl_kv.c`（ESP32 可映射 NVS），core 零改动 |
+
+**接口收敛**（旧 7 → 新 4）：
+
+- 删 `tal_kv_free` → 调用者改用 `tal_free`（`tal_kv_get` 返回堆内存、含结尾 `'\0'`；失败时 `*value=NULL`、`*length=0`）
+- 删 `tal_kv_serialize_set/get` 与 `kv_db_t`/`kv_tp_t`/`KV_*` 类型 → `tuya_endpoint.c` 的 domain 改为 5 个字段 key（`atop.host`/`atop.port`/`atop.path`/`mqtt.host`/`mqtt.port`）逐项存取
+- `del` 幂等（键不存在返回 OK）；`init` 幂等（重复 init 只刷新密钥派生，不重挂介质）
+
+**分工原则**：存储介质、记录格式、加密、序列化**全部是 port 内部细节**；core 不做任何 KV 逻辑。
+Linux 实现保留旧行为：AES-128-CBC（seed/key 经 SHA256 派生，IV=seed）+ mutex 线程安全 + littlefs（自带磨损均衡与掉电保护）。
+
+**提交**：子模块 `ba58b24`、外层 `9961ff8`（2026-10-08）。
+
+**验证**：干净目录单独构建测试目标 exit 0；全量构建 exit 0；自测（10 用例黑盒）新旧存储路径各 ALL TESTS PASSED；e2e exit 124 + TLS×2 + MQTT + QR 22 行。
+
+---
+
+## 历史方案（已作废）
+
 > 设计日期：2026-10-08（含 4K 扇区 flash 场景的修订；最终形态：**线性追加日志、不压缩**）
-> 状态：**已实现并通过全部评审**（引擎 `iot-core/tal_system/src/tal_kv.c`、port `port/src/tkl_kv.c`、契约 `tal_kv_ops.h`、自测 `examples/switch_demo/tal_kv_selftest.c`）
+> 状态：**已作废**（曾被实现并通过评审，后被新方案整体替换；其产物 tal_kv.c 引擎已删除）
 > 目标：删除 `tuyaopen-core/third_party/tal_kv`（含 littlefs），由自研 `tal_kv` 引擎替代；对外**保持旧 tal_kv API 逐字兼容**（上层 78 个调用点零改动）；port 侧用 ops 卡注册制放在 port 下，**只提供一块存储区域 + 区域读写擦**，KV 布局与加解密由 TAL 统一实现。
 
 ## 一、背景与设计取舍

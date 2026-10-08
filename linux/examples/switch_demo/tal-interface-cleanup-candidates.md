@@ -137,3 +137,4 @@
 3. **未编译的旧 init 路径** `port/include/init/src/tkl_init_system.c` 另有一份带 `.log_output` 的结构体，若启用需同步 B1/B2 的卡改动。
 4. **存疑未评**：`tal_wired_get_status/set_ip/get_mac/set_mac`、`tal_kv_cmd` 等（属上一轮零调用清单，本轮未重复评估）；`tal_wired_*` 若要删需连同 `port/src/tkl_wired.c` 一起确认。
 5. **计数口径**：表中"调用点数"为链接进 `switch_demo` 的 111 个 `.o` 中的重定位点数；按全部 174 个 `.o` 口径个别项会 +1~2，不影响结论。
+6. **tal_kv 重构影响（2026-10-08，本表为审计时点快照）**：tal_kv 已改为"core 4 接口透传 + 实现全在 port"（子模块 `ba58b24` / 外层 `9961ff8`）——`serialize_get/set` 接口已删除、`tal_aes128_cbc_encode/decode` 与 `tal_sha256_ret` 的 KV 侧使用方变为 `port/src/tkl_kv.c`、`tal_fs` 不再被 KV 使用、`tal_kv_cmd` 已删（见备注 4）。表中相应行按新事实理解。

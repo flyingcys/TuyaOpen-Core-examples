@@ -1,5 +1,9 @@
 # tal_kv 实施计划（替换 tal_kv）
 
+> 🛑 **整体作废（2026-10-08）**：本计划的方案（core 内自研日志引擎 + port 区域原语）已被
+> "core 4 接口透传 + 实现全在 port（Linux 恢复 littlefs）"取代，见 `tal-data-design.md` 的"新方案"章节。
+> **勿按本计划执行**：其任务书、验证步骤（`reopen-check`/`torn-*` 等命令行模式）与产物均不存在于当前代码。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 用新的 `tal_kv`（4 个 K-V 接口 + 日志式布局引擎 + AES）替换 `tal_kv`，port 侧只需提供"一块数据区 + 4 个区域原语"（Linux 约 40 行）。
