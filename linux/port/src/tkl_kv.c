@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #define DATA_REGION_PATH   "./tuyadb/data.bin"
+/* 需按产品写入总量评估（本引擎不回收空间）；256KB 对 demo 够用，不代表对产品够用 */
 #define DATA_REGION_SIZE   (256 * 1024)
 #define DATA_ERASE_GRAN    4096
 

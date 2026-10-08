@@ -412,7 +412,8 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
  * @brief K-V 数据存储：init / read / write / erase（上层只关心数据）
  *
  * 对上 4 个接口，不暴露存储细节；布局与加解密由 TAL 实现，port 只提供一块
- * 可读写擦的数据区（见 tal_kv_ops.h）。name 限 [A-Za-z0-9._-]、长度 ≤63。
+ * 可读写擦的数据区（见 tal_kv_ops.h）。name 限非空、长度 ≤63（不校验字符集：
+ * 白名单是"每 name 一个文件"方案的遗留，云端下发的 name 字符集不受控）。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  */

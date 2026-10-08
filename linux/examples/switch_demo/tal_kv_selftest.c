@@ -167,13 +167,31 @@ static int test_kv_basic(void)
     CHECK(OPRT_OK == tal_kv_free(rd));
     rd = NULL;
 
-    /* name 规则 */
-    CHECK(OPRT_INVALID_PARM == tal_kv_set("bad/name", wr, 16));
-    CHECK(OPRT_INVALID_PARM == tal_kv_set("", wr, 16));
-    CHECK(OPRT_INVALID_PARM == tal_kv_set("bad name", wr, 16));
-    CHECK(OPRT_INVALID_PARM == tal_kv_set("0123456789012345678901234567890123456789012345678901234567890123", wr, 16)); /* 64B */
-    CHECK(OPRT_INVALID_PARM == tal_kv_del("bad/name"));
-    CHECK(OPRT_INVALID_PARM == tal_kv_get("bad/name", &rd, &out_len));
+    /* name 规则：只限 NULL / 空 / 长度 > 63（字符集不限——云端下发的 name 如
+     * schemaId 不受我们控制，旧实现亦无字符集限制） */
+    CHECK(OPRT_OK == tal_kv_set("bad/name", wr, 16));              /* 含 '/' 合法 */
+    CHECK(OPRT_OK == tal_kv_get("bad/name", &rd, &out_len));       /* 可读回 */
+    CHECK(out_len == 16 && 0 == memcmp(wr, rd, 16));
+    CHECK(OPRT_OK == tal_kv_free(rd));
+    rd = NULL;
+    CHECK(OPRT_OK == tal_kv_set("bad name", wr, 16));              /* 含空格合法 */
+    CHECK(OPRT_OK == tal_kv_del("bad/name"));
+    CHECK(OPRT_NOT_FOUND == tal_kv_get("bad/name", &rd, &out_len));
+    CHECK(OPRT_INVALID_PARM == tal_kv_set("", wr, 16));            /* 空 name */
+    CHECK(OPRT_INVALID_PARM == tal_kv_del(""));
+    CHECK(OPRT_INVALID_PARM == tal_kv_get("", &rd, &out_len));
+    /* 63 字节边界：恰好 63 合法，64 超长被拒 */
+    CHECK(OPRT_OK == tal_kv_set("012345678901234567890123456789012345678901234567890123456789012", wr, 16));
+    CHECK(OPRT_OK == tal_kv_get("012345678901234567890123456789012345678901234567890123456789012", &rd, &out_len));
+    CHECK(out_len == 16);
+    CHECK(OPRT_OK == tal_kv_free(rd));
+    rd = NULL;
+    CHECK(OPRT_INVALID_PARM ==
+          tal_kv_set("0123456789012345678901234567890123456789012345678901234567890123", wr, 16)); /* 64B */
+    CHECK(OPRT_INVALID_PARM ==
+          tal_kv_del("0123456789012345678901234567890123456789012345678901234567890123"));
+    CHECK(OPRT_INVALID_PARM ==
+          tal_kv_get("0123456789012345678901234567890123456789012345678901234567890123", &rd, &out_len));
 
     /* 参数校验（与旧实现一致：key/value/length 任一非法即 INVALID_PARM） */
     CHECK(OPRT_INVALID_PARM == tal_kv_set(NULL, wr, 16));
