@@ -12,6 +12,7 @@
 #include "tal_api.h"
 #include "tal_network.h"
 #include "tkl_network.h"
+#include "tkl_wired.h"
 
 #define TAL_TO_SYS_FD_SET(fds) ((fd_set *)fds)
 
@@ -27,6 +28,9 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <string.h>
 
 #define ENABLE_BIND_INTERFACE 1
 
@@ -1140,3 +1144,196 @@ TAL_NETWORK_CARD_T tal_network_card_platform = {
             .getsockopt = tkl_net_getsockopt,
         },
 };
+
+/* ===== 有线网卡接口（原 tkl_wired.c 内联；仅 Linux 文件实现）=====
+ *
+ * 只保留真正被使用的两个对外接口：
+ *   tkl_wired_get_ip        —— 上层取有线 IP（tuya_main.c / p2p pj_tuyaos_local_ip.c）
+ *   tkl_wired_set_status_cb —— 上层注册链路状态回调（内部起轮询线程）
+ * 原 tkl_wired_get_status 降为 static（状态轮询线程内部使用）；
+ * set_ip / get_mac / set_mac 无调用方，未内联。
+ * ===== */
+
+static TKL_WIRED_STATUS_CHANGE_CB s_wired_event_cb;
+static pthread_t s_wired_event_thread;
+
+/* 回环接口不算有线链路 */
+static int is_loopback_interface(const char *if_name)
+{
+    if (if_name == NULL) {
+        return 0;
+    }
+
+    return (strcmp(if_name, "lo") == 0 || strncmp(if_name, "loopback", 8) == 0);
+}
+
+/* 取指定接口的链路状态（ioctl SIOCGIFFLAGS） */
+static OPERATE_RET __wired_get_status_by_name(const char *if_name, TKL_WIRED_STAT_E *status)
+{
+    int sockfd;
+    struct ifreq ifr;
+
+    memset((void *)&ifr, 0, sizeof(ifr));
+
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("socket");
+        return OPRT_SOCK_ERR;
+    }
+
+    strncpy(ifr.ifr_name, if_name, strlen(if_name));
+    if (ioctl(sockfd, SIOCGIFFLAGS, &ifr) < 0) {
+        perror("ioctl");
+        close(sockfd);
+        return OPRT_COM_ERROR;
+    }
+
+    *status = (ifr.ifr_flags & IFF_UP) ? TKL_WIRED_LINK_UP : TKL_WIRED_LINK_DOWN;
+    close(sockfd);
+
+    return OPRT_OK;
+}
+
+/* 遍历非回环接口，任一 up 即视为有线链路 up */
+static OPERATE_RET __wired_get_status(TKL_WIRED_STAT_E *status)
+{
+    struct if_nameindex *name_list;
+    int i;
+
+    *status = TKL_WIRED_LINK_DOWN;
+
+    name_list = if_nameindex();
+    if (NULL == name_list) {
+        return OPRT_NOT_FOUND;
+    }
+
+    for (i = 0; name_list[i].if_index != 0; ++i) {
+        if (is_loopback_interface(name_list[i].if_name))
+            continue;
+
+        TKL_WIRED_STAT_E if_status = TKL_WIRED_LINK_DOWN;
+        if (!__wired_get_status_by_name(name_list[i].if_name, &if_status)) {
+            *status = if_status;
+            if (if_status == TKL_WIRED_LINK_UP) {
+                break;
+            }
+        }
+    }
+
+    if_freenameindex(name_list);
+    return OPRT_OK;
+}
+
+/* 状态轮询线程：3s 一次，变化时回调（原 tkl_wired.c 行为） */
+static void *wired_status_event_cb(void *arg)
+{
+    TKL_WIRED_STAT_E last_stat = -1;
+    TKL_WIRED_STAT_E stat = TKL_WIRED_LINK_DOWN;
+
+    (void)arg;
+    pthread_detach(pthread_self());
+    while (1) {
+        __wired_get_status(&stat);
+        if (stat != last_stat) {
+            s_wired_event_cb(stat);
+            last_stat = stat;
+        }
+
+        sleep(3);
+    }
+
+    return NULL;
+}
+
+/* 取指定接口的 IP/掩码（ioctl SIOCGIFADDR / SIOCGIFNETMASK） */
+static OPERATE_RET __wired_get_ip_by_name(const char *if_name, NW_IP_S *ip)
+{
+    int sock;
+    struct ifreq ifr;
+
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        printf("socket create failse...GetLocalIp!\n");
+        return OPRT_COM_ERROR;
+    }
+
+    memset(&ifr, 0, sizeof(ifr));
+    strncpy(ifr.ifr_name, if_name, sizeof(ifr.ifr_name) - 1);
+    if (ioctl(sock, SIOCGIFADDR, &ifr) < 0) {
+        close(sock);
+        return OPRT_COM_ERROR;
+    }
+    strncpy(ip->ip, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr), sizeof(ip->ip));
+
+    if (ioctl(sock, SIOCGIFNETMASK, &ifr) < 0) {
+        close(sock);
+        return OPRT_COM_ERROR;
+    }
+    strncpy(ip->mask, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_netmask)->sin_addr), sizeof(ip->mask));
+
+    close(sock);
+    return OPRT_OK;
+}
+
+/**
+ * @brief  get the ip address of the wired link（取第一个非回环且 up 的接口的 IP）
+ *
+ * @param[out]  ip: the ip address
+ *
+ * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
+ */
+OPERATE_RET tkl_wired_get_ip(NW_IP_S *ip)
+{
+    OPERATE_RET rt = OPRT_NOT_FOUND;
+    struct if_nameindex *name_list;
+    int i;
+
+    name_list = if_nameindex();
+    if (NULL == name_list) {
+        return OPRT_NOT_FOUND;
+    }
+
+    for (i = 0; name_list[i].if_index != 0; ++i) {
+        if (is_loopback_interface(name_list[i].if_name))
+            continue;
+
+        TKL_WIRED_STAT_E if_status = TKL_WIRED_LINK_DOWN;
+        if (!__wired_get_status_by_name(name_list[i].if_name, &if_status) && if_status == TKL_WIRED_LINK_UP) {
+            if (!__wired_get_ip_by_name(name_list[i].if_name, ip)) {
+                rt = OPRT_OK;
+                break;
+            }
+        }
+    }
+
+    if_freenameindex(name_list);
+
+    return rt;
+}
+
+/**
+ * @brief  set the status change callback（注册回调并起轮询线程，重复调用幂等）
+ *
+ * @param[in]   cb: the callback when link status changed
+ *
+ * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
+ */
+OPERATE_RET tkl_wired_set_status_cb(TKL_WIRED_STATUS_CHANGE_CB cb)
+{
+    if (cb) {
+        TKL_WIRED_STAT_E status = TKL_WIRED_LINK_DOWN;
+
+        __wired_get_status(&status);
+
+        s_wired_event_cb = cb;
+        if (!s_wired_event_thread) {
+            int ret = pthread_create(&s_wired_event_thread, NULL, wired_status_event_cb, NULL);
+            if (OPRT_OK != ret) {
+                return ret;
+            }
+        }
+
+        cb(status);
+    }
+
+    return OPRT_OK;
+}
