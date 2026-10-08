@@ -4,8 +4,8 @@
  *
  * 区域级用例用 ops 契约（tal_kv_get_ops()）；K-V 用例一律用旧签名公开 API
  * （tal_kv_init/set/get/free/del），覆盖：基本读写、get 的分配语义（堆指针 +
- * 末尾 '\0' + tal_kv_free）、覆盖写、删除幂等、name 规则、不存在、参数校验、
- * 单条上限边界、区域满安全。
+ * 末尾 '\0' + tal_kv_free）、serialize 往返、覆盖写、删除幂等、name 规则、
+ * 不存在、参数校验、单条上限边界、并发安全（多线程写）、区域满安全。
  *
  * 运行：cd build && ./tal_kv_selftest
  *       两段式重启用例（需分两次进程调用，区域跨进程保留）：
@@ -78,7 +78,7 @@ static int test_region_negative(void)
 #include "tal_kv.h"
 #include "tal_memory.h"
 
-#define SELFTEST_REGION "./tuyadb/data.bin"
+#include <pthread.h>
 
 /* 旧 tal_kv 的 seed/key 形态：各 16 字节字符串（tal_kv_cfg_t.seed/key 为 char[17]） */
 static tal_kv_cfg_t s_kv_cfg = {
@@ -188,6 +188,7 @@ static int test_kv_basic(void)
         CHECK(OPRT_OK == tal_kv_set("max.kv", big, SELFTEST_PLAIN_MAX));
         CHECK(OPRT_OK == tal_kv_get("max.kv", &rd, &out_len));
         CHECK(out_len == SELFTEST_PLAIN_MAX && 0 == memcmp(big, rd, SELFTEST_PLAIN_MAX));
+        CHECK(0 == rd[out_len]);                     /* 末尾补 '\0'（与小值用例一致） */
         CHECK(OPRT_OK == tal_kv_free(rd));
         rd = NULL;
         CHECK(OPRT_OK == tal_kv_del("max.kv"));
@@ -304,6 +305,78 @@ static int test_kv_overwrite(void)
     /* 老 key 经 20 次覆盖后仍可读且内容不变 */
     CHECK(OPRT_OK == tal_kv_get("old.key", &rd, &out_len));
     CHECK(out_len == sizeof(old_blob) && 0 == memcmp(old_blob, rd, out_len));
+    CHECK(OPRT_OK == tal_kv_free(rd));
+    rd = NULL;
+    return 0;
+}
+
+/* c) 并发安全：多个线程同时写各自的 key（并发追加 + 索引/seq/tail 更新），
+ * 主线程事后逐个校验内容。公开 API 必须线程安全（旧实现每次读写持 lfs_mutex）：
+ * 无锁时 s_index/s_tail/s_max_seq 存在读改写竞态 → 索引错乱/记录互相覆盖/丢数据
+ * → 本用例变红。 */
+#define CONC_THREADS 4
+#define CONC_ITERS   50
+#define CONC_VAL_LEN 512
+
+typedef struct {
+    int id;
+    int fail_at;                                     /* 线程内首个写失败的下标，-1 = 全部成功 */
+} conc_arg_t;
+
+static void *conc_worker(void *arg)
+{
+    conc_arg_t *a = (conc_arg_t *)arg;
+    uint8_t val[CONC_VAL_LEN];
+    char name[16];
+
+    snprintf(name, sizeof(name), "conc.%d", a->id);
+    for (int it = 0; it < CONC_ITERS; it++) {
+        memset(val, (uint8_t)(a->id * 64 + it), sizeof(val));
+        if (OPRT_OK != tal_kv_set(name, val, sizeof(val))) {
+            a->fail_at = it;
+            return NULL;
+        }
+    }
+    return NULL;
+}
+
+static int test_kv_concurrent(void)
+{
+    pthread_t th[CONC_THREADS];
+    conc_arg_t args[CONC_THREADS];
+    uint8_t sentinel[128], expect[CONC_VAL_LEN];
+    uint8_t *rd = NULL;
+    size_t out_len = 0;
+    char name[16];
+
+    /* 并发前的哨兵 key：并发结束后必须内容不变 */
+    memset(sentinel, 0x9C, sizeof(sentinel));
+    CHECK(OPRT_OK == tal_kv_set("conc.sentinel", sentinel, sizeof(sentinel)));
+
+    for (int i = 0; i < CONC_THREADS; i++) {
+        args[i].id = i;
+        args[i].fail_at = -1;
+        CHECK(0 == pthread_create(&th[i], NULL, conc_worker, &args[i]));
+    }
+    for (int i = 0; i < CONC_THREADS; i++) {
+        CHECK(0 == pthread_join(th[i], NULL));
+        CHECK(-1 == args[i].fail_at);                /* 并发写入不得报错 */
+    }
+
+    /* 每个 key 必须能读回，且内容 = 本线程最后一次写入 */
+    for (int i = 0; i < CONC_THREADS; i++) {
+        snprintf(name, sizeof(name), "conc.%d", i);
+        memset(expect, (uint8_t)(i * 64 + (CONC_ITERS - 1)), sizeof(expect));
+        CHECK(OPRT_OK == tal_kv_get(name, &rd, &out_len));
+        CHECK(out_len == CONC_VAL_LEN);
+        CHECK(0 == memcmp(expect, rd, CONC_VAL_LEN));
+        CHECK(OPRT_OK == tal_kv_free(rd));
+        rd = NULL;
+    }
+    /* 哨兵不受并发影响 */
+    CHECK(OPRT_OK == tal_kv_get("conc.sentinel", &rd, &out_len));
+    CHECK(out_len == sizeof(sentinel));
+    CHECK(0 == memcmp(sentinel, rd, sizeof(sentinel)));
     CHECK(OPRT_OK == tal_kv_free(rd));
     rd = NULL;
     return 0;
@@ -457,6 +530,9 @@ int main(int argc, char *argv[])
         return 1;
     }
     if (0 != test_kv_overwrite()) {
+        return 1;
+    }
+    if (0 != test_kv_concurrent()) {
         return 1;
     }
     if (0 != test_kv_region_full()) {
