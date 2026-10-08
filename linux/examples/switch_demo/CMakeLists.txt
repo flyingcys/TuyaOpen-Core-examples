@@ -60,17 +60,17 @@ add_subdirectory(${TUYAOPEN_PORT_DIR} ${CMAKE_BINARY_DIR}/tuyaopen-port)
 # 3) 应用自带组件：qrcode（原 core 模块随应用走，CONFIG_ENABLE_QRCODE 门控）
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/qrcode)
 
-# 4) 应用自带组件：tal_wired（原 core-communication 模块随应用走，CONFIG_ENABLE_WIRED 门控）
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tal_wired)
+# 4) 应用自带组件：tal_netif（原 core-communication 模块随应用走，CONFIG_ENABLE_WIRED 门控）
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tal_netif)
 
 # 5) 应用自带组件：tal_bluetooth（原 core-communication 模块随应用走，CONFIG_ENABLE_BLUETOOTH 门控）
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tal_bluetooth)
 
-# core 内源码（如 p2p 的 pj_tuyaos_local_ip.c）在 ENABLE_WIRED 下引 tal_wired.h，
+# core 内源码（如 p2p 的 pj_tuyaos_local_ip.c）在 ENABLE_WIRED 下引 tal_netif.h，
 # 而 pjproject 注册早于本目录、无法走 target 依赖，头路径经 tuyaopen-headers 全局注入
-if(TARGET tal_wired)
+if(TARGET tal_netif)
     target_include_directories(tuyaopen-headers INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tal_wired/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tal_netif/include>
     )
 endif()
 
@@ -114,9 +114,9 @@ set(_switch_demo_link
     ${TUYAOPEN_CORE_LIBS}
     $<TARGET_FILE:tuyaopen-port>
 )
-# tal_wired 依赖组内 tuyaopen-port 的 tkl_wired_* 符号，进组保证解析顺序
-if(TARGET tal_wired)
-    list(APPEND _switch_demo_link $<TARGET_FILE:tal_wired>)
+# tal_netif 依赖组内 tuyaopen-port 的 tkl_netif_* 符号，进组保证解析顺序
+if(TARGET tal_netif)
+    list(APPEND _switch_demo_link $<TARGET_FILE:tal_netif>)
 endif()
 # tal_bluetooth 依赖组内 tuyaopen-port 的 tkl_ble_* 符号，进组保证解析顺序
 if(TARGET tal_bluetooth)
@@ -126,23 +126,23 @@ list(APPEND _switch_demo_link -Wl,--end-group tuyaopen-port tuyaopen-headers)
 target_link_libraries(switch_demo PRIVATE ${_switch_demo_link})
 
 # tal_kv 自测（独立可执行，链接与 switch_demo 相同的库）
-# 注：_switch_demo_link 里 tal_wired/tal_bluetooth 是 $<TARGET_FILE:> 裸路径，不会建立构建
+# 注：_switch_demo_link 里 tal_netif/tal_bluetooth 是 $<TARGET_FILE:> 裸路径，不会建立构建
 # 依赖；switch_demo 靠后面额外按目标名 link 才有依赖，自测必须显式 add_dependencies，
-# 否则干净目录下单独构建本目标会 "No rule to make target ...libtal_wired.a"（67 评审 B4）
+# 否则干净目录下单独构建本目标会 "No rule to make target ...libtal_netif.a"（67 评审 B4）
 add_executable(tal_kv_selftest tal_kv_selftest.c)
 target_link_libraries(tal_kv_selftest PRIVATE ${_switch_demo_link})
-if(TARGET tal_wired)
-    add_dependencies(tal_kv_selftest tal_wired)
+if(TARGET tal_netif)
+    add_dependencies(tal_kv_selftest tal_netif)
 endif()
 if(TARGET tal_bluetooth)
     add_dependencies(tal_kv_selftest tal_bluetooth)
 endif()
 unset(_switch_demo_link)
 
-# tal_wired / tal_bluetooth 头经各自 PUBLIC include 传递
-# （demo 源码 #include "tal_wired.h" / ble 触达的 tal_bluetooth.h 保持可达）
-if(TARGET tal_wired)
-    target_link_libraries(switch_demo PRIVATE tal_wired)
+# tal_netif / tal_bluetooth 头经各自 PUBLIC include 传递
+# （demo 源码 #include "tal_netif.h" / ble 触达的 tal_bluetooth.h 保持可达）
+if(TARGET tal_netif)
+    target_link_libraries(switch_demo PRIVATE tal_netif)
 endif()
 if(TARGET tal_bluetooth)
     target_link_libraries(switch_demo PRIVATE tal_bluetooth)
