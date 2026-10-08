@@ -60,10 +60,16 @@ static OPERATE_RET tkl_kv_init(TAL_KV_REGION_T *region)
             }
         } else {
             long fsize = 0;
-            if (0 != fseek(s_region_fp, 0, SEEK_END) || (fsize = ftell(s_region_fp)) != (long)DATA_REGION_SIZE) {
-                /* 尺寸不符（被截断/半截文件）→ 重建为全 0xFF 区域，保持"空态=0xFF"不变量。
+            if (0 != fseek(s_region_fp, 0, SEEK_END)) {
+                fclose(s_region_fp);
+                s_region_fp = NULL;
+                return OPRT_COM_ERROR;
+            }
+            fsize = ftell(s_region_fp);
+            if (fsize < (long)DATA_REGION_SIZE) {
+                /* 偏小（被截断/半截文件）→ 重建为全 0xFF，保持"空态=0xFF"不变量。
                  * 注意：这会清空已存 KV，必须留痕，不能静默。 */
-                fprintf(stderr, "[tkl_kv] region file size mismatch (got %ld, expect %d), rebuild: KV cleared\n",
+                fprintf(stderr, "[tkl_kv] region file truncated (got %ld, expect %d), rebuild: KV cleared\n",
                         fsize, DATA_REGION_SIZE);
                 fclose(s_region_fp);
                 s_region_fp = fopen(DATA_REGION_PATH, "w+b");
@@ -75,6 +81,11 @@ static OPERATE_RET tkl_kv_init(TAL_KV_REGION_T *region)
                     s_region_fp = NULL;
                     return OPRT_COM_ERROR;
                 }
+            } else if (fsize > (long)DATA_REGION_SIZE) {
+                /* 偏大（曾扩容过 / 被替换）→ **只用前 DATA_REGION_SIZE 字节，不清空数据**。
+                 * 区域扩容是预期操作，绝不能因为"文件比预期大"就静默清库（67 评审 P1）。 */
+                fprintf(stderr, "[tkl_kv] region file larger than expected (got %ld, use first %d bytes)\n",
+                        fsize, DATA_REGION_SIZE);
             }
         }
     }
