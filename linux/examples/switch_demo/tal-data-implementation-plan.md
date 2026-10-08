@@ -636,6 +636,8 @@ static void __index_put(const TAL_DATA_ITEM_T *item)
     }
     if (s_index_cnt < TAL_DATA_INDEX_MAX) {
         s_index[s_index_cnt++] = *item;
+    } else {
+        PR_WARN("tal_data: index full, drop %s", item->name);
     }
 }
 
@@ -733,6 +735,16 @@ static OPERATE_RET __scan(void)
             item.data_len = data_len;
             item.seq = seq;
             __index_put(&item);
+        } else if (TAL_DATA_ST_TOMB == state) {
+            /* 墓碑参与 seq 比较：seq 更大（或相等）的墓碑移除同名索引项；
+             * 否则 erase 会在重启后被旧 VALID 记录"复活" */
+            int idx = __index_find(name);
+            if (idx >= 0 && seq >= s_index[idx].seq) {
+                for (uint32_t i = (uint32_t)idx; i + 1 < s_index_cnt; i++) {
+                    s_index[i] = s_index[i + 1];
+                }
+                s_index_cnt--;
+            }
         }
         if (seq > max_seq || 0 == have) {
             max_seq = seq;
@@ -755,7 +767,9 @@ static OPERATE_RET __scan(void)
         return OPRT_OK;
     }
     s_max_seq = max_seq;
-    s_tail = (max_end >= s_region_size) ? 0 : max_end;
+    /* 本任务（无回卷）如实停在末尾：区域满由 __append 的边界检查报 COM_ERROR；
+     * 回卷语义留待 Task 3 用 PAD 记录区分"满/空" */
+    s_tail = max_end;
     s_head = min_off;
     return OPRT_OK;
 }
@@ -908,6 +922,9 @@ OPERATE_RET tal_data_write(const char *name, const uint8_t *buf, size_t len)
     if (OPRT_OK != __name_check(name) || NULL == buf || 0 == len || len > TAL_DATA_PLAIN_MAX) {
         return OPRT_INVALID_PARM;
     }
+    if (__index_find(name) < 0 && s_index_cnt >= TAL_DATA_INDEX_MAX) {
+        return OPRT_COM_ERROR;                       /* 索引已满：先拒绝，避免"写成功但读不到" */
+    }
     /* mbedtls CBC 会就地改写传入的 iv，必须传局部副本（否则全局 IV 被永久污染） */
     memcpy(iv_local, s_iv, 16);
     if (OPRT_OK != tal_aes128_cbc_encode((uint8_t *)buf, (uint32_t)len, s_key, iv_local, &ct, &ct_len)) {
@@ -974,9 +991,9 @@ OPERATE_RET tal_data_read(const char *name, uint8_t *buf, size_t buf_size, size_
     if (OPRT_OK != ops->read(s_index[idx].rec_off, rec, s_index[idx].rec_len) ||
         OPRT_OK != __rec_decode(rec, s_index[idx].rec_len, s_index[idx].rec_off, &state, &seq, rname, &doff, &dlen,
                                 &rlen) ||
-        TAL_DATA_ST_VALID != state) {
+        TAL_DATA_ST_VALID != state || 0 != strcmp(rname, name)) {
         tal_free(rec);
-        return OPRT_NOT_FOUND;
+        return OPRT_NOT_FOUND;                       /* 含"索引项指向的记录 name 不符"的悬垂防护 */
     }
     ct = tal_malloc(dlen);
     if (NULL == ct) {

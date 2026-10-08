@@ -124,7 +124,8 @@ state：0x01=有效 0x00=墓碑 0x02=PAD（回卷填充）
 | 成功 | `OPRT_OK` |
 | `name` 为 NULL/空、长度 > 63、含 `[A-Za-z0-9._-]` 之外字符 | `OPRT_INVALID_PARM` |
 | `write` 的 `len` 为 0 或 > 16384（宏可配） | `OPRT_INVALID_PARM` |
-| `read` 的 `buf`/`out_len` 为 NULL | `OPRT_INVALID_PARM` |
+| `read` 的 `out_len` 为 NULL | `OPRT_INVALID_PARM` |
+| `read` 的 `buf` 为 NULL | 合法：仅回填 `*out_len`（探测尺寸），返回 `OPRT_OK` |
 | `read` 时 name 不存在、或记录 CRC 校验失败（撕裂写） | `OPRT_NOT_FOUND` |
 | `read` 时明文长度 > `buf_size` | `OPRT_INVALID_PARM`，`*out_len` 回填真实长度 |
 | 区域满（压缩也无法腾出空间） | `OPRT_COM_ERROR` |
