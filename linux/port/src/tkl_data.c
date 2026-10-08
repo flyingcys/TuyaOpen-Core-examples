@@ -9,8 +9,10 @@
  */
 #include "tal_data_ops.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #define DATA_REGION_PATH   "./tuyadb/data.bin"
 #define DATA_REGION_SIZE   (256 * 1024)
@@ -18,7 +20,7 @@
 
 static FILE *s_region_fp = NULL;
 
-static OPERATE_RET __region_prefill(FILE *fp)
+static OPERATE_RET data_region_prefill(FILE *fp)
 {
     static uint8_t s_ff[1024];
     memset(s_ff, 0xFF, sizeof(s_ff));
@@ -38,16 +40,36 @@ static OPERATE_RET tkl_data_init(TAL_DATA_REGION_T *region)
     }
 
     if (NULL == s_region_fp) {
+        /* 确保目录存在（首次运行 / 干净环境） */
+        if (0 != mkdir("./tuyadb", 0755) && EEXIST != errno) {
+            return OPRT_COM_ERROR;
+        }
+
         s_region_fp = fopen(DATA_REGION_PATH, "r+b");
         if (NULL == s_region_fp) {
             s_region_fp = fopen(DATA_REGION_PATH, "w+b");   /* 首次：创建并预填 0xFF */
             if (NULL == s_region_fp) {
                 return OPRT_COM_ERROR;
             }
-            if (OPRT_OK != __region_prefill(s_region_fp)) {
+            if (OPRT_OK != data_region_prefill(s_region_fp)) {
                 fclose(s_region_fp);
                 s_region_fp = NULL;
                 return OPRT_COM_ERROR;
+            }
+        } else {
+            long fsize = 0;
+            if (0 != fseek(s_region_fp, 0, SEEK_END) || (fsize = ftell(s_region_fp)) != (long)DATA_REGION_SIZE) {
+                /* 尺寸不符（被截断/半截文件）→ 重建为全 0xFF 区域，保持"空态=0xFF"不变量 */
+                fclose(s_region_fp);
+                s_region_fp = fopen(DATA_REGION_PATH, "w+b");
+                if (NULL == s_region_fp) {
+                    return OPRT_COM_ERROR;
+                }
+                if (OPRT_OK != data_region_prefill(s_region_fp)) {
+                    fclose(s_region_fp);
+                    s_region_fp = NULL;
+                    return OPRT_COM_ERROR;
+                }
             }
         }
     }
@@ -59,7 +81,7 @@ static OPERATE_RET tkl_data_init(TAL_DATA_REGION_T *region)
 
 static OPERATE_RET tkl_data_read(uint32_t offset, uint8_t *buf, uint32_t len)
 {
-    if (NULL == s_region_fp || NULL == buf || offset + len > DATA_REGION_SIZE) {
+    if (NULL == s_region_fp || NULL == buf || offset > DATA_REGION_SIZE || len > DATA_REGION_SIZE - offset) {
         return OPRT_INVALID_PARM;
     }
     if (0 != fseek(s_region_fp, (long)offset, SEEK_SET)) {
@@ -70,7 +92,7 @@ static OPERATE_RET tkl_data_read(uint32_t offset, uint8_t *buf, uint32_t len)
 
 static OPERATE_RET tkl_data_write(uint32_t offset, const uint8_t *buf, uint32_t len)
 {
-    if (NULL == s_region_fp || NULL == buf || offset + len > DATA_REGION_SIZE) {
+    if (NULL == s_region_fp || NULL == buf || offset > DATA_REGION_SIZE || len > DATA_REGION_SIZE - offset) {
         return OPRT_INVALID_PARM;
     }
     if (0 != fseek(s_region_fp, (long)offset, SEEK_SET)) {
@@ -88,7 +110,7 @@ static OPERATE_RET tkl_data_erase(uint32_t offset, uint32_t len)
     static uint8_t s_ff[256];
     memset(s_ff, 0xFF, sizeof(s_ff));
 
-    if (NULL == s_region_fp || 0 == len || offset + len > DATA_REGION_SIZE) {
+    if (NULL == s_region_fp || 0 == len || offset > DATA_REGION_SIZE || len > DATA_REGION_SIZE - offset) {
         return OPRT_INVALID_PARM;
     }
     if (0 != fseek(s_region_fp, (long)offset, SEEK_SET)) {
