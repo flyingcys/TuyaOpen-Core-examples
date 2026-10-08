@@ -19,7 +19,7 @@ extern "C" {
 typedef void* TKL_SEM_HANDLE;
 #define TKL_SEM_WAIT_FOREVER 0xFFFFffff
 
-/* semaphore 接口实现收编于 port/src/tkl_api_ops.c（ops 卡私有，经
+/* semaphore 接口实现收编于 port/src/tkl_runtime.c（ops 卡私有，经
  * TAL_API_OPS_T 分发），本文件仅保留类型定义。 */
 
 #ifdef __cplusplus

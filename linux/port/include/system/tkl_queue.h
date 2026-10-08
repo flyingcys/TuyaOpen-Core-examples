@@ -19,7 +19,7 @@ extern "C" {
 #define TKL_QUEUE_WAIT_FROEVER 0xFFFFFFFF
 typedef void* TKL_QUEUE_HANDLE;
 
-/* queue 接口实现收编于 port/src/tkl_api_ops.c（ops 卡私有，经
+/* queue 接口实现收编于 port/src/tkl_runtime.c（ops 卡私有，经
  * TAL_API_OPS_T 分发），本文件仅保留类型定义。 */
 
 #ifdef __cplusplus

@@ -38,7 +38,7 @@ void *tkl_system_malloc(SIZE_T size);
 */
 void tkl_system_free(void* ptr);
 
-/* 实现收编于 port/src/tkl_api_ops.c：malloc/free 保持对外符号（tuya_transport
+/* 实现收编于 port/src/tkl_runtime.c：malloc/free 保持对外符号（tuya_transport
  * 的 mbedtls_* 与 port 的 utilities 直调）；calloc/realloc/get_free_heap_size
  * 仅 tal 层经 TAL_API_OPS_T 分发，为卡私有（static），声明已移除。
  * 原无调用方的 tkl_system_memset/memcpy、tkl_system_psram_* 已一并删除。 */

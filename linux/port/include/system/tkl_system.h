@@ -45,7 +45,7 @@ void tkl_system_exit_critical(uint32_t irq_mask);
 #define TKL_EXIT_CRITICAL()         \
     tkl_system_exit_critical(__irq_mask)
 
-/* reset / get_millisecond / get_random / sleep 收编于 port/src/tkl_api_ops.c
+/* reset / get_millisecond / get_random / sleep 收编于 port/src/tkl_runtime.c
  * （ops 卡私有，经 TAL_API_OPS_T 分发），声明已移除。无调用方的
  * get_tick_count / get_reset_reason / get_cpu_info / tkl_cpu_sleep_mode_set
  * （tkl_sleep.h 整份）与无实现的 tkl_system_delay 悬空声明已删除。

@@ -3,7 +3,7 @@
  * @brief tal_ota 平台 ops 卡组装 + OTA 实现（linux port）
  *
  * OTA 为平台可选能力：需要 OTA 的 port 实现本文件（组装 tal_ota_ops_platform），
- * 与主卡 tkl_api_ops.c 解耦；不需要 OTA 的平台提供空实现桩即可（core 的
+ * 与主卡 tkl_runtime.c 解耦；不需要 OTA 的平台提供空实现桩即可（core 的
  * tal_api.c 对 tal_ota_ops_platform 为强引用，省略本文件会链接失败）。
  * 实现为文件内 static，经 TAL_OTA_OPS_T 分发。本实现把升级包写入
  * ./tuyadb/ota，end_notify 按 reset 复位进程。
@@ -129,7 +129,7 @@ static OPERATE_RET tkl_ota_end_notify(BOOL_T reset)
 
 /* ---------------------------------------------------------------------------
  * OTA 平台 ops 卡：由本文件组装，core 的 tal_api.c 经 extern 引用并完成
- * tal_ota_* 分发。OTA 为平台可选能力，与主卡（tkl_api_ops.c）解耦。
+ * tal_ota_* 分发。OTA 为平台可选能力，与主卡（tkl_runtime.c）解耦。
  * --------------------------------------------------------------------------- */
 TAL_OTA_OPS_T tal_ota_ops_platform = {
     .get_ability = tkl_ota_get_ability,

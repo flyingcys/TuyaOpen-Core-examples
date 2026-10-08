@@ -59,7 +59,7 @@
 ### B2. 卡成员 `thread_diagnose`（1 调用，且在死链上；port 实现是纯 stub）
 
 - 事实：唯一调用点在 `tal_workq_service.c:194`（`tal_workq_dump` 内），而 `tal_workq_dump` 自身 0 调用；port 的 `tkl_thread_diagnose` 直接 `return OPRT_NOT_SUPPORTED`。
-- 删除清单：`tal_api_ops.h` 成员 + `tal_thread.c` 实现 + `tal_thread.h` 声明 + `tkl_api_ops.c` 实现与绑定；**连带死链上游** `tal_workq_service.c` 的 `tal_workq_dump` 与 `tal_workqueue.c` 的 `tal_workqueue_traverse`（见 B5）。
+- 删除清单：`tal_api_ops.h` 成员 + `tal_thread.c` 实现 + `tal_thread.h` 声明 + `tkl_runtime.c` 实现与绑定；**连带死链上游** `tal_workq_service.c` 的 `tal_workq_dump` 与 `tal_workqueue.c` 的 `tal_workqueue_traverse`（见 B5）。
 - 代价：5 个文件，零调用方改动。
 
 ### B3. `tal_sha1` 全族（12 个函数，整条链零调用）
@@ -88,7 +88,7 @@
 ### B6. 卡成员 `get_free_heap_size`（可选，改动小但价值也低）
 
 - 事实：仅 2 处，均为日志（malloc 失败提示、`Device Free heap`）；无功能分支依赖。
-- 删除清单：`tal_api_ops.h` + `tal_system.c`（实现与失败日志改写）+ `include/tal_memory.h` + `port/src/tkl_api_ops.c` + `tuya_main.c:98`。
+- 删除清单：`tal_api_ops.h` + `tal_system.c`（实现与失败日志改写）+ `include/tal_memory.h` + `port/src/tkl_runtime.c` + `tuya_main.c:98`。
 - ⚠️ 未编译的 agent-core `svc_ai_agent/src/tuya_ai_output.c:216` 在用 → 将来启用会断。
 - 结论：只有确定要极致瘦身卡成员时再做。
 

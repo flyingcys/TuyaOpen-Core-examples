@@ -72,8 +72,8 @@ if(_port_srcs)
         target_link_libraries(tuyaopen-port PUBLIC pthread m)
     endif()
 
-    if(EXISTS "${PORT_ROOT}/src/tkl_network.c" OR EXISTS "${PORT_ROOT}/src/tkl_api_ops.c")
-        # tkl_network（POSIX 实现）/tkl_api_ops（tal_api ops 卡）：include tal_api.h（tal_system 公共头）与
+    if(EXISTS "${PORT_ROOT}/src/tkl_network.c" OR EXISTS "${PORT_ROOT}/src/tkl_runtime.c")
+        # tkl_network（POSIX 实现）/tkl_runtime（tal_api ops 卡）：include tal_api.h（tal_system 公共头）与
         # core 的 tal_network.h/tal_api_ops.h（卡与 ops 类型），符号在最终链接组解析
         if(TARGET tal_system)
             target_link_libraries(tuyaopen-port PRIVATE tal_system)
