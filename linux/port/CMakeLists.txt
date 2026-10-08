@@ -7,7 +7,9 @@ endif()
 
 set(PORT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 
-# adapter 原始布局：include/（头 + utilities 实现）+ src/（TKL 实现，含 tkl_wifi/tkl_bt）
+# adapter 布局：include/（头）+ src/（TKL 实现，含 tkl_wifi/tkl_bt）；
+# 通用工具（tuya_list/queue/mem_heap/ringbuf/slist/tools）已迁至
+# tuyaopen-core/iot-core/tuya_transport/src/utilities（core 共用，平台无关）
 set(_port_srcs)
 file(GLOB_RECURSE _port_srcs CONFIGURE_DEPENDS
     "${PORT_ROOT}/include/*.c"
