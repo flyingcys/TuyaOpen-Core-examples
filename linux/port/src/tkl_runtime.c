@@ -292,29 +292,6 @@ static int tkl_system_get_random(const uint32_t range)
     return (0 == range) ? (int)(value & 0xFF) : (int)(value % range);
 }
 
-/**
- * @brief system enter critical
- *
- * @return  irq status
- */
-UINT_T tkl_system_enter_critical(VOID_T)
-{
-    // No operation in Linux platform
-    return 0;
-}
-
-/**
- * @brief system exit critical
- *
- * @param[in]   irq_mask: irq mask
- * @return  none
- */
-VOID_T tkl_system_exit_critical(UINT_T irq_mask)
-{
-    // No operation in Linux platform
-    return;
-}
-
 /* ---------------------------------------------------------------------------
  * semaphore 实现（原 port/src/tkl_semaphore.c，ops 卡私有）
  * --------------------------------------------------------------------------- */
