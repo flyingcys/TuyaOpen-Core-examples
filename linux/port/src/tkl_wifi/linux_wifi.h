@@ -6,8 +6,8 @@
 
 #define MAX_REV_BUFFER      (512)
 
-/* tkl_flash.c owns the canonical copy ("./tuyadb"); fall back to the same
- * tree when the build does not inject FLASH_FILE_PATH. */
+/* tkl_kv.c (inlined flash emulation) owns the canonical copy ("./tuyadb");
+ * fall back to the same tree when the build does not inject FLASH_FILE_PATH. */
 #ifndef FLASH_FILE_PATH
 #define FLASH_FILE_PATH "./tuyadb"
 #endif

@@ -133,8 +133,7 @@
 ## 四、备注
 
 1. **卡成员 `thread_set_self_name` / `thread_is_self`** 各只有 1 处内部调用，但属线程生命周期语义（设 OS 线程名 / 判断是否删自身）；`set_self_name` 已由用户决策保留，不建议以"低频"为由删除。
-2. **死目录 `port/include/init/`** 不参与编译（`port/CMakeLists.txt` 显式排除），其中对已删符号的引用是已知例外；若将来启用需同步修复。
-3. **未编译的旧 init 路径** `port/include/init/src/tkl_init_system.c` 另有一份带 `.log_output` 的结构体，若启用需同步 B1/B2 的卡改动。
-4. **存疑未评**：`tal_wired_get_status/set_ip/get_mac/set_mac`、`tal_kv_cmd` 等（属上一轮零调用清单，本轮未重复评估）；`tal_wired_*` 若要删需连同 `port/src/tkl_wired.c` 一起确认。
-5. **计数口径**：表中"调用点数"为链接进 `switch_demo` 的 111 个 `.o` 中的重定位点数；按全部 174 个 `.o` 口径个别项会 +1~2，不影响结论。
+2. **死目录 `port/include/init/`**：已于 2026-10-08 整体删除（CMake 早已排除不编译；唯一障碍是 `tal_wired.c` 的两行死代码，已随之清理）。原备注 3（未编译的旧 init 路径引用已删符号）随目录删除一并消失。
+3. **存疑未评（已处置）**：`tal_wired_get_status/set_ip/get_mac/set_mac` 已随 `tkl_wired → tkl_netif` 改名一并裁剪（3 个零调用 tkl 接口 + 4 个死包装）；`tal_kv_cmd` 已随 tal_kv 重构删除。
+4. **计数口径**：表中"调用点数"为链接进 `switch_demo` 的 111 个 `.o` 中的重定位点数；按全部 174 个 `.o` 口径个别项会 +1~2，不影响结论。
 6. **tal_kv 重构影响（2026-10-08，本表为审计时点快照）**：tal_kv 已改为"core 4 接口透传 + 实现全在 port"（子模块 `ba58b24` / 外层 `9961ff8`）——`serialize_get/set` 接口已删除、`tal_aes128_cbc_encode/decode` 与 `tal_sha256_ret` 的 KV 侧使用方变为 `port/src/tkl_kv.c`、`tal_fs` 不再被 KV 使用、`tal_kv_cmd` 已删（见备注 4）。表中相应行按新事实理解。
