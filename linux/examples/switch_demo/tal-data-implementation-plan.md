@@ -817,6 +817,12 @@ static int test_kv_basic(void)
     CHECK(out_len == sizeof(wr));
     CHECK(0 == memcmp(wr, rd, sizeof(wr)));
 
+    /* 连续第二次读取同一 key：IV 必须每次从派生值重取，不能被 CBC 就地改写污染
+     * （只回退 read 侧 iv 副本时，仅此断言会失败；write 侧的由上面的用例覆盖） */
+    memset(rd, 0, sizeof(rd));
+    CHECK(OPRT_OK == tal_data_read("test.kv", rd, sizeof(rd), &out_len));
+    CHECK(out_len == sizeof(wr) && 0 == memcmp(wr, rd, sizeof(wr)));
+
     /* 探测尺寸 */
     CHECK(OPRT_OK == tal_data_read("test.kv", NULL, 0, &out_len));
     CHECK(out_len == sizeof(wr));
