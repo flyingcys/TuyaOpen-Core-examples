@@ -24,6 +24,8 @@
  */
 OPERATE_RET tkl_net_set_timeout(const int fd, const int ms_timeout, const TUYA_TRANS_TYPE_E type);
 
+#if defined(ENABLE_TUYA_P2P)
+/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：仅 p2p-core/pjproject 经 tal_net_set_bufsize 调用 */
 /**
  * @brief Set buffer_size option of socket fd
  *
@@ -34,6 +36,7 @@ OPERATE_RET tkl_net_set_timeout(const int fd, const int ms_timeout, const TUYA_T
  * @return OPRT_OK on success. Others on error
  */
 OPERATE_RET tkl_net_set_bufsize(const int fd, const int buf_size, const TUYA_TRANS_TYPE_E type);
+#endif
 
 /**
  * @brief Enable reuse option of socket fd
@@ -76,6 +79,9 @@ OPERATE_RET tkl_net_set_broadcast(const int fd);
 OPERATE_RET tkl_net_set_keepalive(int fd, const BOOL_T alive, const uint32_t idle, const uint32_t intr,
                                   const uint32_t cnt);
 
+#if defined(ENABLE_TUYA_P2P)
+/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：sock_tal.c 经 tal_net_getsockname /
+ * tal_net_getpeername 做地址探测（ICE 候选） */
 /**
  * @brief Get the local address a socket fd is bound to
  *
@@ -97,6 +103,7 @@ OPERATE_RET tkl_net_getsockname(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port);
  * @return OPRT_OK on success. Others on error
  */
 OPERATE_RET tkl_net_getpeername(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port);
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -125,6 +132,8 @@ TUYA_ERRNO tkl_net_get_errno(void);
 */
 OPERATE_RET tkl_net_fd_set(const int fd, TUYA_FD_SET_T* fds);
 
+#if defined(ENABLE_TUYA_P2P)
+/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：sock_select_tal.c 经 tal_net_fd_clear 调用 */
 /**
 * @brief Clear file descriptor from set
 *
@@ -136,6 +145,7 @@ OPERATE_RET tkl_net_fd_set(const int fd, TUYA_FD_SET_T* fds);
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
 OPERATE_RET tkl_net_fd_clear(const int fd, TUYA_FD_SET_T* fds);
+#endif
 
 /**
 * @brief Check file descriptor is in set
@@ -209,6 +219,8 @@ OPERATE_RET tkl_net_set_block(const int fd, const BOOL_T block);
 */
 TUYA_ERRNO tkl_net_close(const int fd);
 
+#if defined(ENABLE_TUYA_P2P)
+/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：sock_tal.c 经 tal_net_shutdown 调用 */
 /**
 * @brief Shutdown file descriptors
 *
@@ -220,6 +232,7 @@ TUYA_ERRNO tkl_net_close(const int fd);
 * @return 0 on success. Others on error, please refer to the error no of the target system
 */
 TUYA_ERRNO tkl_net_shutdown(const int fd, const int how);
+#endif
 
 /**
 * @brief Create a tcp/udp socket

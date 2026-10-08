@@ -7,6 +7,12 @@
  * (tal_network_card_platform) consumed by core's tal_network.c. Porting a new
  * platform means providing this one file (implementation + card) in its port.
  *
+ * Ops reached only from one optional module are compiled in under that
+ * module's switch (the ENABLE_TUYA_P2P blocks below): with the switch off
+ * they are neither defined nor wired into the card, so a new port only has to
+ * provide the ops its own configuration actually calls. core's TAL_NET_EXEC_OP
+ * checks card members for NULL and reports the op as unavailable at runtime.
+ *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
 #include "tal_api.h"
@@ -116,6 +122,8 @@ OPERATE_RET tkl_net_fd_set(int fd, TUYA_FD_SET_T *fds)
     return ret;
 }
 
+#if defined(ENABLE_TUYA_P2P)
+/* p2p 专用：仅 p2p-core/pjproject 的 sock_select_tal.c 经 tal_net_fd_clear 调用 */
 /**
  * @brief Clear file descriptor from set
  *
@@ -139,6 +147,7 @@ OPERATE_RET tkl_net_fd_clear(int fd, TUYA_FD_SET_T *fds)
 
     return ret;
 }
+#endif /* ENABLE_TUYA_P2P */
 
 /**
  * @brief Check file descriptor is in set
@@ -768,6 +777,8 @@ OPERATE_RET tkl_net_set_timeout(const int fd, const int ms_timeout, const TUYA_T
     return ret;
 }
 
+#if defined(ENABLE_TUYA_P2P)
+/* p2p 专用：仅 p2p-core/pjproject 的 sock_tal.c 经 tal_net_set_bufsize 调用 */
 /**
  * @brief Set buffer_size option of socket fd
  *
@@ -795,6 +806,7 @@ OPERATE_RET tkl_net_set_bufsize(const int fd, const int buf_size, const TUYA_TRA
 
     return ret;
 }
+#endif /* ENABLE_TUYA_P2P */
 
 /**
  * @brief Enable reuse option of socket fd
@@ -1002,6 +1014,8 @@ char *tkl_net_addr2str(TUYA_IP_ADDR_T ipaddr)
     return inet_ntoa(hostaddr);
 }
 
+#if defined(ENABLE_TUYA_P2P)
+/* p2p 专用：仅 p2p-core/pjproject 的 sock_tal.c 经 tal_net_shutdown 调用 */
 /**
  * @brief Disable send and/or receive on a socket
  *
@@ -1022,7 +1036,11 @@ TUYA_ERRNO tkl_net_shutdown(const int fd, const int how)
 
     return shutdown(fd, how);
 }
+#endif /* ENABLE_TUYA_P2P */
 
+#if defined(ENABLE_TUYA_P2P)
+/* p2p 专用：仅 p2p-core/pjproject 的 sock_tal.c 经 tal_net_getsockname /
+ * tal_net_getpeername 调用（地址探测，用于 ICE 候选） */
 /**
  * @brief Get the local address a socket fd is bound to
  *
@@ -1093,11 +1111,14 @@ OPERATE_RET tkl_net_getpeername(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port)
 
     return OPRT_OK;
 }
+#endif /* ENABLE_TUYA_P2P */
 
 /* ---------------------------------------------------------------------------
  * 标准网络卡：由本平台 TKL 实现组装，core 的 tal_network.c 经
  * extern 引用并完成 tal_net_* 分发。移植新平台时在各自 port 的
  * tkl_network.c 中提供同名卡即可。
+ * 卡成员与实现同开关：仅 p2p 使用的 ops 在 ENABLE_TUYA_P2P 下才挂载，
+ * 关掉时对应成员为 NULL，core 侧 TAL_NET_EXEC_OP 会打印 "not available"。
  * --------------------------------------------------------------------------- */
 TAL_NETWORK_CARD_T tal_network_card_platform = {
     .name = "tkl",
@@ -1107,14 +1128,18 @@ TAL_NETWORK_CARD_T tal_network_card_platform = {
         {
             .get_errno = tkl_net_get_errno,
             .fd_set = tkl_net_fd_set,
+#if defined(ENABLE_TUYA_P2P)
             .fd_clear = tkl_net_fd_clear,
+#endif
             .fd_isset = tkl_net_fd_isset,
             .fd_zero = tkl_net_fd_zero,
             .select = tkl_net_select,
             .get_nonblock = tkl_net_get_nonblock,
             .set_block = tkl_net_set_block,
             .close = tkl_net_close,
+#if defined(ENABLE_TUYA_P2P)
             .shutdown = tkl_net_shutdown,
+#endif
             .socket_create = tkl_net_socket_create,
             .connect = tkl_net_connect,
             .connect_raw = tkl_net_connect_raw,
@@ -1127,15 +1152,19 @@ TAL_NETWORK_CARD_T tal_network_card_platform = {
             .recv_nd_size = tkl_net_recv_nd_size,
             .recvfrom = tkl_net_recvfrom,
             .set_timeout = tkl_net_set_timeout,
+#if defined(ENABLE_TUYA_P2P)
             .set_bufsize = tkl_net_set_bufsize,
+#endif
             .set_reuse = tkl_net_set_reuse,
             .disable_nagle = tkl_net_disable_nagle,
             .set_broadcast = tkl_net_set_broadcast,
             .gethostbyname = tkl_net_gethostbyname,
             .set_keepalive = tkl_net_set_keepalive,
             .get_socket_ip = tkl_net_get_socket_ip,
+#if defined(ENABLE_TUYA_P2P)
             .getsockname = tkl_net_getsockname,
             .getpeername = tkl_net_getpeername,
+#endif
             .str2addr = tkl_net_str2addr,
             .addr2str = tkl_net_addr2str,
             .setsockopt = tkl_net_setsockopt,
