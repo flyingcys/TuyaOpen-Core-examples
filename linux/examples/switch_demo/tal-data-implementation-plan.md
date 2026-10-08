@@ -4,7 +4,9 @@
 
 **Goal:** 用新的 `tal_kv`（4 个 K-V 接口 + 日志式布局引擎 + AES）替换 `tal_kv`，port 侧只需提供"一块数据区 + 4 个区域原语"（Linux 约 40 行）。
 
-**Architecture:** 三层——上层（iot-core/应用）只调 `tal_kv_*`；TAL 层（core）实现日志式 K-V 引擎（追加记录 + 墓碑 + seq + CRC + GC 压缩）与 AES 加解密；port 层只实现区域原语（`init/read/write/erase @offset`），Linux 用一个区域文件模拟。契约头在 core（`tal_kv_ops.h`），实例在 port（`tal_kv_ops_platform`），与 `tal_api_ops.h`/`tal_ota_ops.h` 同构。
+**Architecture:** 三层——上层（iot-core/应用）调**旧 `tal_kv_*` API（逐字兼容，零改动）**；TAL 层（core）实现 K-V 引擎（**线性追加日志 + 墓碑 + seq + CRC**，不压缩）与 AES 加解密；port 层只实现区域原语（`init/read/write/erase @offset`），Linux 用一个区域文件模拟。契约头在 core（`tal_kv_ops.h`），实例在 port（`tal_kv_ops_platform`），与 `tal_api_ops.h`/`tal_ota_ops.h` 同构。
+
+> ⚠️ **本计划为历史记录**：Task 4-8 已被"公开 API 落地为旧 tal_kv 全套"取代（见设计文档第二/八节），实际实施以 git 提交与设计文档为准。
 
 **Tech Stack:** C99、CMake（GLOB 收集）、mbedtls（经 `tal_security` 暴露的 `tal_aes128_cbc_*` / `tal_sha256_ret`）、POSIX stdio（Linux port）。
 
@@ -14,7 +16,7 @@
 
 - **文档与注释用中文**（仓库惯例）
 - **不引入新依赖**；加密复用 `tal_aes128_cbc_encode/decode` + `tal_aes_free_data` + `tal_sha256_ret`（`tuya_transport` 的 `tal_security.h`）
-- **`tal_kv` 的 4 个 API 签名不得改动**（见 Task 2）
+- **`tal_kv` 的对外 API 与旧头逐字兼容（不得改动）**——上层 78 个调用点零改动是硬要求
 - **区域布局与平台无关**：TAL 只通过 ops 卡的 4 个区域原语访问存储，不出现任何文件名/路径
 - **验证命令（本仓库）**：
   - 构建：`cd examples/switch_demo/build && cmake --build . -j$(nproc)`（期望 exit 0）
@@ -1866,7 +1868,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 
 ---
 
-## Task 5: 迁移 `tuya_iot.c`（P0，15 处）
+## Task 5: 【已作废——见 Task 4 横幅】迁移 `tuya_iot.c`（P0，15 处）
 
 **Files:**
 - Modify: `tuyaopen-core/iot-core/cloud/tuya_iot.c`（:130/139/152/160/195/206/226/228/558/1121/1122/1387/1395/1402/1409）
@@ -1915,7 +1917,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 
 ---
 
-## Task 6: 迁移 `tuya_endpoint.c`（P0，15 处，含 serialize 2 处）
+## Task 6: 【已作废——见 Task 4 横幅】迁移 `tuya_endpoint.c`（P0，15 处，含 serialize 2 处）
 
 **Files:**
 - Modify: `tuyaopen-core/iot-core/cloud/tuya_endpoint.c`（:46/52/72/79/81/88/111/135/169/205/250-253）
@@ -1985,7 +1987,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 
 ---
 
-## Task 7: 迁移 `tuya_cert_manager.c` + `tuya_register_center.c`（P0/P1，20 处）
+## Task 7: 【已作废——见 Task 4 横幅】迁移 `tuya_cert_manager.c` + `tuya_register_center.c`（P0/P1，20 处）
 
 **Files:**
 - Modify: `tuyaopen-core/iot-core/cloud/tuya_cert_manager.c`（15 处，含 :754/757 的 free 语义消除）
@@ -2020,7 +2022,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 
 ---
 
-## Task 8: 迁移未编译的 3 个文件（28 处）
+## Task 8: 【已作废——见 Task 4 横幅】迁移未编译的 3 个文件（28 处）
 
 **Files:**
 - Modify: `tuyaopen-core/iot-core/cloud/tuya_device_timer.c`（4 处）
