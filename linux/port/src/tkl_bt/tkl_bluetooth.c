@@ -94,6 +94,7 @@ OPERATE_RET tkl_ble_stack_deinit(uint8_t role)
 OPERATE_RET tkl_ble_stack_gatt_link(uint16_t *p_link)
 {
     printf("tkl_ble_stack_gatt_link");   
+    return OPRT_NOT_SUPPORTED;
 }
 
 /**
@@ -136,6 +137,7 @@ OPERATE_RET tkl_ble_gatt_callback_register(const TKL_BLE_GATT_EVT_FUNC_CB gatt_e
 OPERATE_RET tkl_ble_gap_addr_set(TKL_BLE_GAP_ADDR_T const *p_peer_addr)
 {
     printf("tkl_ble_gap_addr_set");
+    return OPRT_NOT_SUPPORTED;
 }
  
 /**
@@ -147,6 +149,7 @@ OPERATE_RET tkl_ble_gap_addr_set(TKL_BLE_GAP_ADDR_T const *p_peer_addr)
 OPERATE_RET tkl_ble_gap_address_get(TKL_BLE_GAP_ADDR_T *p_peer_addr)
 {
     printf("tkl_ble_gap_address_get");
+    return OPRT_NOT_SUPPORTED;
 }
  
 /**
@@ -165,14 +168,7 @@ OPERATE_RET tkl_ble_gap_adv_start(TKL_BLE_GAP_ADV_PARAMS_T const *p_adv_params)
 {
 	printf("tkl_ble_gap_adv_start\n");
     printf("tkl_ble_gap_adv_start:interval(%d,%d),type:%d", p_adv_params->adv_interval_min, p_adv_params->adv_interval_max, p_adv_params->adv_type);
-    #if 0
-    0x00	Public Device Address (公共地址，即 hciconfig 显示的地址)
-    0x01	Random Device Address (随机地址)
-    0x02	Resolvable Private Address (使用公共地址)
-    0x03	Resolvable Private Address (使用随机地址)
-    如果这个字段没有被显式设置为 0x00，它可能会默认为一个无效值（例如 0x00 但由于某些实现差异导致无效），或者控制器可能预期使用随机地址但您的程序没有设置。
-    #endif
-
+ 
     // 1）需要启动 bluetoothd 的 adv 否则连接不上（因为 bluetoothd 在连接时会检查）
     // 2）hci 设置广播和响应包时无关广播是否使能，但是在设置广播间隔时一定要先关再开
     // 3）bluetoothd 的 adv 初始化包括广播间隔的设置，属于异步的，因此需要等其完全执行完再 hci 相关的 adv 配置，否则广播间隔会被覆盖
@@ -209,29 +205,8 @@ OPERATE_RET tkl_ble_gap_adv_stop(void)
 OPERATE_RET tkl_ble_gap_adv_rsp_data_set(TKL_BLE_DATA_T const *p_adv, TKL_BLE_DATA_T const *p_scan_rsp)
 {
     printf("tkl_ble_gap_adv_rsp_data_set\n"); 
-#if 0 
-    if (p_adv != NULL && p_adv->p_data != NULL && p_adv->length > 0) {
-        printf("------------------ Advertising Data ------------------\n");
-        printf("Advertising Data\n", p_adv->p_data, p_adv->length);
-    } else {
-        printf("------------------ Advertising Data ------------------\n");
-        printf("Advertising data is NULL or empty.\n");
-    }
-
-    if (p_scan_rsp != NULL && p_scan_rsp->p_data != NULL && p_scan_rsp->length > 0) {
-        printf("----------------- Scan Response Data -----------------\n");
-        printf("Scan Response Data\n", p_scan_rsp->p_data, p_scan_rsp->length);
-    } else {
-        printf("----------------- Scan Response Data -----------------\n");
-        printf("Scan response data is NULL or empty.\n");
-    }
-
-    bluez_inc_update_adv(p_adv, p_scan_rsp);
-    //bluez_inc_set_adv();
-#else
     tuya_hci_le_set_adv_data(p_adv->p_data, p_adv->length);
     tuya_hci_le_set_scan_rsp_data(p_scan_rsp->p_data, p_scan_rsp->length);
-#endif
     return OPRT_OK;
 }
 
@@ -246,29 +221,9 @@ OPERATE_RET tkl_ble_gap_adv_rsp_data_set(TKL_BLE_DATA_T const *p_adv, TKL_BLE_DA
 OPERATE_RET tkl_ble_gap_adv_rsp_data_update(TKL_BLE_DATA_T const *p_adv, TKL_BLE_DATA_T const *p_scan_rsp)
 {
     printf("tkl_ble_gap_adv_rsp_data_update\n");
-#if 0
-    if (p_adv != NULL && p_adv->p_data != NULL && p_adv->length > 0) {
-        printf("------------------ Advertising Data ------------------\n");
-        printf("Advertising Data\n", p_adv->p_data, p_adv->length);
-    } else {
-        printf("------------------ Advertising Data ------------------\n");
-        printf("Advertising data is NULL or empty.\n");
-    }
-
-    if (p_scan_rsp != NULL && p_scan_rsp->p_data != NULL && p_scan_rsp->length > 0) {
-        printf("----------------- Scan Response Data -----------------\n");
-        printf("Scan Response Data\n", p_scan_rsp->p_data, p_scan_rsp->length);
-    } else {
-        printf("----------------- Scan Response Data -----------------\n");
-        printf("Scan response data is NULL or empty.\n");
-    }
-
-    return OPRT_OK;
-#else
     tuya_hci_le_set_adv_data(p_adv->p_data, p_adv->length);
     tuya_hci_le_set_scan_rsp_data(p_scan_rsp->p_data, p_scan_rsp->length);
     return OPRT_OK;
-#endif
 }
 
 /**
@@ -280,6 +235,7 @@ OPERATE_RET tkl_ble_gap_adv_rsp_data_update(TKL_BLE_DATA_T const *p_adv, TKL_BLE
 OPERATE_RET tkl_ble_gap_scan_start(TKL_BLE_GAP_SCAN_PARAMS_T const *p_scan_params)
 {
     printf("tkl_ble_gap_scan_start");      
+    return OPRT_NOT_SUPPORTED;
 }
 
 /**
@@ -291,6 +247,7 @@ OPERATE_RET tkl_ble_gap_scan_start(TKL_BLE_GAP_SCAN_PARAMS_T const *p_scan_param
 OPERATE_RET tkl_ble_gap_scan_stop(void)
 {
     printf("tkl_ble_gap_scan_stop");         
+    return OPRT_NOT_SUPPORTED;
 }
 
 /**
@@ -304,6 +261,7 @@ OPERATE_RET tkl_ble_gap_scan_stop(void)
 OPERATE_RET tkl_ble_gap_connect(TKL_BLE_GAP_ADDR_T const *p_peer_addr, TKL_BLE_GAP_SCAN_PARAMS_T const *p_scan_params, TKL_BLE_GAP_CONN_PARAMS_T const *p_conn_params)
 {
     printf("tkl_ble_gap_connect");            
+    return OPRT_NOT_SUPPORTED;
 }
 
 /**
@@ -330,21 +288,9 @@ OPERATE_RET tkl_ble_gap_disconnect(uint16_t conn_handle, uint8_t hci_reason)
 OPERATE_RET tkl_ble_gap_conn_param_update(uint16_t conn_handle, TKL_BLE_GAP_CONN_PARAMS_T const *p_conn_params)
 {
     printf("tkl_ble_gap_conn_param_update");
+    return OPRT_NOT_SUPPORTED;
 }
-
-/**
- * @brief   Set the radio's transmit power.
- * @param   [in] role:          0: Advertising Tx Power; 1: Scan Tx Power; 2: Connection Power
- *          [in] tx_power:      tx power:This value will be magnified 10 times. 
- *                              If the tx_power value is -75, the real power is -7.5dB.(or 40 = 4dB)
- * @return  SUCCESS
- *          ERROR
- * */ 
-OPERATE_RET tkl_ble_gap_tx_power_set(uint8_t role, int tx_power)
-{
-    printf("tkl_ble_gap_tx_power_set");
-}
-
+ 
 /**
  * @brief   Get the received signal strength for the last connection event.
  * @param   [in]conn_handle:    connection handle
@@ -354,19 +300,9 @@ OPERATE_RET tkl_ble_gap_tx_power_set(uint8_t role, int tx_power)
 OPERATE_RET tkl_ble_gap_rssi_get(uint16_t conn_handle)
 {
     printf("tkl_ble_gap_rssi_get");
+    return OPRT_NOT_SUPPORTED;
 }
-
-/**
- * @brief   Set the GAP Name For Bluetooth
- * @param   [in]p_name:         GAP Name String
- * @return  SUCCESS
- *          ERROR
- * */
-OPERATE_RET tkl_ble_gap_name_set(char *p_name)
-{
-    printf("tkl_ble_gap_name_set");
-}
-
+ 
 /**
  * @brief   Add Ble Gatt Service
  * @param   [in] p_service: define the ble service
@@ -376,10 +312,11 @@ OPERATE_RET tkl_ble_gap_name_set(char *p_name)
  * */ 
 OPERATE_RET tkl_ble_gatts_service_add(TKL_BLE_GATTS_PARAMS_T *p_service)
 {
-#if 1  // LOG
     // 有些 wifi+ble 应用先调用了这个再调用初始化，
     // 导致失败，这里直接也调用下协议栈初始化，同时该函数做了防重复初始化
     bluez_inc_init(__gap_evt_cb, __gatt_evt_cb);
+
+#if 0  // LOG：服务/特征值明细 dump（原为 #if 1 常开），排查 GATT 表时改回 1
     printf("tkl_ble_gatts_service_add\n");
     printf("svc_num=%d\n", p_service->svc_num);
 
@@ -450,22 +387,7 @@ OPERATE_RET tkl_ble_gatts_service_add(TKL_BLE_GATTS_PARAMS_T *p_service)
     bluez_inc_add_gatt(p_service);
     return OPRT_OK;
 }
-
-/**
- * @brief   [Optional] Indicates a change in attribute assignment to all subscribed peers(Specify conn_handle).
- * 
- * @param   [in] conn_handle    Connection handle.
- * @param   [in] start_handle   The start of the affected handle range.
- * @param   [in] end_handle     The end of the affected handle range.
- * 
- * @return  SUCCESS
- *          ERROR
- * */ 
-OPERATE_RET tkl_ble_gatts_service_change(uint16_t conn_handle, uint16_t start_handle, uint16_t end_handle)
-{
-    printf("tkl_ble_gatts_service_change");
-}
-
+ 
 /**
  * @brief   Set the value of a given attribute. After Config Tuya Read-Char, we can update read-value at any time.
  * @param   [in] conn_handle    Connection handle.
@@ -479,20 +401,9 @@ OPERATE_RET tkl_ble_gatts_service_change(uint16_t conn_handle, uint16_t start_ha
 OPERATE_RET tkl_ble_gatts_value_set(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length)
 {
     printf("tkl_ble_gatts_value_set");
+    return OPRT_NOT_SUPPORTED;
 }
-
-/**
- * @brief   Get the value of a given attribute.
- * @param   [in] conn_handle    Connection handle. Ignored if the value does not belong to a system attribute.
- * @param   [in] char_handle    Attribute handle.
- * @return  SUCCESS
- *          ERROR
- * */ 
-OPERATE_RET tkl_ble_gatts_value_get(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length)
-{
-    printf("tkl_ble_gatts_value_get");
-}
-
+ 
 /**
  * @brief   Notify an attribute value.
  * @param   [in] conn_handle    Connection handle.
@@ -507,21 +418,7 @@ OPERATE_RET tkl_ble_gatts_value_notify(uint16_t conn_handle, uint16_t char_handl
     printf("tkl_ble_gatts_value_notify");
     return bluez_inc_gatt_value_notify(conn_handle, char_handle, p_data, length);
 }
-
-/**
- * @brief   Indicate an attribute value.
- * @param   [in] conn_handle    Connection handle.
- * @param   [in] char_handle    Attribute handle.
- *          [in] p_data         Notify Values
- *          [in] length         Value Length
- * @return  SUCCESS
- *          ERROR
- * */ 
-OPERATE_RET tkl_ble_gatts_value_indicate(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length)
-{
-   printf("tkl_ble_gatts_value_indicate"); 
-}
-
+ 
 /**
  * @brief   Reply to an ATT_MTU exchange request by sending an Exchange MTU Response to the client.
  * @param   [in] conn_handle    Connection handle.
@@ -532,6 +429,7 @@ OPERATE_RET tkl_ble_gatts_value_indicate(uint16_t conn_handle, uint16_t char_han
 OPERATE_RET tkl_ble_gatts_exchange_mtu_reply(uint16_t conn_handle, uint16_t server_rx_mtu)
 {
     printf("tkl_ble_gatts_exchange_mtu_reply"); 
+    return OPRT_NOT_SUPPORTED;
 }
 
 /******************************************************************************************************************************/
@@ -550,6 +448,7 @@ OPERATE_RET tkl_ble_gatts_exchange_mtu_reply(uint16_t conn_handle, uint16_t serv
 OPERATE_RET tkl_ble_gattc_all_service_discovery(uint16_t conn_handle)
 {
     printf("tkl_ble_gattc_all_service_discovery"); 
+    return OPRT_NOT_SUPPORTED;
 }
 
 /**
@@ -565,6 +464,7 @@ OPERATE_RET tkl_ble_gattc_all_service_discovery(uint16_t conn_handle)
 OPERATE_RET tkl_ble_gattc_all_char_discovery(uint16_t conn_handle, uint16_t start_handle, uint16_t end_handle)
 {
     printf("tkl_ble_gattc_all_char_discovery");
+    return OPRT_NOT_SUPPORTED;
 }
 
 /**
@@ -579,6 +479,7 @@ OPERATE_RET tkl_ble_gattc_all_char_discovery(uint16_t conn_handle, uint16_t star
 OPERATE_RET tkl_ble_gattc_char_desc_discovery(uint16_t conn_handle, uint16_t start_handle, uint16_t end_handle)
 {
     printf("tkl_ble_gattc_char_desc_discovery"); 
+    return OPRT_NOT_SUPPORTED;
 }
 
 /**
@@ -593,22 +494,9 @@ OPERATE_RET tkl_ble_gattc_char_desc_discovery(uint16_t conn_handle, uint16_t sta
 OPERATE_RET tkl_ble_gattc_write_without_rsp(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length)
 {
     printf("tkl_ble_gattc_write_without_rsp") ;
+    return OPRT_NOT_SUPPORTED;
 }
-
-/**
- * @brief   [Ble Central] Write Data with response
- * @param   [in] conn_handle    Connection handle.
- * @param   [in] char_handle    Attribute handle.
- *          [in] p_data         Write Values
- *          [in] length         Value Length
- * @return  SUCCESS
- *          ERROR
- * */
-OPERATE_RET tkl_ble_gattc_write(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length)
-{
-    printf("tkl_ble_gattc_write");
-}
-
+ 
 /**
  * @brief   [Ble Central] Read Data
  * @param   [in] conn_handle    Connection handle.
@@ -619,6 +507,7 @@ OPERATE_RET tkl_ble_gattc_write(uint16_t conn_handle, uint16_t char_handle, uint
 OPERATE_RET tkl_ble_gattc_read(uint16_t conn_handle, uint16_t char_handle)
 {
     printf("tkl_ble_gattc_read"); 
+    return OPRT_NOT_SUPPORTED;
 }
 
 /**
@@ -631,61 +520,7 @@ OPERATE_RET tkl_ble_gattc_read(uint16_t conn_handle, uint16_t char_handle)
 OPERATE_RET tkl_ble_gattc_exchange_mtu_request(uint16_t conn_handle, uint16_t client_rx_mtu)
 {
     printf("tkl_ble_gattc_exchange_mtu_request");
+    return OPRT_NOT_SUPPORTED;
 }
-
-/**
- * @brief   [Special Command Control] Base on Bluetooth, We can do some special commands for exchanging some informations.
- * @param   [in] opcode         Operations Opcode.
- *          [in] user_data      Post Some Special Commands Data.
- *          [in] data_len       User's Data Length.
- * @note    For Operations Codes, we can do anythings after exchange from TAL Application
- *          And We define some Opcodes as below for reference.
- *          For Bluetooth NCP Module: Mask=0x01, Code ID: 0x00~0xff. Opcode = ((0x01 << 8) & Code ID)
- *          eg:     0x0100: Special Vendor Module Init
- *                  0x0101: Special Vendor Module Deinit
- *                  0x0102: Special Vendor Module Reset
- *                  0x0103: Special Vendor Module Check Exist: Return OPRT_OK or OPRT_NOT_FOUND ..
- *                  0x0104: Specail Vendor Module Version Get.
- *                  0x0105: Specail Vendor Module Version Set.
- *                  0x0106: Specail Vendor Module Version Update.
- *                  0x0107: Specail Vendor Module Scan Switch.
- *                  0x0108: Specail Vendor Module Scan Stop.
- *                  0x0109: Specail Vendor Module Auth Check.
- *                  0x0110: Specail Vendor Module Auth Erase.
- *
- *  * @return  SUCCESS
- *          ERROR
- * */
-OPERATE_RET tkl_ble_vendor_command_control(uint16_t opcode, void *user_data, uint16_t data_len)
-{
-    printf("tkl_ble_vendor_command_control");
-}
-
-/**
- * @brief set ble mode, used in wifi ble coexist mode
- * 
- * @param[in]       enable     enbale mode
- * @param[in]       mode       the ble mode
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tkl_ble_set_mode(const BOOL_T enable, const uint8_t mode)
-{
-    printf("tkl_ble_set_mode");
-}
-
-/**
- * @brief   Set country code, different country codes have different TX powers.
- * @param   [in] country_code    Country code.
- *                              COUNTRY_CODE_CN     0
- *                              COUNTRY_CODE_US     1
- *                              COUNTRY_CODE_JP     2
- *                              COUNTRY_CODE_EU     3
- *                              COUNTRY_CODE_JP1    4
- * @return  SUCCESS
- *          ERROR
- * */
-OPERATE_RET tkl_ble_gap_country_set(uint8_t country_code)
-{
-    printf("tkl_ble_gap_country_set");
-}
-
+ 
+ 

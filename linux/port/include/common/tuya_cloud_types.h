@@ -9,9 +9,8 @@ Copyright(C),2018-2020, 涂鸦科技 www.tuya.comm
 #include "tuya_iot_config.h"
 #include <stdarg.h>
 
-#if OPERATING_SYSTEM == SYSTEM_LINUX
-// #include <ctype.h>
-#endif
+/* 原处有一个恒空的 #if OPERATING_SYSTEM == SYSTEM_LINUX ... #endif 块
+ * （内容只有一行注释掉的 #include <ctype.h>），已删。 */
 
 #include <stddef.h>
 #include <stdint.h>
@@ -1257,13 +1256,11 @@ typedef struct {
     UINT8_T chipidlen;
 } TUYA_CPU_INFO_T;
 
-#if OPERATING_SYSTEM != SYSTEM_NON_OS
+/* SYS_TICK_T/SYS_TIME_T：本 port 只面向 Linux（OPERATING_SYSTEM=SYSTEM_LINUX），
+ * 恒取 64 位。原 #else 分支（UINT_T）仅裸机（SYSTEM_NON_OS）需要，已删——
+ * 若将来支持裸机需回滚此处。 */
 typedef UINT64_T SYS_TICK_T;
 typedef UINT64_T SYS_TIME_T;
-#else
-typedef UINT_T SYS_TICK_T;
-typedef UINT_T SYS_TIME_T;
-#endif
 /*
  *  reasons for restart
  */

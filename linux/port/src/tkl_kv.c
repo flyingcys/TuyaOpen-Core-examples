@@ -45,8 +45,8 @@
  * 把 __flash_* 映射到实际分区，且 __flash_erase 必须调块擦除命令
  * （写 0xFF 对 NOR flash 是 no-op）。
  * ===== */
-/* 与 linux_wifi.h 协同的可覆盖点：构建可 -DFLASH_FILE_PATH=... 统一改目录
- * （内联原 tkl_flash.c 时保留其 #ifndef guard，否则注入时两处目录分裂） */
+/* 可覆盖点：构建可 -DFLASH_FILE_PATH=... 统一改目录（内联原 tkl_flash.c 时保留其
+ * #ifndef guard；原先还有 linux_wifi.h 的同名覆盖点，该文件已随 tkl_wifi 目录删除） */
 #ifndef FLASH_FILE_PATH
 #define FLASH_FILE_PATH    "./tuyadb"
 #endif

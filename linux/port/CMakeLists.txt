@@ -7,7 +7,7 @@ endif()
 
 set(PORT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 
-# adapter 布局：include/（头）+ src/（TKL 实现，含 tkl_wifi/tkl_bt）；
+# adapter 布局：include/（头）+ src/（TKL 实现，含 tkl_bt）；
 # 通用工具（tuya_list/queue/mem_heap/ringbuf/slist/tools）已迁至
 # tuyaopen-core/iot-core/tuya_transport/src/utilities（core 共用，平台无关）
 set(_port_srcs)
@@ -17,6 +17,9 @@ file(GLOB_RECURSE _port_srcs CONFIGURE_DEPENDS
 )
 if(_port_srcs)
     list(FILTER _port_srcs EXCLUDE REGEX "/CMakeFiles/")
+    # bluez_inc 的 examples/ 是第三方示例（central/main.c、peripheral/peripheral.c 各带
+    # int main()），BT=ON 时 GLOB_RECURSE 会把它们收进 port 静态库，必须排除
+    list(FILTER _port_srcs EXCLUDE REGEX "/bluez_inc/examples/")
     list(REMOVE_DUPLICATES _port_srcs)
 endif()
 
@@ -32,9 +35,6 @@ if(EXISTS "${PORT_ROOT}/littlefs/lfs.c")
     set(_port_lfs_defs LFS_CONFIG=lfs_config.h)
 endif()
 
-if(NOT CONFIG_ENABLE_WIFI AND _port_srcs)
-    list(FILTER _port_srcs EXCLUDE REGEX "/tkl_wifi/")
-endif()
 if(NOT CONFIG_ENABLE_BLUETOOTH AND _port_srcs)
     list(FILTER _port_srcs EXCLUDE REGEX "/tkl_bt/")
 endif()

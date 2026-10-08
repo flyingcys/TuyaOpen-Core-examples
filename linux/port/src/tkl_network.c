@@ -43,7 +43,7 @@ typedef struct NETWORK_ERRNO_TRANS {
     int priv_err;
 } NETWORK_ERRNO_TRANS_S;
 
-const NETWORK_ERRNO_TRANS_S unw_errno_trans[] = {{EINTR, UNW_EINTR},
+static const NETWORK_ERRNO_TRANS_S unw_errno_trans[] = {{EINTR, UNW_EINTR},
                                                  {EBADF, UNW_EBADF},
                                                  {EAGAIN, UNW_EAGAIN},
                                                  {EFAULT, UNW_EFAULT},
