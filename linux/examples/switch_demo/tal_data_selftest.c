@@ -129,8 +129,13 @@ static int test_kv_basic(void)
 static int test_kv_compaction(void)
 {
     uint8_t blob[8 * 1024], rd[8 * 1024];
-    size_t out_len = 0;
+    uint8_t old_blob[512], rd_old[512];
+    size_t out_len = 0, out_old = 0;
     char name[16];
+
+    /* 只写一次、之后不再碰的老 key：GC 必须把它搬运保留（否则区域满时被静默覆盖） */
+    memset(old_blob, 0x33, sizeof(old_blob));
+    CHECK(OPRT_OK == tal_data_write("old.key", old_blob, sizeof(old_blob)));
 
     /* 反复覆盖写大对象，强制触发压缩（区域 256KB） */
     for (int i = 0; i < 64; i++) {
@@ -146,6 +151,10 @@ static int test_kv_compaction(void)
         CHECK(out_len == sizeof(blob));
         CHECK(rd[0] == (uint8_t)(60 + i));                  /* 最后一轮 i=60..63 */
     }
+    /* 老 key 必须存活且内容不变 */
+    memset(rd_old, 0, sizeof(rd_old));
+    CHECK(OPRT_OK == tal_data_read("old.key", rd_old, sizeof(rd_old), &out_old));
+    CHECK(out_old == sizeof(old_blob) && 0 == memcmp(old_blob, rd_old, out_old));
     return 0;
 }
 
