@@ -102,7 +102,11 @@ OPERATE_RET tkl_flash_write(uint32_t addr, const uint8_t *src, uint32_t size)
     }
 
     tkl_fflush(s_flash_file);
-    tkl_fsync(tkl_fileno(s_flash_file));
+    /* 句柄判空见函数入口；此处 fd 无效（-1）时跳过 fsync，不得对 NULL 取 fileno */
+    int fd = tkl_fileno(s_flash_file);
+    if (fd >= 0) {
+        tkl_fsync(fd);
+    }
 
     return OPRT_OK;
 }
@@ -121,6 +125,11 @@ OPERATE_RET tkl_flash_erase(uint32_t addr, uint32_t size)
 
 static OPERATE_RET __flash_file_init(void)
 {
+    /* 有意偏离原样恢复代码：句柄无效时不得继续（tkl_fwrite/tkl_fileno 收 NULL 段错误） */
+    if(!s_flash_file) {
+        return OPRT_FILE_OPEN_FAILED;
+    }
+
     char *data = malloc(PARTITION_SIZE);
     if(NULL == data) {
         return OPRT_MALLOC_FAILED;
@@ -134,7 +143,10 @@ static OPERATE_RET __flash_file_init(void)
     }
     free(data);
     tkl_fflush(s_flash_file);
-    tkl_fsync(tkl_fileno(s_flash_file));
+    int fd = tkl_fileno(s_flash_file);
+    if (fd >= 0) {
+        tkl_fsync(fd);
+    }
 
     // extern OPERATE_RET ws_db_init_mf(void);
     // ws_db_init_mf();
@@ -165,10 +177,16 @@ OPERATE_RET tkl_flash_get_one_type_info(TUYA_FLASH_TYPE_E type, TUYA_FLASH_BASE_
         } else {
             s_flash_file = tkl_fopen(FLASH_FILE_NAME, "rb+");
         }
+        /* 有意偏离原样恢复代码：存储不可用（如目录只读）时文件打不开，原实现
+         * 继续对 NULL 句柄取 fileno 会段错误；此处直接返回错误码，由调用方
+         * （tal_kv_init 等）按失败处理 */
+        if(!s_flash_file) {
+            return OPRT_FILE_OPEN_FAILED;
+        }
         int fd = tkl_fileno(s_flash_file);
         if (fd >=0 ) {
             fcntl(fd, F_SETFD, FD_CLOEXEC);
-        } 
+        }
     }
 
     if ((type > TUYA_FLASH_TYPE_MAX) || (info == NULL)) {

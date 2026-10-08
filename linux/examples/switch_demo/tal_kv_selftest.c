@@ -386,6 +386,42 @@ static int test_concurrent(void)
     return 0;
 }
 
+/* 10. 错密钥：换一套 seed/key 重新 init 后，旧数据必须解不开（非 OK 且出参置
+ *     NULL/0）；恢复原 cfg 重新 init 后数据完好（验证 port 每次 init 都按传入
+ *     配置刷新密钥派生）。用例依赖加密实现——Linux port 有 AES-128-CBC；无加密
+ *     平台（NVS 直映射）可调整或删除该用例。 */
+static int test_wrong_key(void)
+{
+    static const uint8_t wr[32] = "wrong-key-payload-0123456789abc";
+    tal_kv_cfg_t other_cfg = {
+        .seed = "aaaaaaaaaaaaaaaa",
+        .key  = "bbbbbbbbbbbbbbbb",
+    };
+    uint8_t *rd = NULL;
+    size_t out_len = 0;
+    int ret;
+
+    CHECK(OPRT_OK == tal_kv_init(&s_kv_cfg));
+
+    CHECK(OPRT_OK == tal_kv_set("t10.wrong", wr, sizeof(wr)));
+    CHECK(0 == check_roundtrip("t10.wrong", wr, sizeof(wr)));
+
+    /* 换一套 seed/key：旧密文解不开 → 必须报错，且出参置 NULL/0（预置哨兵验证） */
+    CHECK(OPRT_OK == tal_kv_init(&other_cfg));
+    rd = (uint8_t *)0x1;
+    out_len = 0x5A5A;
+    ret = tal_kv_get("t10.wrong", &rd, &out_len);
+    CHECK(OPRT_OK != ret);
+    CHECK(NULL == rd && 0 == out_len);
+
+    /* 恢复原 cfg：数据必须完好（init 幂等但会刷新密钥派生） */
+    CHECK(OPRT_OK == tal_kv_init(&s_kv_cfg));
+    CHECK(0 == check_roundtrip("t10.wrong", wr, sizeof(wr)));
+
+    CHECK(OPRT_OK == tal_kv_del("t10.wrong"));
+    return 0;
+}
+
 int main(void)
 {
     if (0 != test_basic_rw()) {
@@ -416,6 +452,9 @@ int main(void)
         return 1;
     }
     if (0 != test_concurrent()) {
+        return 1;
+    }
+    if (0 != test_wrong_key()) {
         return 1;
     }
     printf("ALL TESTS PASSED\n");

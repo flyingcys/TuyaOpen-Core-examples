@@ -87,6 +87,8 @@ static OPERATE_RET kv_storage_init(void)
     lfs_cfg.block_size = info.partition[0].block_size;
     lfs_cfg.block_count = info.partition[0].size / info.partition[0].block_size;
     lfs_cfg.cache_size = info.partition[0].block_size;
+    /* 原样恢复自旧实现：公式为笔误（(8 - block_count/8) 使结果恒为 8，littlefs 位图
+     * 分窗扫描按 8 字节窗口工作，功能正常），有意保留不改——避免影响 flash 布局 */
     lfs_cfg.lookahead_size = lfs_cfg.block_count / 8 + (8 - (lfs_cfg.block_count / 8));
     lfs_cfg.block_cycles = 500;
 
@@ -282,6 +284,11 @@ static OPERATE_RET tkl_kv_set(const char *key, const uint8_t *value, size_t leng
     if (NULL == key || NULL == value || 0 == length) {
         return OPRT_INVALID_PARM;
     }
+    /* 未 init（介质未挂载）时不得触碰 lfs：lfs->cfg 为空会崩 */
+    if (FALSE == s_lfs_mounted) {
+        PR_ERR("kv not mounted, set %s rejected", key);
+        return OPRT_COM_ERROR;
+    }
 
     PR_DEBUG("key:%s, len %u", key, (unsigned int)length);
     result = kv_encrypt(value, length, &encrypted, &encrypted_length);
@@ -303,12 +310,23 @@ static OPERATE_RET tkl_kv_get(const char *key, uint8_t **value, size_t *length)
     uint32_t encrypted_length = 0;
     OPERATE_RET result;
 
+    /* 契约（tal_kv.h）：失败时 *value 置 NULL、*length 置 0。先于参数校验归零，
+     * 保证 port 被直接调用（不经济传的 tal_kv.c）也守住承诺 */
+    if (NULL != value) {
+        *value = NULL;
+    }
+    if (NULL != length) {
+        *length = 0;
+    }
+
     if (NULL == key || NULL == value || NULL == length) {
         return OPRT_INVALID_PARM;
     }
-    /* 契约（tal_kv.h）：失败时 *value 置 NULL、*length 置 0 */
-    *value = NULL;
-    *length = 0;
+    /* 未 init（介质未挂载）时不得触碰 lfs：lfs->cfg 为空会崩 */
+    if (FALSE == s_lfs_mounted) {
+        PR_ERR("kv not mounted, get %s rejected", key);
+        return OPRT_COM_ERROR;
+    }
 
     tal_mutex_lock(s_lfs_mutex);
     result = kv_storage_read(key, &encrypted, &encrypted_length);
@@ -334,6 +352,11 @@ static OPERATE_RET tkl_kv_del(const char *key)
 
     if (NULL == key) {
         return OPRT_INVALID_PARM;
+    }
+    /* 未 init（介质未挂载）时不得触碰 lfs：lfs->cfg 为空会崩 */
+    if (FALSE == s_lfs_mounted) {
+        PR_ERR("kv not mounted, del %s rejected", key);
+        return OPRT_COM_ERROR;
     }
 
     tal_mutex_lock(s_lfs_mutex);
