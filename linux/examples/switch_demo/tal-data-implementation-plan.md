@@ -1719,6 +1719,103 @@ static OPERATE_RET __scan(void)
 
 **6) 提交**：同 Step 5 的两仓提交格式，message 注明"设计修正版"。
 
+### Step 3-修正2：去掉压缩（最终版，**以本段为准，替代上面的 Step 3 与 Step 3-修正**）
+
+> 2026-10-08 用户决策：**flash 存储不做压缩**，要求平台开足够大的存储区域。删除 GC/回卷/空洞扫描全部逻辑，日志退化为**纯线性追加**。
+
+**实现改动（相对当前 HEAD `51aeca0`/`32b65ba`）**：
+
+1. **删除** `__compact`、`__free_gap`、`__usable_free`、`__garbage_len` 全部逻辑；`s_head` 变量删除（无读者）
+2. `__append` 退化为直接调 `__append_rec`（无压缩、无重试）：
+```c
+static OPERATE_RET __append(const uint8_t *rec, uint32_t rec_len)
+{
+    return __append_rec(rec, rec_len);
+}
+```
+3. `__append_rec` 去掉 PAD 回卷分支——**不跨区尾，满即报错**：
+```c
+static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len)
+{
+    TAL_DATA_OPS_T *ops = tal_data_get_ops();
+
+    if (s_tail + rec_len > s_region_size) {
+        return OPRT_COM_ERROR;                       /* 区域满：绝不覆盖已有记录 */
+    }
+    if (OPRT_OK != ops->write(s_tail, rec, rec_len)) {
+        return OPRT_COM_ERROR;
+    }
+    s_tail += rec_len;
+    return OPRT_OK;
+}
+```
+4. `__scan` **恢复 Task 2 的顺序扫描版本**（`tal_data.c` 现 HEAD 里的空洞容忍分块扫描删掉，回到"顺序读、magic 不符即日志尾"的版本 + 保留墓碑分支与不变量注释 + `s_tail = max_end`）
+5. 删除自测里 `test_kv_compaction` 的 64×8KB 覆盖写（会撑爆区域），改为两个用例：
+```c
+static int test_kv_overwrite(void)
+{
+    /* a) 覆盖写正确性 + 老 key 存活（不触发容量上限） */
+    uint8_t old_blob[512], blob[256], rd[512];
+    size_t out_len = 0;
+    char name[16];
+
+    memset(old_blob, 0x33, sizeof(old_blob));
+    CHECK(OPRT_OK == tal_data_write("old.key", old_blob, sizeof(old_blob)));
+
+    for (int i = 0; i < 20; i++) {
+        memset(blob, (uint8_t)i, sizeof(blob));
+        snprintf(name, sizeof(name), "ovw.%d", i % 4);
+        CHECK(OPRT_OK == tal_data_write(name, blob, sizeof(blob)));
+    }
+    for (int i = 0; i < 4; i++) {
+        snprintf(name, sizeof(name), "ovw.%d", i);
+        memset(rd, 0, sizeof(rd));
+        CHECK(OPRT_OK == tal_data_read(name, rd, sizeof(rd), &out_len));
+        CHECK(out_len == sizeof(blob));
+        CHECK(rd[0] == (uint8_t)(16 + i));           /* 最后一轮 i=16..19 */
+    }
+    /* 老 key 经 20 次覆盖后仍可读且内容不变 */
+    memset(rd, 0, sizeof(rd));
+    CHECK(OPRT_OK == tal_data_read("old.key", rd, sizeof(rd), &out_len));
+    CHECK(out_len == sizeof(old_blob) && 0 == memcmp(old_blob, rd, out_len));
+    return 0;
+}
+
+static int test_kv_region_full(void)
+{
+    /* b) 区域满安全：持续写大数据直到报满，已写入的 key 必须全部仍可读（不得覆盖/丢失） */
+    uint8_t blob[8 * 1024], rd[8 * 1024];
+    size_t out_len = 0;
+    char name[16];
+    int written = 0, full = 0;
+
+    for (int i = 0; i < 128; i++) {
+        memset(blob, (uint8_t)(i & 0xFF), sizeof(blob));
+        snprintf(name, sizeof(name), "full.%d", i);
+        if (OPRT_OK != tal_data_write(name, blob, sizeof(blob))) {
+            full = 1;
+            break;
+        }
+        written++;
+    }
+    CHECK(1 == full);                                /* 必须真的写满并报错 */
+    CHECK(written > 0);
+    for (int i = 0; i < written; i++) {              /* 已写入的全部可读且内容正确 */
+        snprintf(name, sizeof(name), "full.%d", i);
+        memset(rd, 0, sizeof(rd));
+        CHECK(OPRT_OK == tal_data_read(name, rd, sizeof(rd), &out_len));
+        CHECK(out_len == sizeof(blob));
+        CHECK(rd[0] == (uint8_t)(i & 0xFF));
+    }
+    return 0;
+}
+```
+并在 `main()` 里把 `test_kv_compaction()` 换成 `test_kv_overwrite()` + `test_kv_region_full()`。
+
+**变异验证（必须做）**：把 `__append_rec` 的 `s_tail + rec_len > s_region_size` 检查去掉（允许越界/覆盖）→ `test_kv_region_full` **必须变红**；恢复后复绿。
+
+**提交**：分两仓库提交，message 注明「去掉压缩（flash 不做回收，区域开足够大）」，并在 message 里写明这是取代前两笔 GC 实现的最终版。
+
 ---
 
 ## Task 4: 迁移 `tuya_main.c`（P0）
