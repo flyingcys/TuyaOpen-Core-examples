@@ -423,6 +423,9 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 extern "C" {
 #endif
 
+/* 单条明文上限（宏可配） */
+#define TAL_DATA_PLAIN_MAX (16 * 1024)
+
 /* seed/key 各 16 字节（沿用现有 tal_kv 的密钥形态） */
 OPERATE_RET tal_data_init(const char *seed, const char *key);
 
@@ -477,7 +480,7 @@ TAL_DATA_OPS_T *tal_data_get_ops(void)
 #define TAL_DATA_ST_PAD      0x02
 #define TAL_DATA_NAME_MAX    63
 #define TAL_DATA_INDEX_MAX   64
-#define TAL_DATA_PLAIN_MAX   (16 * 1024)
+/* 单条明文上限 TAL_DATA_PLAIN_MAX 由 tal_data.h 提供 */
 
 typedef struct {
     char     name[TAL_DATA_NAME_MAX + 1];
@@ -889,6 +892,7 @@ static OPERATE_RET __append(const uint8_t *rec, uint32_t rec_len)
 OPERATE_RET tal_data_write(const char *name, const uint8_t *buf, size_t len)
 {
     uint8_t *ct = NULL, *rec = NULL;
+    uint8_t iv_local[16];
     uint32_t ct_len = 0, rec_len;
     OPERATE_RET ret;
 
@@ -898,7 +902,9 @@ OPERATE_RET tal_data_write(const char *name, const uint8_t *buf, size_t len)
     if (OPRT_OK != __name_check(name) || NULL == buf || 0 == len || len > TAL_DATA_PLAIN_MAX) {
         return OPRT_INVALID_PARM;
     }
-    if (OPRT_OK != tal_aes128_cbc_encode((uint8_t *)buf, (uint32_t)len, s_key, s_iv, &ct, &ct_len)) {
+    /* mbedtls CBC 会就地改写传入的 iv，必须传局部副本（否则全局 IV 被永久污染） */
+    memcpy(iv_local, s_iv, 16);
+    if (OPRT_OK != tal_aes128_cbc_encode((uint8_t *)buf, (uint32_t)len, s_key, iv_local, &ct, &ct_len)) {
         return OPRT_COM_ERROR;
     }
     rec_len = __rec_len((uint32_t)strlen(name), ct_len);
@@ -939,6 +945,7 @@ OPERATE_RET tal_data_read(const char *name, uint8_t *buf, size_t buf_size, size_
     int idx;
     uint8_t *rec = NULL, *ct = NULL, *pt = NULL;
     uint8_t state = 0;
+    uint8_t iv_local[16];
     char rname[TAL_DATA_NAME_MAX + 1];
     uint32_t seq = 0, doff = 0, dlen = 0, rlen = 0, data_in_rec;
     uint32_t pt_len = 0;
@@ -974,11 +981,23 @@ OPERATE_RET tal_data_read(const char *name, uint8_t *buf, size_t buf_size, size_
     memcpy(ct, rec + data_in_rec, dlen);
     tal_free(rec);
 
-    if (OPRT_OK != tal_aes128_cbc_decode(ct, dlen, s_key, s_iv, &pt, &pt_len)) {
+    /* mbedtls CBC 会就地改写传入的 iv，必须传局部副本 */
+    memcpy(iv_local, s_iv, 16);
+    if (OPRT_OK != tal_aes128_cbc_decode(ct, dlen, s_key, iv_local, &pt, &pt_len)) {
         tal_free(ct);
         return OPRT_COM_ERROR;
     }
     tal_free(ct);
+
+    /* tal_aes128_cbc_decode 返回的是密文长度，需按 PKCS7 求实际明文长度 */
+    {
+        int32_t actual = tal_aes_get_actual_length(pt, pt_len);
+        if (actual < 0) {
+            tal_aes_free_data(pt);
+            return OPRT_COM_ERROR;
+        }
+        pt_len = (uint32_t)actual;
+    }
 
     *out_len = pt_len;
     if (NULL == buf) {
