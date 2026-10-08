@@ -46,7 +46,7 @@ static OPERATE_RET __netif_get_status_by_name(const char *if_name, TKL_NETIF_LIN
         return OPRT_SOCK_ERR;
     }
 
-    strncpy(ifr.ifr_name, if_name, strlen(if_name));
+    strncpy(ifr.ifr_name, if_name, sizeof(ifr.ifr_name) - 1);
     if (ioctl(sockfd, SIOCGIFFLAGS, &ifr) < 0) {
         perror("ioctl");
         close(sockfd);

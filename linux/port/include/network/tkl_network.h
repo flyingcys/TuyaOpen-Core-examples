@@ -1,6 +1,6 @@
 /**
-* @file tkl_wired.h
-* @brief Common process - adapter the wired api
+* @file tkl_network.h
+* @brief Linux TKL network (POSIX sockets) — tkl_net_* 接口声明
 * @version 0.1
 * @date 2020-11-09
 *
