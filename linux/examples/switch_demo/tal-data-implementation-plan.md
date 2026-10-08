@@ -2045,14 +2045,353 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 
 ---
 
+## Task 4-修正：tal_kv 兼容层（**取代 Task 4 ~ Task 8 的全部迁移工作**）
+
+> 2026-10-08 用户决策：**上层保持 `tal_kv_*` 命名**，底层换 `tal_data`/`tkl_data` → iot-core / examples / p2p 的 **78 个调用点零改动**。原 Task 4–8（逐点迁移）作废。
+
+**Files:**
+- Create: `tuyaopen-core/third_party/tal_kv_compat/CMakeLists.txt`（**target 名必须叫 `tal_kv`**）
+- Create: `tuyaopen-core/third_party/tal_kv_compat/include/tal_kv.h`（旧 API 声明 + 类型）
+- Create: `tuyaopen-core/third_party/tal_kv_compat/src/tal_kv_compat.c`（实现）
+- Modify: `tuyaopen-core/third_party/CMakeLists.txt`（`add_subdirectory(tal_kv)` → `add_subdirectory(tal_kv_compat)`）
+- Modify: `tuyaopen-core/third_party/Kconfig`（`rsource "tal_kv/Kconfig"` → 删）
+
+**Interfaces:**
+- Consumes: `tal_data_init/read/write/erase`（Task 2/3 已交付）
+- Produces: `tal_kv_init/set/get/free/del/serialize_set/serialize_get` + `kv_db_t`/`kv_tp_t`/`tal_kv_cfg_t`（与旧 `tal_kv.h` 逐字兼容，**去掉** `tal_kv_cmd` 与 `tal_lfs_get`）
+
+**为什么必须同名**：`iot-core/tal_system/include/tal_api.h:55` 有 `#include "tal_kv.h"`；`iot-core/CMakeLists.txt:62`、`iot-core/tal_system/CMakeLists.txt:14`、agent-core/p2p 的 CMake 都 `target_link_libraries(... tal_kv)`。同名后这些引用**全部原样解析，iot-core 一个文件都不用改**。
+
+- [ ] **Step 1: 写 `tal_kv.h`（从旧头逐字保留 API 与类型，删两个函数）**
+
+```c
+/**
+ * @file tal_kv.h
+ * @brief K-V 存储（兼容层）：对外 API 与旧 tal_kv 逐字一致，实现改为 tal_data
+ *
+ * 上层（iot-core / 应用 / p2p）继续用 tal_kv_* 命名，底层由 tal_data（日志式
+ * 引擎 + AES）与 port 的 tkl_data（区域原语）承载。
+ *
+ * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
+ */
+#ifndef __TAL_KV_H__
+#define __TAL_KV_H__
+
+#include "tuya_cloud_types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define TAL_LV_KEY_LEN 16
+
+typedef enum {
+    KV_CHAR = 0,
+    KV_BYTE,
+    KV_SHORT,
+    KV_USHORT,
+    KV_INT,
+    KV_BOOL,
+    KV_STRING,
+    KV_RAW,
+} kv_tp_t;
+
+typedef struct {
+    char *key;
+    kv_tp_t tp;
+    void *val;
+    uint16_t len;
+} kv_db_t;
+
+typedef struct {
+    char seed[TAL_LV_KEY_LEN + 1];
+    char key[TAL_LV_KEY_LEN + 1];
+} tal_kv_cfg_t;
+
+int tal_kv_init(tal_kv_cfg_t *kv_cfg);
+int tal_kv_set(const char *key, const uint8_t *value, size_t length);
+int tal_kv_get(const char *key, uint8_t **value, size_t *length);
+int tal_kv_free(uint8_t *value);
+int tal_kv_del(const char *key);
+int tal_kv_serialize_set(const char *key, kv_db_t *db, size_t dbcnt);
+int tal_kv_serialize_get(const char *key, kv_db_t *db, size_t dbcnt);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+```
+
+> ⚠️ **实施时必须先读旧头逐字核对**：`tuyaopen-core/third_party/tal_kv/include/tal_kv.h` 的 `kv_tp_t` 枚举顺序、`kv_db_t`/`tal_kv_cfg_t` 字段名与顺序、函数签名——**必须逐字一致**（调用点要零改动编译）。上面是依据摸底报告的骨架，**以旧头为准**。
+
+- [ ] **Step 2: 写 `tal_kv_compat.c`（8 个 API over tal_data）**
+
+```c
+/**
+ * @file tal_kv_compat.c
+ * @brief tal_kv 兼容层实现：旧 API → tal_data（含 get 的分配语义与 serialize 的 cJSON）
+ */
+#include "tal_kv.h"
+#include "tal_data.h"
+#include "tal_memory.h"
+#include "tal_log.h"
+
+#include "cJSON.h"
+
+#include <string.h>
+
+#define KV_COMPAT_MAX_BLOB (16 * 1024)   /* 与 tal_data 单条上限一致 */
+
+int tal_kv_init(tal_kv_cfg_t *kv_cfg)
+{
+    if (NULL == kv_cfg) {
+        return OPRT_INVALID_PARM;
+    }
+    return tal_data_init(kv_cfg->seed, kv_cfg->key);
+}
+
+int tal_kv_set(const char *key, const uint8_t *value, size_t length)
+{
+    return tal_data_write(key, value, length);
+}
+
+/* 旧语义：value 为出参堆指针，调用方用 tal_kv_free 释放 */
+int tal_kv_get(const char *key, uint8_t **value, size_t *length)
+{
+    size_t len = 0;
+    uint8_t *buf = NULL;
+    OPERATE_RET ret;
+
+    if (NULL == value || NULL == length) {
+        return OPRT_INVALID_PARM;
+    }
+    ret = tal_data_read(key, NULL, 0, &len);          /* 探测尺寸 */
+    if (OPRT_OK != ret) {
+        return ret;                                   /* 含 NOT_FOUND */
+    }
+    buf = tal_malloc(len + 1);
+    if (NULL == buf) {
+        return OPRT_MALLOC_FAILED;
+    }
+    ret = tal_data_read(key, buf, len, &len);
+    if (OPRT_OK != ret) {
+        tal_free(buf);
+        return ret;
+    }
+    buf[len] = '\0';                                  /* 旧实现末尾补 \0，兼容字符串用法 */
+    *value = buf;
+    *length = len;
+    return OPRT_OK;
+}
+
+int tal_kv_free(uint8_t *value)
+{
+    if (NULL != value) {
+        tal_free(value);
+    }
+    return OPRT_OK;
+}
+
+int tal_kv_del(const char *key)
+{
+    return tal_data_erase(key);
+}
+
+/* 把 kv_db_t 数组序列化成 JSON 落盘（旧 kv_serialize 的等价实现；无需兼容旧落盘格式） */
+int tal_kv_serialize_set(const char *key, kv_db_t *db, size_t dbcnt)
+{
+    cJSON *root = NULL, *arr = NULL;
+    char *out = NULL;
+    OPERATE_RET ret = OPRT_OK;
+
+    if (NULL == key || NULL == db) {
+        return OPRT_INVALID_PARM;
+    }
+    root = cJSON_CreateObject();
+    arr = cJSON_CreateArray();
+    if (NULL == root || NULL == arr) {
+        cJSON_Delete(root);
+        cJSON_Delete(arr);
+        return OPRT_MALLOC_FAILED;
+    }
+    cJSON_AddItemToObject(root, "db", arr);
+    for (size_t i = 0; i < dbcnt; i++) {
+        cJSON *item = cJSON_CreateObject();
+        if (NULL == item) {
+            cJSON_Delete(root);
+            return OPRT_MALLOC_FAILED;
+        }
+        cJSON_AddStringToObject(item, "k", db[i].key ? db[i].key : "");
+        cJSON_AddNumberToObject(item, "t", (double)db[i].tp);
+        cJSON_AddNumberToObject(item, "l", (double)db[i].len);
+        if (NULL != db[i].val && db[i].len > 0) {
+            /* 值统一按十六进制字符串存，读回时按 tp 还原 */
+            char *hex = tal_malloc((size_t)db[i].len * 2 + 1);
+            if (NULL == hex) {
+                cJSON_Delete(item);
+                cJSON_Delete(root);
+                return OPRT_MALLOC_FAILED;
+            }
+            for (uint16_t j = 0; j < db[i].len; j++) {
+                sprintf(hex + j * 2, "%02x", ((uint8_t *)db[i].val)[j]);
+            }
+            cJSON_AddStringToObject(item, "v", hex);
+            tal_free(hex);
+        }
+        cJSON_AddItemToArray(arr, item);
+    }
+    out = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (NULL == out) {
+        return OPRT_COM_ERROR;
+    }
+    ret = tal_data_write(key, (const uint8_t *)out, strlen(out));
+    cJSON_free(out);
+    return ret;
+}
+
+int tal_kv_serialize_get(const char *key, kv_db_t *db, size_t dbcnt)
+{
+    size_t len = 0;
+    uint8_t *buf = NULL;
+    cJSON *root = NULL, *arr = NULL;
+    OPERATE_RET ret;
+
+    if (NULL == key || NULL == db) {
+        return OPRT_INVALID_PARM;
+    }
+    ret = tal_data_read(key, NULL, 0, &len);
+    if (OPRT_OK != ret) {
+        return ret;
+    }
+    buf = tal_malloc(len + 1);
+    if (NULL == buf) {
+        return OPRT_MALLOC_FAILED;
+    }
+    if (OPRT_OK != tal_data_read(key, buf, len, &len)) {
+        tal_free(buf);
+        return OPRT_COM_ERROR;
+    }
+    buf[len] = '\0';
+    root = cJSON_Parse((const char *)buf);
+    tal_free(buf);
+    if (NULL == root) {
+        return OPRT_COM_ERROR;
+    }
+    arr = cJSON_GetObjectItem(root, "db");
+    if (NULL == arr || !cJSON_IsArray(arr)) {
+        cJSON_Delete(root);
+        return OPRT_COM_ERROR;
+    }
+    for (size_t i = 0; i < dbcnt; i++) {
+        cJSON *item = cJSON_GetArrayItem(arr, (int)i);
+        cJSON *jk, *jt, *jl, *jv;
+        if (NULL == item || NULL == db[i].key || NULL == db[i].val) {
+            continue;
+        }
+        jk = cJSON_GetObjectItem(item, "k");
+        jt = cJSON_GetObjectItem(item, "t");
+        jl = cJSON_GetObjectItem(item, "l");
+        jv = cJSON_GetObjectItem(item, "v");
+        if (NULL == jk || NULL == jt || NULL == jl || !cJSON_IsString(jk)) {
+            continue;
+        }
+        if (0 != strcmp(jk->valuestring, db[i].key)) {
+            continue;                                 /* 按 key 匹配，顺序无关 */
+        }
+        db[i].tp = (kv_tp_t)(int)cJSON_GetNumberValue(jt);
+        uint16_t want = (uint16_t)cJSON_GetNumberValue(jl);
+        uint8_t *dst = (uint8_t *)db[i].val;
+        uint16_t cap = db[i].len;                     /* 入参 len = 调用方缓冲容量 */
+        db[i].len = (want < cap) ? want : cap;
+        if (NULL != jv && cJSON_IsString(jv)) {
+            for (uint16_t j = 0; j < db[i].len; j++) {
+                unsigned int byte = 0;
+                sscanf(jv->valuestring + j * 2, "%02x", &byte);
+                dst[j] = (uint8_t)byte;
+            }
+        }
+    }
+    cJSON_Delete(root);
+    return OPRT_OK;
+}
+```
+
+> ⚠️ `serialize_get` 的**入参语义**必须与旧实现一致（旧实现是把 `db[i].len` 当**缓冲容量**还是当**期望长度**？读 `third_party/tal_kv/src/kv_serialize.c` 核对后照抄；上面的 cap 语义是猜测，**以旧实现为准**）。
+
+- [ ] **Step 3: 写 `CMakeLists.txt`（target 名必须是 `tal_kv`）**
+
+```cmake
+# tal_kv 兼容层：对外保持旧 API 与 target 名，实现改为 tal_data
+file(GLOB_RECURSE _tal_kv_compat_srcs CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+)
+
+add_library(tal_kv STATIC)
+target_sources(tal_kv PRIVATE ${_tal_kv_compat_srcs})
+target_include_directories(tal_kv PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+target_link_libraries(tal_kv
+    PUBLIC tal_system
+    PRIVATE tuyaopen-headers libcjson
+)
+unset(_tal_kv_compat_srcs)
+```
+
+- [ ] **Step 4: 切构建引用**
+
+- `third_party/CMakeLists.txt:10`：`add_subdirectory(tal_kv)` → `add_subdirectory(tal_kv_compat)`
+- `third_party/Kconfig:7`：删掉 `rsource "tal_kv/Kconfig"`（`menu "third party"` 留空即可）
+- **`tuyaopen-core.cmake`、`iot-core/**`、`agent-core/**`、`p2p-core/**` 一律不动**（target 名与头名未变）
+
+- [ ] **Step 5: 构建验证（iot-core 零改动的前提下）**
+
+```bash
+cd examples/switch_demo/build && cmake . >/dev/null && cmake --build . -j$(nproc)
+```
+
+Expected: exit 0；`nm` 确认 `tal_kv_init/tal_kv_get/tal_kv_set/tal_kv_del/tal_kv_serialize_get/set` 符号存在且由兼容层提供。
+
+- [ ] **Step 6: 运行验证（数据链路真跑通）**
+
+```bash
+cd examples/switch_demo/build && rm -rf tuyadb && timeout 25 ./switch_demo
+```
+
+Expected: 与改造前一致——TLS 握手 ×2、`MQTT direct connected`、QR 22 行；`./tuyadb/data.bin` 被创建且内容为密文。
+
+- [ ] **Step 7: 提交**
+
+```bash
+git -C tuyaopen-core add third_party/tal_kv_compat third_party/CMakeLists.txt third_party/Kconfig
+git -C tuyaopen-core commit -m "third_party: 新增 tal_kv 兼容层（旧 API over tal_data），iot-core 零改动
+
+Co-Authored-By: Claude Code <noreply@anthropic.com>"
+git add -A -- ':(exclude)corehttp-coremqtt/coreHTTP-v2.0.1' ':(exclude)corehttp-coremqtt/coreHTTP-v3.1.3' ':(exclude)corehttp-coremqtt/coreMQTT-v1.0.1' ':(exclude)corehttp-coremqtt/coreMQTT-v5.0.2'
+git commit -m "tuyaopen-core: 子模块指针更新（tal_kv 兼容层）
+
+Co-Authored-By: Claude Code <noreply@anthropic.com>"
+```
+
+---
+
+## Task 5 ~ Task 8（**作废**）
+
+> 原计划：逐点迁移 `tuya_main.c` / `tuya_iot.c` / `tuya_endpoint.c` / `tuya_cert_manager.c` / `tuya_register_center.c` / 未编译的 3 个文件（共 78 处）到 `tal_data_*`。
+> **2026-10-08 用户决策：上层保持 `tal_kv_*` 命名 → 这些迁移全部取消**，由 Task 4-修正 的兼容层承载。下文的迁移清单仅作历史记录。
+
+---
+
 ## Task 9: 删除旧链路 + 构建清理
 
 **Files:**
-- Delete: `tuyaopen-core/third_party/tal_kv/`（整目录）
+- Delete: `tuyaopen-core/third_party/tal_kv/`（整目录，含 littlefs 1.7MB）
 - Delete: `tuyaopen-core/iot-core/tal_system/src/tal_fs.c` + `include/tal_fs.h`
 - Delete: `port/src/tkl_flash.c` + `port/include/flash/tkl_flash.h`
 - Delete: `port/src/tkl_fs.c` + `port/include/system/tkl_fs.h`
-- Modify: `tuyaopen-core/third_party/CMakeLists.txt:10`、`third_party/Kconfig:7`、`tuyaopen-core.cmake:78`、`iot-core/CMakeLists.txt:62`、`iot-core/tal_system/CMakeLists.txt:14`、`iot-core/tal_system/include/tal_api.h:55`、agent-core/p2p-core 的 2 处 CMake 引用
+- **不改任何 CMake 与 include**：target 名 `tal_kv` 与头名 `tal_kv.h` 由 Task 4-修正 的兼容层继续提供 → `tuyaopen-core.cmake:78`、`iot-core/CMakeLists.txt:62`、`iot-core/tal_system/CMakeLists.txt:14`、agent-core/p2p 的引用、`tal_api.h:55` 的 `#include "tal_kv.h"` **全部原样解析**；`tal_fs.c`/`tkl_flash.c`/`tkl_fs.c` 均由 GLOB 自动出列
 
 - [ ] **Step 1: 全仓确认零残留**
 
@@ -2063,9 +2402,9 @@ cd /home/share/samba/open-components/tuyaopen-core-examples/linux
 
 Expected: 仅剩待删的构建引用与 `tal_kv` 目录自身（`port/include/init/` 是既定死目录例外）。
 
-- [ ] **Step 2: 删除文件与构建引用**
+- [ ] **Step 2: 删除文件**
 
-按上表删除；`tal_api.h:55` 的 `#include "tal_kv.h"` 改为 `#include "tal_data.h"`。
+按上表删除 4 项（`tal_kv` 目录 + `tal_fs` + `tkl_flash` + `tkl_fs`）。**不要动** `tal_api.h` 的 include、`tuyaopen-core.cmake` 与任何 `target_link_libraries(... tal_kv)`——它们由兼容层解析。
 
 - [ ] **Step 3: 清空 build 重新 configure（必须）**
 

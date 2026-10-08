@@ -150,7 +150,13 @@ state：0x01=有效 0x00=墓碑 0x02=PAD（回卷填充）
 
 删后需**清空 build 目录重新 configure**（`CONFIGURE_DEPENDS` 不会摘除已消失的子目录 target）。
 
-## 八、迁移清单（78 个调用点）
+## 八、迁移清单（**2026-10-08 决策：改用兼容层，上层零改动**）
+
+> 用户决策：**上层保持 `tal_kv_*` 命名**，底层换 `tal_data`/`tkl_data` → iot-core / examples / p2p 的 78 个调用点**一个都不用改**。
+>
+> 新增 **`tal_kv` 兼容层**（`third_party/tal_kv_compat/`，target 名与头名沿用 `tal_kv`）：实现旧的 8 个 API over `tal_data`（`get` 保留"分配返回 + `tal_kv_free`"语义，`serialize_get/set` 用 cJSON 重新实现）。因 target 名/头名未变，`tal_api.h:55` 的 include、`tuyaopen-core.cmake` 与 iot-core/agent-core/p2p 的 CMake 引用**全部原样解析**。
+>
+> 下表原为逐点迁移清单，**已作废**，仅作历史记录。
 
 | 优先级 | 文件 | 处数 | 说明 |
 |---|---|---|---|
