@@ -60,30 +60,10 @@ add_subdirectory(${TUYAOPEN_PORT_DIR} ${CMAKE_BINARY_DIR}/tuyaopen-port)
 # 3) 应用自带组件：qrcode（原 core 模块随应用走，CONFIG_ENABLE_QRCODE 门控）
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/qrcode)
 
-# 4) 应用自带组件：tal_netif（原 core-communication 模块随应用走，CONFIG_ENABLE_WIRED 门控）
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tal_netif)
-
-# 5) 应用自带组件：tal_bluetooth（原 core-communication 模块随应用走，CONFIG_ENABLE_BLUETOOTH 门控）
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tal_bluetooth)
-
-# core 内源码（如 p2p 的 pj_tuyaos_local_ip.c）在 ENABLE_WIRED 下引 tal_netif.h，
-# 而 pjproject 注册早于本目录、无法走 target 依赖，头路径经 tuyaopen-headers 全局注入
-if(TARGET tal_netif)
-    target_include_directories(tuyaopen-headers INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tal_netif/include>
-    )
-endif()
-
-# core 内源码（iot-core/ble/ble_mgr.c）在 ENABLE_BLUETOOTH 下引 tal_bluetooth.h，
-# 头路径经 tuyaopen-headers 全局注入（ble/ 源码挂 tuyaopen-headers，无 target 依赖）
-if(TARGET tal_bluetooth)
-    target_include_directories(tuyaopen-headers INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tal_bluetooth/include>
-        # ble_netcfg.h 无条件引已删的 tkl_wifi.h（仅用 SSID/PASSWD 定长常量），
-        # 常量兼容替身见 ble_port_compat/tkl_wifi.h 头注
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ble_port_compat>
-    )
-endif()
+# tal_netif / tal_bluetooth 已随 core 自包含回归，不再是应用组件：
+#   tal_netif    → tuyaopen-core/iot-core/tal_system（编入 tal_system）
+#   tal_bluetooth→ tuyaopen-core/iot-core/ble（编入 tuya_cloud_service，随 BLUETOOTH 门控）
+# 头经 tal_system / tuya_cloud_service 的 PUBLIC include 传递，无需额外注入。
 
 file(GLOB _iot_demo_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
@@ -114,39 +94,15 @@ set(_iot_demo_link
     ${TUYAOPEN_CORE_LIBS}
     $<TARGET_FILE:tuyaopen-port>
 )
-# tal_netif 依赖组内 tuyaopen-port 的 tkl_netif_* 符号，进组保证解析顺序
-if(TARGET tal_netif)
-    list(APPEND _iot_demo_link $<TARGET_FILE:tal_netif>)
-endif()
-# tal_bluetooth 依赖组内 tuyaopen-port 的 tkl_ble_* 符号，进组保证解析顺序
-if(TARGET tal_bluetooth)
-    list(APPEND _iot_demo_link $<TARGET_FILE:tal_bluetooth>)
-endif()
+# tal_netif（tal_system）/ tal_bluetooth（tuya_cloud_service）已随 TUYAOPEN_CORE_LIBS 在组内，
+# 其 tkl_netif_* / tkl_ble_* 符号与本组内 tuyaopen-port 互相解析
 list(APPEND _iot_demo_link -Wl,--end-group tuyaopen-port tuyaopen-headers)
 target_link_libraries(iot_demo PRIVATE ${_iot_demo_link})
 
 # tal_kv 自测（独立可执行，链接与 iot_demo 相同的库）
-# 注：_iot_demo_link 里 tal_netif/tal_bluetooth 是 $<TARGET_FILE:> 裸路径，不会建立构建
-# 依赖；iot_demo 靠后面额外按目标名 link 才有依赖，自测必须显式 add_dependencies，
-# 否则干净目录下单独构建本目标会 "No rule to make target ...libtal_netif.a"（67 评审 B4）
 add_executable(tal_kv_selftest tal_kv_selftest.c)
 target_link_libraries(tal_kv_selftest PRIVATE ${_iot_demo_link})
-if(TARGET tal_netif)
-    add_dependencies(tal_kv_selftest tal_netif)
-endif()
-if(TARGET tal_bluetooth)
-    add_dependencies(tal_kv_selftest tal_bluetooth)
-endif()
 unset(_iot_demo_link)
-
-# tal_netif / tal_bluetooth 头经各自 PUBLIC include 传递
-# （demo 源码 #include "tal_netif.h" / ble 触达的 tal_bluetooth.h 保持可达）
-if(TARGET tal_netif)
-    target_link_libraries(iot_demo PRIVATE tal_netif)
-endif()
-if(TARGET tal_bluetooth)
-    target_link_libraries(iot_demo PRIVATE tal_bluetooth)
-endif()
 
 # qrcode 无循环依赖，组外链接；开关关闭时目标不注册，跳过
 if(TARGET qrcode)

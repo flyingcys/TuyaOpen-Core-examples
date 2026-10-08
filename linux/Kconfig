@@ -9,4 +9,4 @@ mainmenu "tuyaopen-core linux target"
 rsource "tuyaopen-core/Kconfig"
 
 # 应用层组件开关（qrcode 等随应用走，不在 core 内）
-rsource "examples/switch_demo/qrcode/Kconfig"
+rsource "examples/iot_demo/qrcode/Kconfig"
