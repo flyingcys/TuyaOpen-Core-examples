@@ -71,6 +71,10 @@ static OPERATE_RET __flash_file_prefill(void)
     memset(data, 0xff, FLASH_PARTITION_SZ);
     for (uint32_t offset = 0; offset < FLASH_FILE_SIZE; offset += FLASH_PARTITION_SZ) {
         if (FLASH_PARTITION_SZ != fwrite(data, 1, FLASH_PARTITION_SZ, s_flash_file)) {
+            /* ENOSPC 是最常见原因：首次预填要写满 FLASH_FILE_SIZE（256MB） */
+            PR_ERR("flash prefill failed at offset %u/%u: %s（磁盘空间不足？首次需 %u MB）", offset,
+                   (unsigned int)FLASH_FILE_SIZE, strerror(errno),
+                   (unsigned int)(FLASH_FILE_SIZE / (1024 * 1024)));
             tal_free(data);
             return OPRT_FILE_WRITE_FAILED;
         }
@@ -95,12 +99,12 @@ static OPERATE_RET __flash_open(void)
     if (0 != access(FLASH_FILE_NAME, F_OK)) {
         /* 首次：建目录 + 创建 + 预填 */
         if (0 != access(FLASH_FILE_PATH, F_OK) && 0 != mkdir(FLASH_FILE_PATH, 0755) && EEXIST != errno) {
-            PR_ERR("flash dir create failed: %s", FLASH_FILE_PATH);
+            PR_ERR("flash dir create failed: %s: %s", FLASH_FILE_PATH, strerror(errno));
             return OPRT_FILE_OPEN_FAILED;
         }
         s_flash_file = fopen(FLASH_FILE_NAME, "wb+");
         if (NULL == s_flash_file) {
-            PR_ERR("flash file create failed: %s", FLASH_FILE_NAME);
+            PR_ERR("flash file create failed: %s: %s", FLASH_FILE_NAME, strerror(errno));
             return OPRT_FILE_OPEN_FAILED;
         }
         if (OPRT_OK != __flash_file_prefill()) {
