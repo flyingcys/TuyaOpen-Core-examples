@@ -6,10 +6,10 @@
  * ENABLE_FILE_SYSTEM 分支（只留 littlefs）、serialize（kv_serialize.c）、
  * CLI（tal_kv_cmd）与 tal_lfs_get；kv_storage_* 从 tal_fs 门面改为直调 lfs API。
  *
- * 介质：tkl_flash 的 TUYA_FLASH_TYPE_UF 分区（Linux 上由 tkl_flash.c 映射到
- * ./tuyadb/tuyadb 文件）挂 littlefs；每条记录 = 明文经 AES-128-CBC 加密后的密文，
- * IV/密钥在 init 时由 seed/key 各经 SHA256 派生 16 字节，读回时逐字节校验 PKCS7
- * 填充。写/读/删全程持 s_kv_mutex（tal_mutex），加解密在锁外做。
+ * 介质：flash 模拟（本文件内联，标准 C IO 读写 ./tuyadb/tuyadb，不依赖 tkl_fs）
+ * 的 UF 分区挂 littlefs；每条记录 = 明文经 AES-128-CBC 加密后的密文，IV/密钥在
+ * init 时由 seed/key 各经 SHA256 派生 16 字节，读回时逐字节校验 PKCS7 填充。
+ * 写/读/删全程持 s_kv_mutex（tal_mutex），加解密在锁外做。
  *
  * 平台 ops 卡：tal_kv_ops_platform 由本文件组装，core 的 tal_kv.c 经 extern 引用。
  * 移植其它平台时替换本文件（NVS 类平台直接映射芯片 KV 即可）。
@@ -21,7 +21,13 @@
  */
 #include "tal_kv_ops.h"
 
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "tal_log.h"
 #include "tal_memory.h"
@@ -29,7 +35,132 @@
 #include "tal_security.h"
 
 #include "lfs.h"
-#include "tkl_flash.h"
+
+/* ===== flash 模拟（原 tkl_flash.c 内联；文件实现专用，标准 C IO，不依赖 tkl_fs）
+ *
+ * 布局与旧实现逐字一致（文件路径/大小/分区偏移相同），旧镜像可直接挂载：
+ *   ./tuyadb/tuyadb（256MB，首次创建时预填 0xFF）内划 UF 分区
+ *   UF_PARTITION_START=0x9000, UF_PARTITION_SIZE=0x18000（96KB）
+ *
+ * 移植警告：本段整体只适用于"文件模拟 flash"；真 flash 平台应替换本文件，
+ * 把 __flash_* 映射到实际分区，且 __flash_erase 必须调块擦除命令
+ * （写 0xFF 对 NOR flash 是 no-op）。
+ * ===== */
+#define FLASH_FILE_PATH    "./tuyadb"
+#define FLASH_FILE_NAME    FLASH_FILE_PATH "/tuyadb"
+#define FLASH_FILE_SIZE    (256 * 1024 * 1024)
+#define FLASH_PARTITION_SZ (1 << 12)                                /* 4KB，littlefs 的 block/read/prog 粒度 */
+#define SIMPLE_FLASH_START (FLASH_PARTITION_SZ)                     /* 0x1000 */
+#define SIMPLE_FLASH_SIZE  (0x8000)                                 /* 32K */
+#define UF_PARTITION_START (SIMPLE_FLASH_START + SIMPLE_FLASH_SIZE) /* 0x9000 */
+#define UF_PARTITION_SIZE  (0x18000)                                /* 96K */
+
+static FILE *s_flash_file;
+
+/* 首次创建时预填 0xFF（模拟擦除态；littlefs 依赖未写区域为 0xFF） */
+static OPERATE_RET __flash_file_prefill(void)
+{
+    char *data = malloc(FLASH_PARTITION_SZ);
+    if (NULL == data) {
+        return OPRT_MALLOC_FAILED;
+    }
+
+    memset(data, 0xff, FLASH_PARTITION_SZ);
+    for (uint32_t offset = 0; offset < FLASH_FILE_SIZE; offset += FLASH_PARTITION_SZ) {
+        if (FLASH_PARTITION_SZ != fwrite(data, 1, FLASH_PARTITION_SZ, s_flash_file)) {
+            free(data);
+            return OPRT_FILE_WRITE_FAILED;
+        }
+    }
+    free(data);
+
+    fflush(s_flash_file);
+    int fd = fileno(s_flash_file);
+    if (fd >= 0) {
+        fsync(fd);
+    }
+    return OPRT_OK;
+}
+
+/* 打开/创建 flash 文件（幂等）。存储不可用（目录只读等）返回错误码而非崩溃 */
+static OPERATE_RET __flash_open(void)
+{
+    if (NULL != s_flash_file) {
+        return OPRT_OK;
+    }
+
+    if (0 != access(FLASH_FILE_NAME, F_OK)) {
+        /* 首次：建目录 + 创建 + 预填 */
+        if (0 != access(FLASH_FILE_PATH, F_OK) && 0 != mkdir(FLASH_FILE_PATH, 0755) && EEXIST != errno) {
+            PR_ERR("flash dir create failed: %s", FLASH_FILE_PATH);
+            return OPRT_FILE_OPEN_FAILED;
+        }
+        s_flash_file = fopen(FLASH_FILE_NAME, "wb+");
+        if (NULL == s_flash_file) {
+            PR_ERR("flash file create failed: %s", FLASH_FILE_NAME);
+            return OPRT_FILE_OPEN_FAILED;
+        }
+        if (OPRT_OK != __flash_file_prefill()) {
+            fclose(s_flash_file);
+            s_flash_file = NULL;
+            return OPRT_FILE_WRITE_FAILED;
+        }
+    } else {
+        s_flash_file = fopen(FLASH_FILE_NAME, "rb+");
+        if (NULL == s_flash_file) {
+            PR_ERR("flash file open failed: %s", FLASH_FILE_NAME);
+            return OPRT_FILE_OPEN_FAILED;
+        }
+    }
+
+    int fd = fileno(s_flash_file);
+    if (fd >= 0) {
+        fcntl(fd, F_SETFD, FD_CLOEXEC);
+    }
+    return OPRT_OK;
+}
+
+static OPERATE_RET __flash_read(uint32_t addr, uint8_t *dst, uint32_t size)
+{
+    if (NULL == s_flash_file) {
+        return OPRT_RESOURCE_NOT_READY;
+    }
+    if (0 != fseek(s_flash_file, (long)addr, SEEK_SET)) {
+        return OPRT_FILE_OPEN_FAILED;
+    }
+    if (size != (uint32_t)fread(dst, 1, size, s_flash_file)) {
+        return OPRT_FILE_READ_FAILED;
+    }
+    return OPRT_OK;
+}
+
+static OPERATE_RET __flash_write(uint32_t addr, const uint8_t *src, uint32_t size)
+{
+    if (NULL == s_flash_file) {
+        return OPRT_RESOURCE_NOT_READY;
+    }
+    if (0 != fseek(s_flash_file, (long)addr, SEEK_SET)) {
+        return OPRT_FILE_OPEN_FAILED;
+    }
+    if (size != (uint32_t)fwrite(src, 1, size, s_flash_file)) {
+        return OPRT_FILE_WRITE_FAILED;
+    }
+    fflush(s_flash_file);
+    int fd = fileno(s_flash_file);
+    if (fd >= 0) {
+        fsync(fd);
+    }
+    return OPRT_OK;
+}
+
+/* 文件实现专用：不真擦——文件可覆盖写，靠预填 0xFF + littlefs 的 CRC 提交语义
+ * 维持；真 flash 平台必须在此调块擦除命令（写 0xFF 对 NOR 是 no-op） */
+static OPERATE_RET __flash_erase(uint32_t addr, uint32_t size)
+{
+    (void)addr;
+    (void)size;
+    return OPRT_OK;
+}
 
 static lfs_t s_lfs;
 static lfs_size_t s_lfs_flash_addr;
@@ -41,20 +172,20 @@ static BOOL_T s_lfs_mounted = FALSE;
 static int user_provided_block_device_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, void *buffer,
                                            lfs_size_t size)
 {
-    OPERATE_RET ret = tkl_flash_read(s_lfs_flash_addr + c->block_size * block + off, buffer, size);
+    OPERATE_RET ret = __flash_read(s_lfs_flash_addr + c->block_size * block + off, buffer, size);
     return (OPRT_OK == ret) ? LFS_ERR_OK : LFS_ERR_IO;
 }
 
 static int user_provided_block_device_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t off,
                                            const void *buffer, lfs_size_t size)
 {
-    OPERATE_RET ret = tkl_flash_write(s_lfs_flash_addr + c->block_size * block + off, buffer, size);
+    OPERATE_RET ret = __flash_write(s_lfs_flash_addr + c->block_size * block + off, buffer, size);
     return (OPRT_OK == ret) ? LFS_ERR_OK : LFS_ERR_IO;
 }
 
 static int user_provided_block_device_erase(const struct lfs_config *c, lfs_block_t block)
 {
-    OPERATE_RET ret = tkl_flash_erase(s_lfs_flash_addr + c->block_size * block, c->block_size);
+    OPERATE_RET ret = __flash_erase(s_lfs_flash_addr + c->block_size * block, c->block_size);
     return (OPRT_OK == ret) ? LFS_ERR_OK : LFS_ERR_IO;
 }
 
@@ -67,26 +198,25 @@ static int user_provided_block_device_sync(const struct lfs_config *c)
 /* Storage helpers: callers hold s_lfs_mutex for read, write, and remove. */
 static OPERATE_RET kv_storage_init(void)
 {
-    TUYA_FLASH_BASE_INFO_T info;
     /* lfs 内部持有 cfg 指针（lfs->cfg），配置结构须比挂载活得久 */
     static struct lfs_config lfs_cfg;
     int result;
 
-    if (OPRT_OK != tkl_flash_get_one_type_info(TUYA_FLASH_TYPE_UF, &info) || 0 == info.partition[0].block_size) {
+    if (OPRT_OK != __flash_open()) {
         return OPRT_COM_ERROR;
     }
 
-    s_lfs_flash_addr = info.partition[0].start_addr;
+    s_lfs_flash_addr = UF_PARTITION_START;
     memset(&lfs_cfg, 0, sizeof(lfs_cfg));
     lfs_cfg.read = user_provided_block_device_read;
     lfs_cfg.prog = user_provided_block_device_prog;
     lfs_cfg.erase = user_provided_block_device_erase;
     lfs_cfg.sync = user_provided_block_device_sync;
-    lfs_cfg.read_size = info.partition[0].block_size;
-    lfs_cfg.prog_size = info.partition[0].block_size;
-    lfs_cfg.block_size = info.partition[0].block_size;
-    lfs_cfg.block_count = info.partition[0].size / info.partition[0].block_size;
-    lfs_cfg.cache_size = info.partition[0].block_size;
+    lfs_cfg.read_size = FLASH_PARTITION_SZ;
+    lfs_cfg.prog_size = FLASH_PARTITION_SZ;
+    lfs_cfg.block_size = FLASH_PARTITION_SZ;
+    lfs_cfg.block_count = UF_PARTITION_SIZE / FLASH_PARTITION_SZ;
+    lfs_cfg.cache_size = FLASH_PARTITION_SZ;
     /* 原样恢复自旧实现：公式为笔误（(8 - block_count/8) 使结果恒为 8）。该值是
      * littlefs 的内存前瞻缓冲——不落盘、不影响磁盘布局，改大改小只影响内存占用
      * 与分配器扫描窗口；恒为 8 经实测可工作，有意保留原样 */
