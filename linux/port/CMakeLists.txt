@@ -20,6 +20,18 @@ if(_port_srcs)
     list(REMOVE_DUPLICATES _port_srcs)
 endif()
 
+# littlefs（tal_kv 的存储引擎，tkl_kv.c 直接用）：不在 include/ 或 src/ 下，
+# GLOB 收不到，显式收集
+if(EXISTS "${PORT_ROOT}/littlefs/lfs.c")
+    list(APPEND _port_srcs
+        "${PORT_ROOT}/littlefs/lfs_util.c"
+        "${PORT_ROOT}/littlefs/lfs.c"
+    )
+    # lfs_util.h 经 LFS_CONFIG 展开 lfs_config.h（在 include/system/ 下，见下面的
+    # _port_incs 注入）；其 lfs_malloc / LFS_ERROR 依赖 tal_malloc / PR_ERR
+    set(_port_lfs_defs LFS_CONFIG=lfs_config.h)
+endif()
+
 if(NOT CONFIG_ENABLE_WIFI AND _port_srcs)
     list(FILTER _port_srcs EXCLUDE REGEX "/tkl_wifi/")
 endif()
@@ -43,12 +55,19 @@ endif()
 if(IS_DIRECTORY "${PORT_ROOT}")
     list(APPEND _port_incs "${PORT_ROOT}")
 endif()
+# littlefs 头（lfs.h/lfs_util.h）：tkl_kv.c 直接 include "lfs.h"
+if(IS_DIRECTORY "${PORT_ROOT}/littlefs")
+    list(APPEND _port_incs "${PORT_ROOT}/littlefs")
+endif()
 list(REMOVE_DUPLICATES _port_incs)
 
 if(_port_srcs)
     add_library(tuyaopen-port STATIC)
     target_sources(tuyaopen-port PRIVATE ${_port_srcs})
     target_include_directories(tuyaopen-port PUBLIC ${_port_incs})
+    if(_port_lfs_defs)
+        target_compile_definitions(tuyaopen-port PRIVATE ${_port_lfs_defs})
+    endif()
     if(UNIX)
         target_link_libraries(tuyaopen-port PUBLIC pthread m)
     endif()
@@ -61,6 +80,14 @@ if(_port_srcs)
         endif()
         target_include_directories(tuyaopen-port PRIVATE
             "${PORT_ROOT}/../tuyaopen-core/iot-core/tuya_transport/include/transport")
+    endif()
+
+    if(EXISTS "${PORT_ROOT}/src/tkl_kv.c")
+        # tkl_kv（littlefs + AES）：include tal_log/tal_memory/tal_mutex（tal_system）
+        # 与 tal_security（tuya_transport，随 tal_system 的 PUBLIC 依赖传播）
+        if(TARGET tal_system)
+            target_link_libraries(tuyaopen-port PRIVATE tal_system)
+        endif()
     endif()
 
     if(EXISTS "${PORT_ROOT}/src/tkl_bt" AND CONFIG_ENABLE_BLUETOOTH)
@@ -108,4 +135,5 @@ unset(_port_incs)
 unset(_port_hdrs)
 unset(_port_hdr)
 unset(_port_hdr_dir)
+unset(_port_lfs_defs)
 unset(PORT_ROOT)
