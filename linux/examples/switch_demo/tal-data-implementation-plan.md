@@ -1412,6 +1412,313 @@ git commit -m "switch_demo: tal_data 自测补充压缩/撕裂/重启用例
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
 
+### Step 3-修正：设计修正后重做（**以本段为准，替代上面 Step 3 的实现**）
+
+> 2026-10-08 修正。原 Step 3 的设计有洞（实测：GC 是死代码 / 区域满静默覆盖活数据 / 压缩必失败）。修正规则见设计文档第四、五节；本段给出完整实现。
+
+**1) 空闲空间与追加（替换 `__append` / `__append_rec`）**
+
+```c
+/* 空闲间隙（环形：tail 顺时针到 head）；0 表示"空"（head==tail） */
+static uint32_t __free_gap(void)
+{
+    return (s_head - s_tail + s_region_size) % s_region_size;
+}
+
+/* 可用空闲：空区视为整区；否则保留 1 字节余量，使 tail 永不追上 head（消除满/空歧义） */
+static uint32_t __usable_free(void)
+{
+    uint32_t gap = __free_gap();
+    return (0 == gap) ? s_region_size : (gap - 1);
+}
+
+/* 占用区内的垃圾字节数（占用 - 有效） */
+static uint32_t __garbage_len(void)
+{
+    uint32_t live = 0, occupied;
+    for (uint32_t i = 0; i < s_index_cnt; i++) {
+        live += s_index[i].rec_len;
+    }
+    occupied = (s_head == s_tail) ? 0 : (s_region_size - __free_gap());
+    return (occupied > live) ? (occupied - live) : 0;
+}
+
+/* 追加一条记录：只写空闲间隙；跨区尾仅在"回卷后不越过 head"时允许 PAD 回卷 */
+static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len)
+{
+    TAL_DATA_OPS_T *ops = tal_data_get_ops();
+
+    if (s_tail + rec_len > s_region_size) {
+        uint32_t pad_len = s_region_size - s_tail;
+        /* 回卷后从 0 起写，只有 [0, head) 是空闲；head==0 时无处可回卷 */
+        if (0 == s_head || rec_len + 1 > s_head) {
+            return OPRT_COM_ERROR;
+        }
+        if (pad_len >= 16) {
+            uint8_t *pad = tal_malloc(pad_len);
+            if (NULL == pad) {
+                return OPRT_MALLOC_FAILED;
+            }
+            memset(pad, 0xFF, pad_len);
+            __rec_encode(pad, TAL_DATA_ST_PAD, ++s_max_seq, "pad", NULL, 0);
+            if (OPRT_OK != ops->write(s_tail, pad, pad_len)) {
+                tal_free(pad);
+                s_max_seq--;
+                return OPRT_COM_ERROR;
+            }
+            tal_free(pad);
+        }
+        s_tail = 0;
+    }
+    if (rec_len + 1 > __usable_free()) {
+        return OPRT_COM_ERROR;
+    }
+    if (OPRT_OK != ops->write(s_tail, rec, rec_len)) {
+        return OPRT_COM_ERROR;
+    }
+    s_tail += rec_len;
+    return OPRT_OK;
+}
+
+/* 追加：主动阈值压缩（等写不下再压就晚了——那时 free < live，副本无处放） */
+static OPERATE_RET __append(const uint8_t *rec, uint32_t rec_len)
+{
+    if (__usable_free() < s_region_size / 2 && __garbage_len() > 0) {
+        (void)__compact();
+    }
+    if (OPRT_OK == __append_rec(rec, rec_len)) {
+        return OPRT_OK;
+    }
+    if (OPRT_OK != __compact()) {
+        return OPRT_COM_ERROR;                       /* 压缩也无法腾出空间 → 区域满 */
+    }
+    return __append_rec(rec, rec_len);
+}
+```
+
+**2) GC 压缩（替换 `__compact`）**
+
+```c
+/* GC：把各 name 最新记录复制到空闲间隙（新 seq），推进 head 并擦除回收区。
+ * 副本起点对齐到擦除粒度，保证回收擦除不触碰副本。 */
+static OPERATE_RET __compact(void)
+{
+    uint32_t live_len = 0, old_tail, old_head, copy_start;
+    TAL_DATA_ITEM_T old_index[TAL_DATA_INDEX_MAX];
+    uint32_t old_cnt;
+
+    for (uint32_t i = 0; i < s_index_cnt; i++) {
+        live_len += s_index[i].rec_len;
+    }
+    if (live_len + 16 > __usable_free()) {
+        return OPRT_COM_ERROR;                       /* 活数据装不进空闲间隙（已知限制：活数据 > 半区） */
+    }
+    if (0 == live_len) {
+        s_head = s_tail;                             /* 无有效数据：整区可回收 */
+        return OPRT_OK;
+    }
+
+    memcpy(old_index, s_index, sizeof(old_index));
+    old_cnt = s_index_cnt;
+    old_tail = s_tail;
+    old_head = s_head;
+
+    copy_start = (old_tail + s_erase_gran - 1) / s_erase_gran * s_erase_gran;
+    if (copy_start + live_len + 16 > s_region_size) {
+        return OPRT_COM_ERROR;                       /* 对齐后放不下 */
+    }
+    s_tail = copy_start;
+
+    for (uint32_t i = 0; i < old_cnt; i++) {
+        TAL_DATA_ITEM_T item = old_index[i];
+        uint8_t *ct = NULL, *new_rec = NULL;
+        uint32_t new_len;
+        OPERATE_RET ret;
+
+        ct = tal_malloc(item.data_len);
+        if (NULL == ct) {
+            return OPRT_MALLOC_FAILED;
+        }
+        if (OPRT_OK != tal_data_get_ops()->read(item.data_off, ct, item.data_len)) {
+            tal_free(ct);
+            return OPRT_COM_ERROR;
+        }
+        new_len = __rec_len((uint32_t)strlen(item.name), item.data_len);
+        new_rec = tal_malloc(new_len);
+        if (NULL == new_rec) {
+            tal_free(ct);
+            return OPRT_MALLOC_FAILED;
+        }
+        __rec_encode(new_rec, TAL_DATA_ST_VALID, ++s_max_seq, item.name, ct, item.data_len);
+        ret = __append_rec(new_rec, new_len);
+        if (OPRT_OK == ret) {
+            /* 用新的 s_tail 反推副本位置（回卷安全） */
+            s_index[i].rec_off = (s_tail >= new_len) ? (s_tail - new_len) : (s_region_size + s_tail - new_len);
+            s_index[i].rec_len = new_len;
+            s_index[i].data_off = s_index[i].rec_off + 12 + (uint32_t)strlen(item.name);
+            s_index[i].seq = s_max_seq;
+        }
+        tal_free(new_rec);
+        tal_free(ct);
+        if (OPRT_OK != ret) {
+            return ret;                              /* 部分完成的副本 seq 更大 → 重启后按 seq 收敛，安全 */
+        }
+    }
+
+    s_head = old_tail;                               /* 旧记录区变空闲 */
+    /* 回收擦除：上界 = copy_start（已对齐），严格不触碰副本 */
+    {
+        uint32_t era_beg = (old_head / s_erase_gran) * s_erase_gran;
+        if (copy_start > era_beg) {
+            if (OPRT_OK != tal_data_get_ops()->erase(era_beg, copy_start - era_beg)) {
+                PR_WARN("tal_data: reclaim erase fail (%u,%u)", era_beg, copy_start - era_beg);
+            }
+        }
+    }
+    return OPRT_OK;
+}
+```
+
+**3) 扫描改为容忍空洞（替换 `__scan` 的主循环）**
+
+回收擦除后日志出现 0xFF 空洞，"遇到空洞即停"会漏掉其后的全部记录（重启即丢数据）。改为**全区域分块扫描 + 逐字节找 magic + CRC 验证**：
+
+```c
+/* 全区域扫描：分块读入内存找 magic；命中则按 CRC 验证——
+ * 通过 = 记录（按记录长度前进）；不通过 = 数据内的假 magic（前进 1 字节）。
+ * 回收擦除后的 0xFF 空洞因此可被跳过。 */
+static OPERATE_RET __scan(void)
+{
+    TAL_DATA_OPS_T *ops = tal_data_get_ops();
+    uint8_t *chunk = NULL;
+    const uint32_t CHUNK = 512;
+    uint32_t off = 0, min_seq = 0xFFFFFFFF, min_off = 0, max_seq = 0, max_end = 0;
+    int have = 0;
+
+    chunk = tal_malloc(CHUNK);
+    if (NULL == chunk) {
+        return OPRT_MALLOC_FAILED;
+    }
+
+    s_index_cnt = 0;
+    while (off + 16 <= s_region_size) {
+        uint32_t scan = 0, limit = (s_region_size - off < CHUNK) ? (s_region_size - off) : CHUNK;
+        uint8_t state = 0, name[TAL_DATA_NAME_MAX + 1] = {0};
+        uint32_t seq = 0, data_off = 0, data_len = 0, rec_len = 0;
+        uint32_t namelen, dlen, total;
+        uint8_t *rec = NULL;
+
+        if (OPRT_OK != ops->read(off, chunk, limit)) {
+            break;
+        }
+        /* 在块内找 magic */
+        while (scan + 2 <= limit && TAL_DATA_MAGIC != __rd16(chunk + scan)) {
+            scan++;
+        }
+        if (scan + 2 > limit) {
+            off += limit;                            /* 本块无 magic → 跳过整块 */
+            continue;
+        }
+        off += scan;                                 /* 定位到候选记录起点 */
+
+        /* 候选点：读定长头拿 namelen/datalen，再读整条验 CRC */
+        uint8_t hdr[16];
+        if (off + 16 > s_region_size || OPRT_OK != ops->read(off, hdr, 16)) {
+            break;
+        }
+        namelen = hdr[7];
+        if (namelen < 1 || namelen > TAL_DATA_NAME_MAX) {
+            off++;                                   /* 假 magic → 前进 1 字节 */
+            continue;
+        }
+        dlen = __rd32(hdr + 8 + namelen);
+        total = __rec_len(namelen, dlen);
+        if (total > TAL_DATA_PLAIN_MAX + 128 || off + total > s_region_size) {
+            off++;
+            continue;
+        }
+        rec = tal_malloc(total);
+        if (NULL == rec) {
+            tal_free(chunk);
+            return OPRT_MALLOC_FAILED;
+        }
+        if (OPRT_OK != ops->read(off, rec, total) ||
+            OPRT_OK != __rec_decode(rec, total, off, &state, &seq, name, &data_off, &data_len, &rec_len)) {
+            tal_free(rec);
+            off++;                                   /* 假 magic / 撕裂记录 → 前进 1 字节 */
+            continue;
+        }
+        tal_free(rec);
+
+        if (TAL_DATA_ST_VALID == state) {
+            TAL_DATA_ITEM_T item;
+            memset(&item, 0, sizeof(item));
+            strncpy(item.name, name, TAL_DATA_NAME_MAX);
+            item.rec_off = off;
+            item.rec_len = rec_len;
+            item.data_off = data_off;
+            item.data_len = data_len;
+            item.seq = seq;
+            __index_put(&item);
+        } else if (TAL_DATA_ST_TOMB == state) {
+            /* 墓碑参与 seq 比较：seq 更大（或相等）的墓碑移除同名索引项；
+             * 否则 erase 会在重启后被旧 VALID 记录"复活"。
+             * 不变量：依赖"扫描顺序内 seq 单调"（后扫到的记录 seq 不大于先扫到的）；
+             * GC 副本追加到更高偏移且分配新 seq，该不变量仍成立；若将来 GC 布局破坏它，
+             * 需改为扫描末尾按 name 归并。 */
+            int idx = __index_find(name);
+            if (idx >= 0 && seq >= s_index[idx].seq) {
+                for (uint32_t i = (uint32_t)idx; i + 1 < s_index_cnt; i++) {
+                    s_index[i] = s_index[i + 1];
+                }
+                s_index_cnt--;
+            }
+        }
+        if (seq > max_seq || 0 == have) {
+            max_seq = seq;
+            max_end = off + rec_len;
+        }
+        if (seq < min_seq || 0 == have) {
+            min_seq = seq;
+            min_off = off;
+        }
+        have = 1;
+        off += rec_len;                              /* 记录有效 → 按记录长度前进 */
+    }
+
+    tal_free(chunk);
+
+    if (0 == have) {
+        s_max_seq = 0;
+        s_tail = 0;
+        s_head = 0;
+        return OPRT_OK;
+    }
+    s_max_seq = max_seq;
+    s_tail = max_end;
+    s_head = min_off;
+    return OPRT_OK;
+}
+```
+
+**4) 自测补「老 key 存活」断言（修掉假绿）**
+
+`test_kv_compaction` 里追加：压缩前先写一个**只写一次、之后不再碰**的老 key，64 次 bulk 覆盖写之后断言它仍可读且内容不变：
+
+```c
+    uint8_t old_blob[512], rd_old[512];
+    size_t out_old = 0;
+    memset(old_blob, 0x33, sizeof(old_blob));
+    CHECK(OPRT_OK == tal_data_write("old.key", old_blob, sizeof(old_blob)));
+    /* ... 64 次 bulk 覆盖写（触发压缩） ... */
+    CHECK(OPRT_OK == tal_data_read("old.key", rd_old, sizeof(rd_old), &out_old));
+    CHECK(out_old == sizeof(old_blob) && 0 == memcmp(old_blob, rd_old, out_old));
+```
+
+**5) 变异验证（必须做）**：把 `__compact` 直接 `return OPRT_COM_ERROR`（禁用 GC）→ `test_kv_compaction` **必须变红**；恢复后复绿。另把 `__append_rec` 的回卷分支强制放行（去掉 head 检查）→ 应出现读回失败/覆盖。
+
+**6) 提交**：同 Step 5 的两仓提交格式，message 注明"设计修正版"。
+
 ---
 
 ## Task 4: 迁移 `tuya_main.c`（P0）
