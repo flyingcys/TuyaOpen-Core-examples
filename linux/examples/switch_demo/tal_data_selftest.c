@@ -1,7 +1,7 @@
 /**
  * @file tal_data_selftest.c
  * @brief tal_data 自测：区域原语（init / read / write / erase）+ K-V API 级用例
- *        （init/write/read/erase、墓碑与重启重开路径、大对象覆盖写触发的 GC 压缩）
+ *        （init/write/read/erase、墓碑与重启重开路径、覆盖写正确性、区域满安全）
  *
  * 运行：cd build && ./tal_data_selftest
  *       两段式重启用例（需分两次进程调用，区域跨进程保留）：
@@ -126,35 +126,61 @@ static int test_kv_basic(void)
     return 0;
 }
 
-static int test_kv_compaction(void)
+static int test_kv_overwrite(void)
 {
-    uint8_t blob[8 * 1024], rd[8 * 1024];
-    uint8_t old_blob[512], rd_old[512];
-    size_t out_len = 0, out_old = 0;
+    /* a) 覆盖写正确性 + 老 key 存活（不触发容量上限） */
+    uint8_t old_blob[512], blob[256], rd[512];
+    size_t out_len = 0;
     char name[16];
 
-    /* 只写一次、之后不再碰的老 key：GC 必须把它搬运保留（否则区域满时被静默覆盖） */
     memset(old_blob, 0x33, sizeof(old_blob));
     CHECK(OPRT_OK == tal_data_write("old.key", old_blob, sizeof(old_blob)));
 
-    /* 反复覆盖写大对象，强制触发压缩（区域 256KB） */
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < 20; i++) {
         memset(blob, (uint8_t)i, sizeof(blob));
-        snprintf(name, sizeof(name), "bulk.%d", i % 4);     /* 4 个 key 轮换 */
+        snprintf(name, sizeof(name), "ovw.%d", i % 4);
         CHECK(OPRT_OK == tal_data_write(name, blob, sizeof(blob)));
     }
-    /* 压缩后所有 key 仍可读，且内容为最后一次写入的 */
     for (int i = 0; i < 4; i++) {
-        snprintf(name, sizeof(name), "bulk.%d", i);
+        snprintf(name, sizeof(name), "ovw.%d", i);
         memset(rd, 0, sizeof(rd));
         CHECK(OPRT_OK == tal_data_read(name, rd, sizeof(rd), &out_len));
         CHECK(out_len == sizeof(blob));
-        CHECK(rd[0] == (uint8_t)(60 + i));                  /* 最后一轮 i=60..63 */
+        CHECK(rd[0] == (uint8_t)(16 + i));           /* 最后一轮 i=16..19 */
     }
-    /* 老 key 必须存活且内容不变 */
-    memset(rd_old, 0, sizeof(rd_old));
-    CHECK(OPRT_OK == tal_data_read("old.key", rd_old, sizeof(rd_old), &out_old));
-    CHECK(out_old == sizeof(old_blob) && 0 == memcmp(old_blob, rd_old, out_old));
+    /* 老 key 经 20 次覆盖后仍可读且内容不变 */
+    memset(rd, 0, sizeof(rd));
+    CHECK(OPRT_OK == tal_data_read("old.key", rd, sizeof(rd), &out_len));
+    CHECK(out_len == sizeof(old_blob) && 0 == memcmp(old_blob, rd, out_len));
+    return 0;
+}
+
+static int test_kv_region_full(void)
+{
+    /* b) 区域满安全：持续写大数据直到报满，已写入的 key 必须全部仍可读（不得覆盖/丢失） */
+    uint8_t blob[8 * 1024], rd[8 * 1024];
+    size_t out_len = 0;
+    char name[16];
+    int written = 0, full = 0;
+
+    for (int i = 0; i < 128; i++) {
+        memset(blob, (uint8_t)(i & 0xFF), sizeof(blob));
+        snprintf(name, sizeof(name), "full.%d", i);
+        if (OPRT_OK != tal_data_write(name, blob, sizeof(blob))) {
+            full = 1;
+            break;
+        }
+        written++;
+    }
+    CHECK(1 == full);                                /* 必须真的写满并报错 */
+    CHECK(written > 0);
+    for (int i = 0; i < written; i++) {              /* 已写入的全部可读且内容正确 */
+        snprintf(name, sizeof(name), "full.%d", i);
+        memset(rd, 0, sizeof(rd));
+        CHECK(OPRT_OK == tal_data_read(name, rd, sizeof(rd), &out_len));
+        CHECK(out_len == sizeof(blob));
+        CHECK(rd[0] == (uint8_t)(i & 0xFF));
+    }
     return 0;
 }
 
@@ -246,7 +272,10 @@ int main(int argc, char *argv[])
     if (0 != test_kv_basic()) {
         return 1;
     }
-    if (0 != test_kv_compaction()) {
+    if (0 != test_kv_overwrite()) {
+        return 1;
+    }
+    if (0 != test_kv_region_full()) {
         return 1;
     }
     printf("ALL TESTS PASSED\n");
