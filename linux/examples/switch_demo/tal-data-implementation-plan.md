@@ -316,24 +316,29 @@ TAL_DATA_OPS_T tal_data_ops_platform = {
         }                                                                                                              \
     } while (0)
 
+/* Task 1 阶段 core 的 getter 尚未实现（Task 2 在 tal_data.c 提供 tal_data_get_ops），
+ * 这里直接 extern 平台实例；Task 2 起可改用 getter。 */
+extern TAL_DATA_OPS_T tal_data_ops_platform;
+#define OPS (&tal_data_ops_platform)
+
 static int test_region_basic(void)
 {
     TAL_DATA_REGION_T region = {0};
     uint8_t wr[32], rd[32];
 
-    CHECK(OPRT_OK == tal_data_get_ops()->init(&region));
+    CHECK(OPRT_OK == OPS->init(&region));
     CHECK(region.size >= 64 * 1024);
     CHECK(region.erase_granularity >= 1);
 
     memset(wr, 0xA5, sizeof(wr));
-    CHECK(OPRT_OK == tal_data_get_ops()->write(0, wr, sizeof(wr)));
+    CHECK(OPRT_OK == OPS->write(0, wr, sizeof(wr)));
     memset(rd, 0, sizeof(rd));
-    CHECK(OPRT_OK == tal_data_get_ops()->read(0, rd, sizeof(rd)));
+    CHECK(OPRT_OK == OPS->read(0, rd, sizeof(rd)));
     CHECK(0 == memcmp(wr, rd, sizeof(wr)));
 
-    CHECK(OPRT_OK == tal_data_get_ops()->erase(0, 4096));
+    CHECK(OPRT_OK == OPS->erase(0, 4096));
     memset(rd, 0, sizeof(rd));
-    CHECK(OPRT_OK == tal_data_get_ops()->read(0, rd, sizeof(rd)));
+    CHECK(OPRT_OK == OPS->read(0, rd, sizeof(rd)));
     for (size_t i = 0; i < sizeof(rd); i++) {
         CHECK(0xFF == rd[i]);   /* 擦除态 = 0xFF */
     }
@@ -352,7 +357,7 @@ int main(void)
 
 - [ ] **Step 4: 加自测构建目标**
 
-在 `examples/switch_demo/CMakeLists.txt` 的 `add_executable(switch_demo ${_switch_demo_srcs})`（:92）之后插入：
+在 `examples/switch_demo/CMakeLists.txt` 的 `target_link_libraries(switch_demo PRIVATE ${_switch_demo_link})` **之后、`unset(_switch_demo_link)` 之前**插入（**必须在此处**：`${_switch_demo_link}` 更早才被赋值，插早了会拿到空值 → 自测目标没有 include 路径）：
 
 ```cmake
 # tal_data 自测（独立可执行，链接与 switch_demo 相同的库）
@@ -457,6 +462,14 @@ OPERATE_RET tal_data_erase(const char *name);
 #include "tal_security.h"
 
 #include <string.h>
+
+/* 平台 ops 卡（port 的 tkl_data.c 定义），core 侧经 getter 分发 */
+extern TAL_DATA_OPS_T tal_data_ops_platform;
+
+TAL_DATA_OPS_T *tal_data_get_ops(void)
+{
+    return &tal_data_ops_platform;
+}
 
 #define TAL_DATA_MAGIC       0xDA7A
 #define TAL_DATA_ST_VALID    0x01
