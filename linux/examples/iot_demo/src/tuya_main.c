@@ -210,9 +210,9 @@ static volatile bool s_link_up = false;
  * @param stat 当前链路状态
  * @return void
  */
-static void __user_link_status_cb(NETIF_LINK_STAT_E stat)
+static void __user_link_status_cb(TAL_NETIF_LINK_STAT_E stat)
 {
-    s_link_up = (TKL_NETIF_LINK_UP == stat);
+    s_link_up = (TAL_NETIF_LINK_UP == stat);
 
     /* 同步活动 IP：link up ≠ IP 就绪（tkl_netif 仅查 IFF_UP，不代表已获地址）。
      * 出站 socket 的源地址绑定与 LAN 广播包里的本机 IP 均取自此值；取不到置 0 表示不绑定 */

@@ -7,7 +7,7 @@
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
-#include "tkl_netif.h"
+#include "tal_netif_ops.h"
 
 #include <arpa/inet.h>
 #include <net/if.h>
@@ -19,7 +19,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-static TKL_NETIF_LINK_CHANGE_CB s_netif_link_cb;
+static TAL_NETIF_LINK_CHANGE_CB s_netif_link_cb;
 static pthread_t s_netif_link_thread;
 
 /* 回环接口不算网络链路 */
@@ -33,7 +33,7 @@ static int is_loopback_interface(const char *if_name)
 }
 
 /* 取指定接口的链路状态（ioctl SIOCGIFFLAGS） */
-static OPERATE_RET __netif_get_status_by_name(const char *if_name, TKL_NETIF_LINK_STAT_E *status)
+static OPERATE_RET __netif_get_status_by_name(const char *if_name, TAL_NETIF_LINK_STAT_E *status)
 {
     int sockfd;
     struct ifreq ifr;
@@ -53,19 +53,19 @@ static OPERATE_RET __netif_get_status_by_name(const char *if_name, TKL_NETIF_LIN
         return OPRT_COM_ERROR;
     }
 
-    *status = (ifr.ifr_flags & IFF_UP) ? TKL_NETIF_LINK_UP : TKL_NETIF_LINK_DOWN;
+    *status = (ifr.ifr_flags & IFF_UP) ? TAL_NETIF_LINK_UP : TAL_NETIF_LINK_DOWN;
     close(sockfd);
 
     return OPRT_OK;
 }
 
 /* 遍历非回环接口，任一 up 即视为链路 up */
-static OPERATE_RET __netif_get_status(TKL_NETIF_LINK_STAT_E *status)
+static OPERATE_RET __netif_get_status(TAL_NETIF_LINK_STAT_E *status)
 {
     struct if_nameindex *name_list;
     int i;
 
-    *status = TKL_NETIF_LINK_DOWN;
+    *status = TAL_NETIF_LINK_DOWN;
 
     name_list = if_nameindex();
     if (NULL == name_list) {
@@ -76,10 +76,10 @@ static OPERATE_RET __netif_get_status(TKL_NETIF_LINK_STAT_E *status)
         if (is_loopback_interface(name_list[i].if_name))
             continue;
 
-        TKL_NETIF_LINK_STAT_E if_status = TKL_NETIF_LINK_DOWN;
+        TAL_NETIF_LINK_STAT_E if_status = TAL_NETIF_LINK_DOWN;
         if (!__netif_get_status_by_name(name_list[i].if_name, &if_status)) {
             *status = if_status;
-            if (if_status == TKL_NETIF_LINK_UP) {
+            if (if_status == TAL_NETIF_LINK_UP) {
                 break;
             }
         }
@@ -92,8 +92,8 @@ static OPERATE_RET __netif_get_status(TKL_NETIF_LINK_STAT_E *status)
 /* 链路状态轮询线程：3s 一次，变化时回调 */
 static void *netif_link_event_cb(void *arg)
 {
-    TKL_NETIF_LINK_STAT_E last_stat = -1;
-    TKL_NETIF_LINK_STAT_E stat = TKL_NETIF_LINK_DOWN;
+    TAL_NETIF_LINK_STAT_E last_stat = -1;
+    TAL_NETIF_LINK_STAT_E stat = TAL_NETIF_LINK_DOWN;
 
     (void)arg;
     pthread_detach(pthread_self());
@@ -139,7 +139,7 @@ static OPERATE_RET __netif_get_ip_by_name(const char *if_name, NW_IP_S *ip)
     return OPRT_OK;
 }
 
-OPERATE_RET tkl_netif_get_ip(NW_IP_S *ip)
+static OPERATE_RET tkl_netif_get_ip(NW_IP_S *ip)
 {
     OPERATE_RET rt = OPRT_NOT_FOUND;
     struct if_nameindex *name_list;
@@ -154,8 +154,8 @@ OPERATE_RET tkl_netif_get_ip(NW_IP_S *ip)
         if (is_loopback_interface(name_list[i].if_name))
             continue;
 
-        TKL_NETIF_LINK_STAT_E if_status = TKL_NETIF_LINK_DOWN;
-        if (!__netif_get_status_by_name(name_list[i].if_name, &if_status) && if_status == TKL_NETIF_LINK_UP) {
+        TAL_NETIF_LINK_STAT_E if_status = TAL_NETIF_LINK_DOWN;
+        if (!__netif_get_status_by_name(name_list[i].if_name, &if_status) && if_status == TAL_NETIF_LINK_UP) {
             if (!__netif_get_ip_by_name(name_list[i].if_name, ip)) {
                 rt = OPRT_OK;
                 break;
@@ -168,10 +168,10 @@ OPERATE_RET tkl_netif_get_ip(NW_IP_S *ip)
     return rt;
 }
 
-OPERATE_RET tkl_netif_set_link_cb(TKL_NETIF_LINK_CHANGE_CB cb)
+static OPERATE_RET tkl_netif_set_link_cb(TAL_NETIF_LINK_CHANGE_CB cb)
 {
     if (cb) {
-        TKL_NETIF_LINK_STAT_E status = TKL_NETIF_LINK_DOWN;
+        TAL_NETIF_LINK_STAT_E status = TAL_NETIF_LINK_DOWN;
 
         __netif_get_status(&status);
 
@@ -188,3 +188,12 @@ OPERATE_RET tkl_netif_set_link_cb(TKL_NETIF_LINK_CHANGE_CB cb)
 
     return OPRT_OK;
 }
+
+/* ---------------------------------------------------------------------------
+ * 平台 ops 卡：由本平台 TKL 实现组装，core 的 tal_netif.c 经 extern 引用并完成
+ * tal_netif_* 分发。移植新平台时在各自 port 的 tkl_netif.c 中提供同名卡即可。
+ * --------------------------------------------------------------------------- */
+TAL_NETIF_OPS_T tal_netif_ops_platform = {
+    .get_ip = tkl_netif_get_ip,
+    .set_link_cb = tkl_netif_set_link_cb,
+};
