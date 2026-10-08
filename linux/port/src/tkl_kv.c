@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #define DATA_REGION_PATH   "./tuyadb/data.bin"
 #define DATA_REGION_SIZE   (256 * 1024)
@@ -59,7 +60,10 @@ static OPERATE_RET tkl_kv_init(TAL_KV_REGION_T *region)
         } else {
             long fsize = 0;
             if (0 != fseek(s_region_fp, 0, SEEK_END) || (fsize = ftell(s_region_fp)) != (long)DATA_REGION_SIZE) {
-                /* 尺寸不符（被截断/半截文件）→ 重建为全 0xFF 区域，保持"空态=0xFF"不变量 */
+                /* 尺寸不符（被截断/半截文件）→ 重建为全 0xFF 区域，保持"空态=0xFF"不变量。
+                 * 注意：这会清空已存 KV，必须留痕，不能静默。 */
+                fprintf(stderr, "[tkl_kv] region file size mismatch (got %ld, expect %d), rebuild: KV cleared\n",
+                        fsize, DATA_REGION_SIZE);
                 fclose(s_region_fp);
                 s_region_fp = fopen(DATA_REGION_PATH, "w+b");
                 if (NULL == s_region_fp) {
@@ -102,6 +106,7 @@ static OPERATE_RET tkl_kv_write(uint32_t offset, const uint8_t *buf, uint32_t le
         return OPRT_COM_ERROR;
     }
     fflush(s_region_fp);
+    fsync(fileno(s_region_fp));   /* 掉电时最后几笔不丢（旧实现经 tal_fsync 落盘） */
     return OPRT_OK;
 }
 
@@ -124,6 +129,7 @@ static OPERATE_RET tkl_kv_erase(uint32_t offset, uint32_t len)
         done += chunk;
     }
     fflush(s_region_fp);
+    fsync(fileno(s_region_fp));   /* 擦除同样落盘（旧实现经 tal_fsync 落盘） */
     return OPRT_OK;
 }
 

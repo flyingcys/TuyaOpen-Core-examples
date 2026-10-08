@@ -13,8 +13,14 @@
  *       重开用例（完整自测把区域写满后调用，验证"满区域重开"：
  *       墓碑不复活 / 已写入数据完整 / 写入被拒且不覆盖；重开后写读正常在 restart-check）：
  *         ./tal_kv_selftest reopen-check
- *       撕裂写用例（干净区域上分两次进程调用，第二次重扫时 CRC 失败须视为不存在）：
+ *       撕裂写用例（干净区域上分两次进程调用，第二次重扫时 CRC 失败须视为不存在，
+ *       且不得整区归零——第一条完好记录必须存活）：
  *         rm -f tuyadb/data.bin && ./tal_kv_selftest torn-setup && ./tal_kv_selftest torn-check
+ *       未擦除区域用例（区域预填非 0xFF 垃圾 → init 应归零并正常工作，重启可读）：
+ *         rm -rf tuyadb && ./tal_kv_selftest garbage-setup && ./tal_kv_selftest garbage-check \
+ *           && ./tal_kv_selftest garbage-recheck
+ *       错密钥用例（A 写入 → 换 B 重开：get 必须报错而不是返回垃圾）：
+ *         rm -rf tuyadb && ./tal_kv_selftest wrongkey-setup && ./tal_kv_selftest wrongkey-check
  */
 #include "tal_kv_ops.h"
 
@@ -495,16 +501,24 @@ int main(int argc, char *argv[])
         return 0;
     }
     if (argc > 1 && 0 == strcmp(argv[1], "torn-setup")) {
-        /* 干净区域上只写一条记录 → 记录必然从偏移 0 开始，数据区偏移 = 12 + namelen */
-        uint8_t wr[256];
+        /* 干净区域上写两条记录：先写一条完好的（保证扫描 have=1，不会走"空区域归零"
+         * 兜底），再写目标记录并破坏其数据首字节 → 重扫时第二条 CRC 失败应被当作
+         * 日志尾丢弃，第一条必须完好（证明是"丢弃撕裂记录"而非"整区归零"）。 */
+        uint8_t keep[256], wr[256];
+        uint32_t rec1, data_off;
+        uint8_t bad = 0x00;
+
+        memset(keep, 0x22, sizeof(keep));
         memset(wr, 0x11, sizeof(wr));
         CHECK(OPRT_OK == tal_kv_init(&s_kv_cfg));
+        CHECK(OPRT_OK == tal_kv_set("torn.keep", keep, sizeof(keep)));
         CHECK(OPRT_OK == tal_kv_set("torn.key", wr, sizeof(wr)));
-        {
-            uint8_t bad = 0x00;
-            uint32_t data_off = 12 + (uint32_t)strlen("torn.key");
-            CHECK(OPRT_OK == OPS->write(data_off, &bad, 1));  /* 破坏数据首字节 */
-        }
+
+        /* 第二条记录的数据区偏移 = 第一条记录长度 + 12 + namelen("torn.key")；
+         * 记录长度 = align4(16 + namelen + 密文长)，256B 明文 → 密文 272B（PKCS7 补满 16） */
+        rec1 = (16 + (uint32_t)strlen("torn.keep") + (uint32_t)(sizeof(keep) + 16) + 3) & ~3u;
+        data_off = rec1 + 12 + (uint32_t)strlen("torn.key");
+        CHECK(OPRT_OK == OPS->write(data_off, &bad, 1));  /* 破坏第二条记录的数据首字节 */
         printf("TORN SETUP OK\n");
         return 0;
     }
@@ -512,9 +526,102 @@ int main(int argc, char *argv[])
         uint8_t *rd = NULL;
         size_t out_len = 0;
         CHECK(OPRT_OK == tal_kv_init(&s_kv_cfg));
-        /* 重扫时该记录 CRC 失败 → 视为不存在 */
+        /* 重扫时第二条记录 CRC 失败 → 视为不存在 */
         CHECK(OPRT_NOT_FOUND == tal_kv_get("torn.key", &rd, &out_len));
+        /* 第一条完好记录必须存活（撕裂记录只截断日志尾，不得整区归零） */
+        CHECK(OPRT_OK == tal_kv_get("torn.keep", &rd, &out_len));
+        CHECK(out_len == 256);
+        for (size_t i = 0; i < out_len; i++) {
+            CHECK(0x22 == rd[i]);
+        }
+        CHECK(OPRT_OK == tal_kv_free(rd));
         printf("TORN CHECK OK\n");
+        return 0;
+    }
+    if (argc > 1 && 0 == strcmp(argv[1], "garbage-setup")) {
+        /* 模拟"未擦除/曾被占用的区域"（如老 littlefs 分区原地升级）：用 ops 直接往
+         * 干净区域写非 0xFF 垃圾，且不写任何可解析记录（首字节非记录 magic） */
+        TAL_KV_REGION_T region = {0};
+        uint8_t junk[4096];
+
+        CHECK(OPRT_OK == OPS->init(&region));
+        for (size_t i = 0; i < sizeof(junk); i++) {
+            junk[i] = (uint8_t)(0x5A ^ i);
+        }
+        CHECK(OPRT_OK == OPS->write(0, junk, sizeof(junk)));
+        printf("GARBAGE SETUP OK\n");
+        return 0;
+    }
+    if (argc > 1 && 0 == strcmp(argv[1], "garbage-check")) {
+        /* init 扫描为空时必须把区域归零一次（兜底）：否则真 NOR flash 上只能 1→0，
+         * 往非 0xFF 区域追加会静默写失败而内存索引无感 → 每次重启丢数据。
+         * 归零后写读必须正常。 */
+        TAL_KV_REGION_T region = {0};
+        uint8_t wr[64];
+        uint8_t *rd = NULL;
+        size_t out_len = 0;
+
+        CHECK(OPRT_OK == tal_kv_init(&s_kv_cfg));
+        /* 归零验证：整个区域必须回到擦除态（全 0xFF） */
+        CHECK(OPRT_OK == OPS->init(&region));
+        {
+            uint8_t *chunk = (uint8_t *)tal_malloc(region.size);
+            CHECK(NULL != chunk);
+            CHECK(OPRT_OK == OPS->read(0, chunk, region.size));
+            for (uint32_t i = 0; i < region.size; i++) {
+                CHECK(0xFF == chunk[i]);
+            }
+            tal_free(chunk);
+        }
+        /* 归零后写读正常 */
+        for (size_t i = 0; i < sizeof(wr); i++) {
+            wr[i] = (uint8_t)(0xE0 + i);
+        }
+        CHECK(OPRT_OK == tal_kv_set("garb.kv", wr, sizeof(wr)));
+        CHECK(OPRT_OK == tal_kv_get("garb.kv", &rd, &out_len));
+        CHECK(out_len == sizeof(wr));
+        CHECK(0 == memcmp(wr, rd, sizeof(wr)));
+        CHECK(OPRT_OK == tal_kv_free(rd));
+        printf("GARBAGE CHECK OK\n");
+        return 0;
+    }
+    if (argc > 1 && 0 == strcmp(argv[1], "garbage-recheck")) {
+        /* 重启后仍可读（证明归零 + 写入真的落到区域，而非只在内存索引里） */
+        uint8_t *rd = NULL;
+        size_t out_len = 0;
+        CHECK(OPRT_OK == tal_kv_init(&s_kv_cfg));
+        CHECK(OPRT_OK == tal_kv_get("garb.kv", &rd, &out_len));
+        CHECK(out_len == 64);
+        for (size_t i = 0; i < out_len; i++) {
+            CHECK((uint8_t)(0xE0 + i) == rd[i]);
+        }
+        CHECK(OPRT_OK == tal_kv_free(rd));
+        printf("GARBAGE RECHECK OK\n");
+        return 0;
+    }
+    if (argc > 1 && 0 == strcmp(argv[1], "wrongkey-setup")) {
+        uint8_t wr[64];
+        memset(wr, 0x77, sizeof(wr));
+        CHECK(OPRT_OK == tal_kv_init(&s_kv_cfg));
+        CHECK(OPRT_OK == tal_kv_set("wk.kv", wr, sizeof(wr)));
+        printf("WRONGKEY SETUP OK\n");
+        return 0;
+    }
+    if (argc > 1 && 0 == strcmp(argv[1], "wrongkey-check")) {
+        /* 换一套 seed/key 重开：解密后 PKCS7 全校验必须失败 → get 报错，绝不能把随机
+         * 垃圾当有效值返回（旧 kv_decrypt 逐字节校验填充值）。
+         * 该 key 对经筛选：解密垃圾的末字节落在 1..16，旧 tal_aes_get_actual_length
+         * 只按末字节截断、不校验填充字节 → 会"成功"返回垃圾（本用例据此可红）。 */
+        static tal_kv_cfg_t bad_cfg = {
+            .seed = "S000000000000000",
+            .key  = "B000000000000000",
+        };
+        uint8_t *rd = NULL;
+        size_t out_len = 0;
+        CHECK(OPRT_OK == tal_kv_init(&bad_cfg));
+        CHECK(OPRT_OK != tal_kv_get("wk.kv", &rd, &out_len));   /* 必须报错 */
+        CHECK(NULL == rd && 0 == out_len);
+        printf("WRONGKEY CHECK OK\n");
         return 0;
     }
     if (0 != test_region_basic()) {
