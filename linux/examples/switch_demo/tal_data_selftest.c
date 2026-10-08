@@ -1,13 +1,15 @@
 /**
  * @file tal_data_selftest.c
  * @brief tal_data 自测：区域原语（init / read / write / erase）+ K-V API 级用例
- *        （init/write/read/erase、墓碑与重启重开路径）；撕裂写 / 压缩等用例在 Task 3 追加
+ *        （init/write/read/erase、墓碑与重启重开路径、大对象覆盖写触发的 GC 压缩）
  *
  * 运行：cd build && ./tal_data_selftest
  *       两段式重启用例（需分两次进程调用，区域跨进程保留）：
  *         rm -rf tuyadb && ./tal_data_selftest restart-setup && ./tal_data_selftest restart-check
  *       重开用例（在完整自测跑完后，区域非空时调用）：
  *         ./tal_data_selftest reopen-check
+ *       撕裂写用例（干净区域上分两次进程调用，第二次重扫时 CRC 失败须视为不存在）：
+ *         rm -f tuyadb/data.bin && ./tal_data_selftest torn-setup && ./tal_data_selftest torn-check
  */
 #include "tal_data_ops.h"
 
@@ -124,6 +126,36 @@ static int test_kv_basic(void)
     return 0;
 }
 
+static int test_kv_compaction(void)
+{
+    uint8_t blob[8 * 1024], rd[8 * 1024];
+    size_t out_len = 0;
+    char name[16];
+
+    /* 反复覆盖写大对象，强制触发压缩（区域 256KB） */
+    for (int i = 0; i < 64; i++) {
+        memset(blob, (uint8_t)i, sizeof(blob));
+        snprintf(name, sizeof(name), "bulk.%d", i % 4);     /* 4 个 key 轮换 */
+        CHECK(OPRT_OK == tal_data_write(name, blob, sizeof(blob)));
+    }
+    /* 压缩后所有 key 仍可读，且内容为最后一次写入的 */
+    for (int i = 0; i < 4; i++) {
+        snprintf(name, sizeof(name), "bulk.%d", i);
+        memset(rd, 0, sizeof(rd));
+        CHECK(OPRT_OK == tal_data_read(name, rd, sizeof(rd), &out_len));
+        CHECK(out_len == sizeof(blob));
+        CHECK(rd[0] == (uint8_t)(60 + i));                  /* 最后一轮 i=60..63 */
+    }
+    return 0;
+}
+
+/* 撕裂写在**进程内**观察不到（读路径用 RAM 索引 + 复核 CRC，但损坏发生在
+ * 本次运行写入之后时，需重启重扫才能体现）→ 拆成 setup / check 两个模式，
+ * 由 main 的 torn-setup / torn-check 分支分两次调用。
+ *
+ * 压缩中途掉电的安全性（副本先写、旧记录后擦）由代码评审核对顺序不变量，
+ * 不做运行时注入测试——见设计文档第五节的压缩步骤与 __compact 实现。 */
+
 int main(int argc, char *argv[])
 {
     if (argc > 1 && 0 == strcmp(argv[1], "restart-setup")) {
@@ -173,6 +205,29 @@ int main(int argc, char *argv[])
         printf("REOPEN OK\n");
         return 0;
     }
+    if (argc > 1 && 0 == strcmp(argv[1], "torn-setup")) {
+        /* 干净区域上只写一条记录 → 记录必然从偏移 0 开始，数据区偏移 = 12 + namelen */
+        uint8_t wr[256];
+        memset(wr, 0x11, sizeof(wr));
+        CHECK(OPRT_OK == tal_data_init("0123456789abcdef", "fedcba9876543210"));
+        CHECK(OPRT_OK == tal_data_write("torn.key", wr, sizeof(wr)));
+        {
+            uint8_t bad = 0x00;
+            uint32_t data_off = 12 + (uint32_t)strlen("torn.key");
+            CHECK(OPRT_OK == tal_data_get_ops()->write(data_off, &bad, 1));  /* 破坏数据首字节 */
+        }
+        printf("TORN SETUP OK\n");
+        return 0;
+    }
+    if (argc > 1 && 0 == strcmp(argv[1], "torn-check")) {
+        uint8_t rd[256];
+        size_t out_len = 0;
+        CHECK(OPRT_OK == tal_data_init("0123456789abcdef", "fedcba9876543210"));
+        /* 重扫时该记录 CRC 失败 → 视为不存在 */
+        CHECK(OPRT_NOT_FOUND == tal_data_read("torn.key", rd, sizeof(rd), &out_len));
+        printf("TORN CHECK OK\n");
+        return 0;
+    }
     if (0 != test_region_basic()) {
         return 1;
     }
@@ -180,6 +235,9 @@ int main(int argc, char *argv[])
         return 1;
     }
     if (0 != test_kv_basic()) {
+        return 1;
+    }
+    if (0 != test_kv_compaction()) {
         return 1;
     }
     printf("ALL TESTS PASSED\n");
