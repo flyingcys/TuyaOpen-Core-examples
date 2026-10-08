@@ -4,6 +4,12 @@
 * @version 0.1
 * @date 2020-11-09
 *
+* 文件系统是 p2p 可选能力：只保留 local_store 实际用到的 18 个接口
+* （9 文件 + 4 路径 + 5 目录），实现见 port/src/tkl_fs.c（整文件由
+* ENABLE_TUYA_P2P 门控），经 TAL_FS_OPS_T 卡（tal_fs_ops.h）由 core 的
+* tal_fs.h/tal_fs.c 分发。零调用接口（mode/feof/ftell/fgetsize/faccess/
+* fgetc/ftruncate/dir_is_regular）已从本头删除。
+*
 * @copyright Copyright 2021-2030 Tuya Inc. All Rights Reserved.
 *
 */
@@ -43,18 +49,6 @@ int tkl_fs_mkdir(const char* path);
 */
 int tkl_fs_remove(const char* path);
 
-
-/**
-* @brief Get file mode
-*
-* @param[in] path: path of directory
-* @param[out] mode: bit attibute of directory
-*
-* @note This API is used for getting file mode.
-*
-* @return 0 on success. Others on failed
-*/
-int tkl_fs_mode(const char* path, uint32_t* mode);
 
 /**
 * @brief Check whether the file or directory exists
@@ -142,18 +136,6 @@ int tkl_dir_name(TUYA_FILEINFO info, const char** name);
 int tkl_dir_is_directory(TUYA_FILEINFO info, BOOL_T* is_dir);
 
 /**
-* @brief Check whether the node is a normal file
-*
-* @param[in] info: file information
-* @param[out] is_regular: is normal file or not
-*
-* @note This API is used to check whether the node is a normal file.
-*
-* @return 0 on success. Others on failed
-*/
-int tkl_dir_is_regular(TUYA_FILEINFO info, BOOL_T* is_regular);
-
-/**
 * @brief Open file
 *
 * @param[in] path: path of file
@@ -227,17 +209,6 @@ int tkl_fsync(int fd);
 char* tkl_fgets(char* buf, int len, TUYA_FILE file);
 
 /**
-* @brief Check wheather to reach the end fo the file
-*
-* @param[in] file: file handle
-*
-* @note This API is used to check wheather to reach the end fo the file
-*
-* @return 0 on not eof, others on eof
-*/
-int tkl_feof(TUYA_FILE file);
-
-/**
 * @brief Seek to the offset position of the file
 *
 * @param[in] file: file handle
@@ -249,52 +220,6 @@ int tkl_feof(TUYA_FILE file);
 * @return 0 on success, others on failed
 */
 int tkl_fseek(TUYA_FILE file, int64_t offs, int whence);
-
-/**
-* @brief Get current position of file
-*
-* @param[in] file: file handle
-*
-* @note This API is used to get current position of file.
-*
-* @return the current offset of the file
-*/
-int64_t tkl_ftell(TUYA_FILE file);
-
-/**
-* @brief Get file size
-*
-* @param[in] filepath file path + file name
-*
-* @note This API is used to get the size of file.
-*
-* @return the sizeof of file
-*/
-int tkl_fgetsize(const char *filepath);
-
-/**
-* @brief Judge if the file can be access
-*
-* @param[in] filepath file path + file name
-*
-* @param[in] mode access mode
-*
-* @note This API is used to access one file.
-*
-* @return 0 success,-1 failed
-*/
-int tkl_faccess(const char *filepath, int mode);
-
-/**
-* @brief read the next character from stream
-*
-* @param[in] file char stream
-*
-* @note This API is used to get one char from stream.
-*
-* @return as an unsigned char cast to a int ,or EOF on end of file or error
-*/
-int tkl_fgetc(TUYA_FILE file);
 
 /**
 * @brief flush the IO read/write stream
@@ -318,19 +243,6 @@ int tkl_fflush(TUYA_FILE file);
 */
 int tkl_fileno(TUYA_FILE file);
 
-
-/**
-* @brief truncate one file according to the length
-*
-* @param[in] fd file description
-*
-* @param[in] length the length want to truncate
-*
-* @note This API is used to truncate one file.
-*
-* @return 0 success,-1 failed
-*/
-int tkl_ftruncate(int fd, uint64_t length);
 
 #ifdef __cplusplus
 } // extern "C"

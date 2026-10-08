@@ -1,13 +1,23 @@
 /**
  * @file tkl_fs.c
- * @brief the default weak implements of tuya os file system, this implement only used when OS=linux
- * @version 0.1
- * @date 2019-08-15
- * 
+ * @brief 文件系统平台 ops 卡组装 + POSIX 实现（linux port）
+ *
+ * 文件系统是 p2p 可选能力：唯一调用方是 p2p-core/local_store（core 侧经
+ * tal_fs.h 的透传落到本文件的 TAL_FS_OPS_T 卡）。不用 p2p 的平台整文件由
+ * ENABLE_TUYA_P2P 门控——不编译、不必实现这 18 个接口；宏由 port 的 CMake
+ * 从 CONFIG_ENABLE_TUYA_P2P 映射注入（见 port/CMakeLists.txt）。
+ *
+ * 实现为 POSIX 直包装（open/read/write/opendir/readdir...），经 TAL_FS_OPS_T
+ * 分发；core 的 tal_fs.c 无 p2p 时无人引用其符号，静态库不拉入 tal_fs.o，
+ * 卡不存在也不会链接失败。
+ *
  * @copyright Copyright 2020-2021 Tuya Inc. All Rights Reserved.
- * 
+ *
  */
+#if defined(ENABLE_TUYA_P2P)
+
 #include "tkl_fs.h"
+#include "tal_fs_ops.h"
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -43,31 +53,6 @@ TUYA_WEAK_ATTRIBUTE int tkl_fs_remove(const char* path)
     return remove(path);
 }
 
-/**
-* @brief Get file mode
-*
-* @param[in] path: path of directory
-* @param[out] mode: bit attibute of directory
-*
-* @note This API is used for getting file mode.
-*
-* @return 0 on success. Others on failed
-*/
-TUYA_WEAK_ATTRIBUTE int tkl_fs_mode(const char* path, uint32_t* mode)
-{
-    if (mode == NULL) {
-        return -1;
-    }
-
-    struct stat statbuf = {0};
-    int ret = lstat(path, &statbuf);
-    if (ret != 0) {
-        return ret;
-    }
-
-    *mode = statbuf.st_mode;
-    return 0;
-}
 
 /**
 * @brief Check whether the file or directory exists
@@ -219,26 +204,6 @@ TUYA_WEAK_ATTRIBUTE int tkl_dir_is_directory(TUYA_FILEINFO info, BOOL_T* is_dir)
     return 0;
 }
 
-/**
-* @brief Check whether the node is a normal file
-*
-* @param[in] info: file information
-* @param[out] is_regular: is normal file or not
-*
-* @note This API is used to check whether the node is a normal file.
-*
-* @return 0 on success. Others on failed
-*/
-TUYA_WEAK_ATTRIBUTE int tkl_dir_is_regular(TUYA_FILEINFO info, BOOL_T* is_regular)
-{
-    if (is_regular == NULL) {
-        return -1;
-    }
-
-    struct dirent* dp = (struct dirent*)info;
-    *is_regular = (dp->d_type == DT_REG);
-    return 0;
-}
 
 /**
 * @brief Open file
@@ -335,20 +300,6 @@ TUYA_WEAK_ATTRIBUTE char* tkl_fgets(char* buf, int len, TUYA_FILE file)
     return fgets(buf, len, fp);
 }
 
-/**
-* @brief Check wheather to reach the end fo the file
-*
-* @param[in] file: file handle
-*
-* @note This API is used to check wheather to reach the end fo the file
-*
-* @return 0 on not eof, others on eof
-*/
-TUYA_WEAK_ATTRIBUTE int tkl_feof(TUYA_FILE file)
-{
-    FILE* fp = (FILE*)file;
-    return feof(fp);
-}
 
 /**
 * @brief Seek to the offset position of the file
@@ -367,69 +318,9 @@ TUYA_WEAK_ATTRIBUTE int tkl_fseek(TUYA_FILE file, int64_t offs, int whence)
     return fseek(fp, offs, whence);
 }
 
-/**
-* @brief Get current position of file
-*
-* @param[in] file: file handle
-*
-* @note This API is used to get current position of file.
-*
-* @return the current offset of the file
-*/
-TUYA_WEAK_ATTRIBUTE int64_t tkl_ftell(TUYA_FILE file)
-{
-    FILE* fp = (FILE*)file;
-    return ftell(fp);
-}
 
-/**
-* @brief Get file size
-*
-* @param[in] filepath file path + file name
-*
-* @note This API is used to get the size of file.
-*
-* @return the sizeof of file
-*/
-TUYA_WEAK_ATTRIBUTE int tkl_fgetsize(const char *filepath)
-{
-    struct stat statbuf;
-    stat(filepath, &statbuf);
-    int size = statbuf.st_size;
 
-    return size;
-}
 
-/**
-* @brief Judge if the file can be access
-*
-* @param[in] filepath file path + file name
-*
-* @param[in] mode access mode
-*
-* @note This API is used to access one file.
-*
-* @return 0 success,-1 failed
-*/
-TUYA_WEAK_ATTRIBUTE int tkl_faccess(const char *filepath, int mode)
-{
-    return access(filepath, mode);
-}
-
-/**
-* @brief read the next character from stream
-*
-* @param[in] file char stream
-*
-* @note This API is used to get one char from stream.
-*
-* @return as an unsigned char cast to a int ,or EOF on end of file or error
-*/
-TUYA_WEAK_ATTRIBUTE int tkl_fgetc(TUYA_FILE file)
-{
-    FILE* fp = (FILE*)file;
-    return fgetc(fp);
-}
 
 /**
 * @brief flush the IO read/write stream
@@ -461,19 +352,33 @@ TUYA_WEAK_ATTRIBUTE int tkl_fileno(TUYA_FILE file)
     return fileno(fp);
 }
 
-/**
-* @brief truncate one file according to the length
-*
-* @param[in] fd file description
-*
-* @param[in] length the length want to truncate
-*
-* @note This API is used to truncate one file.
-*
-* @return 0 success,-1 failed
-*/
-TUYA_WEAK_ATTRIBUTE int tkl_ftruncate(int fd, uint64_t length)
-{
-    return ftruncate(fd, length);
-}
+
+/* ---------------------------------------------------------------------------
+ * 文件系统平台 ops 卡：由本文件组装，core 的 tal_fs.c 经 extern 引用并完成
+ * tal_fs_* / tal_dir_* 分发。文件系统为 p2p 可选能力（唯一调用方
+ * p2p-core/local_store），与主卡（tkl_runtime.c）解耦；整文件随
+ * ENABLE_TUYA_P2P 门控，不用 p2p 的平台无需适配。
+ * --------------------------------------------------------------------------- */
+TAL_FS_OPS_T tal_fs_ops_platform = {
+    .fopen = tkl_fopen,
+    .fclose = tkl_fclose,
+    .fwrite = tkl_fwrite,
+    .fread = tkl_fread,
+    .fseek = tkl_fseek,
+    .fflush = tkl_fflush,
+    .fsync = tkl_fsync,
+    .fileno = tkl_fileno,
+    .fgets = tkl_fgets,
+    .fs_is_exist = tkl_fs_is_exist,
+    .fs_mkdir = tkl_fs_mkdir,
+    .fs_remove = tkl_fs_remove,
+    .fs_rename = tkl_fs_rename,
+    .dir_open = tkl_dir_open,
+    .dir_close = tkl_dir_close,
+    .dir_read = tkl_dir_read,
+    .dir_name = tkl_dir_name,
+    .dir_is_directory = tkl_dir_is_directory,
+};
+
+#endif /* ENABLE_TUYA_P2P */
 

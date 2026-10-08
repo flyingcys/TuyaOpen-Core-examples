@@ -80,12 +80,14 @@ if(_port_srcs)
         endif()
         target_include_directories(tuyaopen-port PRIVATE
             "${PORT_ROOT}/../tuyaopen-core/iot-core/tuya_transport/include/transport")
-        # 网络卡的模块级隔离：仅 p2p 使用的 ops 由 ENABLE_TUYA_P2P 门控。
-        # core 的开关宏（TuyaOpenOptions → tuyaopen-headers）只作用于 core 模块，
-        # port 目标须注入同一宏名，否则开了 P2P 也挂不上卡成员。
-        if(CONFIG_ENABLE_TUYA_P2P)
-            target_compile_definitions(tuyaopen-port PRIVATE ENABLE_TUYA_P2P=1)
-        endif()
+    endif()
+
+    # 模块级隔离（独立于上面的条件块）：仅 p2p 使用的适配由 ENABLE_TUYA_P2P 门控
+    # ——tkl_network 的 5 个 p2p 成员 + tkl_fs 整文件。core 的开关宏
+    # （TuyaOpenOptions → tuyaopen-headers）只作用于 core 模块，port 目标须注入
+    # 同一宏名，否则开了 P2P 也挂不上卡成员/编不出 tkl_fs。
+    if(CONFIG_ENABLE_TUYA_P2P)
+        target_compile_definitions(tuyaopen-port PRIVATE ENABLE_TUYA_P2P=1)
     endif()
 
     if(EXISTS "${PORT_ROOT}/src/tkl_kv.c")
