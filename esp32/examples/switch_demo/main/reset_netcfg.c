@@ -50,7 +50,7 @@ static int reset_count_read(uint8_t *count)
     PR_DEBUG("reset count is %d", *count);
 
     if (NULL != read_buf) {
-        tal_kv_free(read_buf);
+        tal_free(read_buf);
         read_buf = NULL;
     }
 

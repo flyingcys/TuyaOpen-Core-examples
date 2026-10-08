@@ -180,36 +180,24 @@ static int test_empty_value(void)
     return 0;
 }
 
-/* 4b. 长度 0 的宽容用例：新头文件未定义 length==0 的返回码，故不断言具体错误码；
- *     只要求不崩溃，且若写入被接受则读回自洽（OK+length==0，或 NOT_FOUND） */
+/* 4b. 长度 0 的非法参数用例：契约（tal_kv.h 的 tal_kv_set）已明确 length 必须
+ *     > 0、为 0 返回 OPRT_INVALID_PARM，故断言具体错误码 + 不留损坏状态 */
 static int test_zero_length(void)
 {
     const uint8_t dummy = 0x5A;
     uint8_t *rd = NULL;
     size_t out_len = 0;
-    int ret;
-    int gret;
 
     CHECK(OPRT_OK == tal_kv_init(&s_kv_cfg));
     CHECK(OPRT_OK == tal_kv_del("t4.zero"));        /* 幂等清理，不依赖干净存储 */
 
-    ret = tal_kv_set("t4.zero", &dummy, 0);
-    printf("INFO: tal_kv_set(len=0) -> %d（头文件未定义，两种结果均接受）\n", ret);
-    if (OPRT_OK == ret) {
-        gret = tal_kv_get("t4.zero", &rd, &out_len);
-        CHECK(OPRT_OK == gret || OPRT_NOT_FOUND == gret);
-        if (OPRT_OK == gret) {
-            CHECK(NULL != rd);
-            CHECK(0 == out_len);
-            CHECK(0 == rd[0]);                      /* 仍含结尾 '\0' */
-            tal_free(rd);
-            rd = NULL;
-        } else {
-            CHECK(NULL == rd && 0 == out_len);
-        }
-    }
+    CHECK(OPRT_INVALID_PARM == tal_kv_set("t4.zero", &dummy, 0));
 
-    /* 无论写入是否被接受，清理后该 key 必须重新可写（不留下损坏状态） */
+    /* 非法写入不得落盘：读回应为 NOT_FOUND 且出参归零 */
+    CHECK(OPRT_NOT_FOUND == tal_kv_get("t4.zero", &rd, &out_len));
+    CHECK(NULL == rd && 0 == out_len);
+
+    /* 该 key 必须仍可正常写入（不留下损坏状态） */
     CHECK(OPRT_OK == tal_kv_del("t4.zero"));
     CHECK(OPRT_OK == tal_kv_set("t4.zero", (const uint8_t *)"ok", 2));
     CHECK(0 == check_roundtrip("t4.zero", (const uint8_t *)"ok", 2));
