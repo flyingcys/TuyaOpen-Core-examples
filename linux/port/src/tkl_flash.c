@@ -168,6 +168,11 @@ OPERATE_RET tkl_flash_get_one_type_info(TUYA_FLASH_TYPE_E type, TUYA_FLASH_BASE_
 {
     BOOL_T is_exist = FALSE;
 
+    /* 参数优先校验（与 tkl_kv 的约定一致）：坏参数先于存储状态返回 */
+    if ((type > TUYA_FLASH_TYPE_MAX) || (info == NULL)) {
+        return OPRT_INVALID_PARM;
+    }
+
     if(!s_flash_file) {
         tkl_fs_is_exist(FLASH_FILE_NAME, &is_exist);
         if(FALSE == is_exist) {
@@ -189,9 +194,6 @@ OPERATE_RET tkl_flash_get_one_type_info(TUYA_FLASH_TYPE_E type, TUYA_FLASH_BASE_
         }
     }
 
-    if ((type > TUYA_FLASH_TYPE_MAX) || (info == NULL)) {
-        return OPRT_INVALID_PARM;
-    }
     switch (type) {
         case TUYA_FLASH_TYPE_UF:
             info->partition_num = 1;
