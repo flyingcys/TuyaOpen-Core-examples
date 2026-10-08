@@ -4,7 +4,7 @@
 > （区域写满即废、尾部撕裂不兜底、中段损坏截断其后记录、扩容需按写入总量评估）对产品不可接受。
 > 下方"历史方案"内容仅作记录，勿作为实现依据——照其验证步骤跑会失败。
 
-## 新方案（2026-10-08 定稿，已实现）
+## 新方案（2026-10-08 定稿，已实现并通过评审）
 
 **架构**：core 只留 4 接口透传，**实现全在 port**（iot-core 零 KV 逻辑）。
 
@@ -23,9 +23,11 @@
 **分工原则**：存储介质、记录格式、加密、序列化**全部是 port 内部细节**；core 不做任何 KV 逻辑。
 Linux 实现保留旧行为：AES-128-CBC（seed/key 经 SHA256 派生，IV=seed）+ mutex 线程安全 + littlefs（自带磨损均衡与掉电保护）。
 
-**提交**：子模块 `ba58b24`…`43a79bc`、外层 `9961ff8`…`c6cc153`（2026-10-08）。
+**提交**：子模块 `ba58b24`…`43a79bc`、外层 `9961ff8`…`ffa62d7`（2026-10-08）。
 
 **验证**：干净目录单独构建测试目标 exit 0；全量构建 exit 0；自测（10 用例黑盒）新旧存储路径各 ALL TESTS PASSED（含变异反证）；e2e exit 124 + TLS×2 + MQTT + QR 22 行；压力探针 160KB 写入（>96KB 分区）触发 littlefs 块回收全验证；ASan + UBSan 自测全绿。
+
+**评审**：内部独立评审（opus，含 gdb 崩溃路径取证与旧镜像升级实测）结论"可合入、无 Critical"，3 Important + 9 Minor 全部处置或记录在案；对端会话 `linux-67` 两批 PK——它独立复现了字节兼容（真实 seed/key 逐 key 解密）、ASan/UBSan、P2P+local_store 配置构建——最终明确 **"第二版认可合入，无 BLOCKER"**，全部发现闭环。
 
 **升级兼容性（实测）**：恢复的 littlefs + AES 与旧固件**字节兼容**——旧镜像（旧 7 接口固件写入的 `examples/switch_demo/tuyadb/tuyadb`）在新代码下正常挂载，`region`/`regist_key`/`endpoint.cert`/`endpoint.domain` 全部解密出正确明文；旧的单 key `endpoint.domain` 不再被读，5 个新字段 key 缺失返回 NOT_FOUND → 触发 `STATE_ENDPOINT_UPDATE` → iDNS 重取 → 写回 5 key，自愈。
 
