@@ -1,5 +1,5 @@
 # tal_wired（原 core-communication 模块，随应用层走）
-# 依赖映射：tkl_wired.h / tkl_init_wired.h / tuya_cloud_types.h 均为 port 头，
+# 依赖映射：tkl_wired.h / tuya_cloud_types.h 均为 port 头，
 # 经 tuyaopen-headers（port 注入）可达；符号层面仅调 tkl_wired_*（tuyaopen-port），
 # 在 demo 可执行文件的链接组内解析。
 if(NOT CONFIG_ENABLE_WIRED)

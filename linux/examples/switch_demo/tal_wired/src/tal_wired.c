@@ -25,10 +25,7 @@
  */
 
 #include "tal_wired.h"
-#include "tkl_init_wired.h"
-
-// the tkl description, must be exist
-extern TKL_WIRED_DESC_T c_wired_desc;
+#include "tkl_wired.h"
 
 /**
  * @brief  get the link status of wired link

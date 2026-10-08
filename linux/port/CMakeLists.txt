@@ -15,8 +15,6 @@ file(GLOB_RECURSE _port_srcs CONFIGURE_DEPENDS
 )
 if(_port_srcs)
     list(FILTER _port_srcs EXCLUDE REGEX "/CMakeFiles/")
-    # init/src 属 TuyaOpen auto-init 机制，本仓库无调用方，不编（其 tkl_init_system.h 依赖 IN 宏）
-    list(FILTER _port_srcs EXCLUDE REGEX "/include/init/src/")
     list(REMOVE_DUPLICATES _port_srcs)
 endif()
 
