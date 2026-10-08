@@ -854,6 +854,12 @@ static int test_kv_basic(void)
     }
 ```
 
+同时把 Task 1 留下的 `extern TAL_DATA_OPS_T tal_data_ops_platform;` 就地改用 core 的 getter（本任务已在 `tal_data.c` 提供）：
+
+```c
+#define OPS (tal_data_get_ops())
+```
+
 - [ ] **Step 4: 实现 write / read / erase（追加式）**
 
 在 `tal_data.c` 的 `tal_data_init` 之后追加：
