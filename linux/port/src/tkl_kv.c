@@ -87,8 +87,9 @@ static OPERATE_RET kv_storage_init(void)
     lfs_cfg.block_size = info.partition[0].block_size;
     lfs_cfg.block_count = info.partition[0].size / info.partition[0].block_size;
     lfs_cfg.cache_size = info.partition[0].block_size;
-    /* 原样恢复自旧实现：公式为笔误（(8 - block_count/8) 使结果恒为 8，littlefs 位图
-     * 分窗扫描按 8 字节窗口工作，功能正常），有意保留不改——避免影响 flash 布局 */
+    /* 原样恢复自旧实现：公式为笔误（(8 - block_count/8) 使结果恒为 8）。该值是
+     * littlefs 的内存前瞻缓冲——不落盘、不影响磁盘布局，改大改小只影响内存占用
+     * 与分配器扫描窗口；恒为 8 经实测可工作，有意保留原样 */
     lfs_cfg.lookahead_size = lfs_cfg.block_count / 8 + (8 - (lfs_cfg.block_count / 8));
     lfs_cfg.block_cycles = 500;
 

@@ -23,9 +23,14 @@
 **分工原则**：存储介质、记录格式、加密、序列化**全部是 port 内部细节**；core 不做任何 KV 逻辑。
 Linux 实现保留旧行为：AES-128-CBC（seed/key 经 SHA256 派生，IV=seed）+ mutex 线程安全 + littlefs（自带磨损均衡与掉电保护）。
 
-**提交**：子模块 `ba58b24`、外层 `9961ff8`（2026-10-08）。
+**提交**：子模块 `ba58b24`…`43a79bc`、外层 `9961ff8`…`c6cc153`（2026-10-08）。
 
-**验证**：干净目录单独构建测试目标 exit 0；全量构建 exit 0；自测（10 用例黑盒）新旧存储路径各 ALL TESTS PASSED；e2e exit 124 + TLS×2 + MQTT + QR 22 行。
+**验证**：干净目录单独构建测试目标 exit 0；全量构建 exit 0；自测（10 用例黑盒）新旧存储路径各 ALL TESTS PASSED（含变异反证）；e2e exit 124 + TLS×2 + MQTT + QR 22 行；压力探针 160KB 写入（>96KB 分区）触发 littlefs 块回收全验证；ASan + UBSan 自测全绿。
+
+**升级兼容性（实测）**：恢复的 littlefs + AES 与旧固件**字节兼容**——旧镜像（旧 7 接口固件写入的 `examples/switch_demo/tuyadb/tuyadb`）在新代码下正常挂载，`region`/`regist_key`/`endpoint.cert`/`endpoint.domain` 全部解密出正确明文；旧的单 key `endpoint.domain` 不再被读，5 个新字段 key 缺失返回 NOT_FOUND → 触发 `STATE_ENDPOINT_UPDATE` → iDNS 重取 → 写回 5 key，自愈。
+
+- **复现方法**：`git worktree add /tmp/legacy <改动前提交>` → 在 worktree 中构建并运行一次 `switch_demo`（或自测），生成的 `examples/switch_demo/tuyadb/tuyadb` 即 legacy 镜像 → 拷回当前工作区，用新构建产物挂载并读真实业务 key 验证（`.legacy` 镜像本身不入库，105MB）。
+- **边界**：若旧区域 `lfs_mount` 失败（superblock 损坏等），`kv_storage_init` 会 `lfs_format` 重建，**旧数据不可恢复**——兼容的前提是旧区域结构完好。
 
 ---
 
