@@ -9,7 +9,7 @@
  *   #define WIFI_SSID_LEN  32
  *   #define WIFI_PASSWD_LEN 64
  *
- * 范围控制：本目录经 tuyaopen-headers 注入（switch_demo/CMakeLists.txt，
+ * 范围控制：本目录经 tuyaopen-headers 注入（iot_demo/CMakeLists.txt，
  * 仅 TARGET tal_bluetooth 存在即 BT=ON 时生效），只 shadow include 查找；
  * 现存编译面中 include "tkl_wifi.h" 的仅 ble_netcfg.h 一处。本替身只提供
  * 常量，不伪造任何 tkl_wifi_* 函数原型（WIFI TKL 符号层面已不存在）。

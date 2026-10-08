@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(switch_demo C)
+project(iot_demo C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -85,75 +85,75 @@ if(TARGET tal_bluetooth)
     )
 endif()
 
-file(GLOB _switch_demo_srcs CONFIGURE_DEPENDS
+file(GLOB _iot_demo_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
 )
 
-add_executable(switch_demo ${_switch_demo_srcs})
+add_executable(iot_demo ${_iot_demo_srcs})
 
-target_include_directories(switch_demo PRIVATE
+target_include_directories(iot_demo PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 # 显式提供的凭据覆盖 tuya_config.h 的 #ifndef 默认值
 if(TUYA_PRODUCT_ID)
-    target_compile_definitions(switch_demo PRIVATE TUYA_PRODUCT_ID="${TUYA_PRODUCT_ID}")
+    target_compile_definitions(iot_demo PRIVATE TUYA_PRODUCT_ID="${TUYA_PRODUCT_ID}")
 endif()
 if(TUYA_OPENSDK_UUID)
-    target_compile_definitions(switch_demo PRIVATE TUYA_OPENSDK_UUID="${TUYA_OPENSDK_UUID}")
+    target_compile_definitions(iot_demo PRIVATE TUYA_OPENSDK_UUID="${TUYA_OPENSDK_UUID}")
 endif()
 if(TUYA_OPENSDK_AUTHKEY)
-    target_compile_definitions(switch_demo PRIVATE TUYA_OPENSDK_AUTHKEY="${TUYA_OPENSDK_AUTHKEY}")
+    target_compile_definitions(iot_demo PRIVATE TUYA_OPENSDK_AUTHKEY="${TUYA_OPENSDK_AUTHKEY}")
 endif()
 
 # app 链接：一个组同时包 core 库与 port（解析 TAL/云服务与 TKL 的循环引用）；
 # 组外的 tuyaopen-port 提供头路径，tuyaopen-headers 提供开关宏注入与 port 头
 # （app 自己的源码也要看见 ENABLE_* 与 TKL 头）
-set(_switch_demo_link
+set(_iot_demo_link
     -Wl,--start-group
     ${TUYAOPEN_CORE_LIBS}
     $<TARGET_FILE:tuyaopen-port>
 )
 # tal_netif 依赖组内 tuyaopen-port 的 tkl_netif_* 符号，进组保证解析顺序
 if(TARGET tal_netif)
-    list(APPEND _switch_demo_link $<TARGET_FILE:tal_netif>)
+    list(APPEND _iot_demo_link $<TARGET_FILE:tal_netif>)
 endif()
 # tal_bluetooth 依赖组内 tuyaopen-port 的 tkl_ble_* 符号，进组保证解析顺序
 if(TARGET tal_bluetooth)
-    list(APPEND _switch_demo_link $<TARGET_FILE:tal_bluetooth>)
+    list(APPEND _iot_demo_link $<TARGET_FILE:tal_bluetooth>)
 endif()
-list(APPEND _switch_demo_link -Wl,--end-group tuyaopen-port tuyaopen-headers)
-target_link_libraries(switch_demo PRIVATE ${_switch_demo_link})
+list(APPEND _iot_demo_link -Wl,--end-group tuyaopen-port tuyaopen-headers)
+target_link_libraries(iot_demo PRIVATE ${_iot_demo_link})
 
-# tal_kv 自测（独立可执行，链接与 switch_demo 相同的库）
-# 注：_switch_demo_link 里 tal_netif/tal_bluetooth 是 $<TARGET_FILE:> 裸路径，不会建立构建
-# 依赖；switch_demo 靠后面额外按目标名 link 才有依赖，自测必须显式 add_dependencies，
+# tal_kv 自测（独立可执行，链接与 iot_demo 相同的库）
+# 注：_iot_demo_link 里 tal_netif/tal_bluetooth 是 $<TARGET_FILE:> 裸路径，不会建立构建
+# 依赖；iot_demo 靠后面额外按目标名 link 才有依赖，自测必须显式 add_dependencies，
 # 否则干净目录下单独构建本目标会 "No rule to make target ...libtal_netif.a"（67 评审 B4）
 add_executable(tal_kv_selftest tal_kv_selftest.c)
-target_link_libraries(tal_kv_selftest PRIVATE ${_switch_demo_link})
+target_link_libraries(tal_kv_selftest PRIVATE ${_iot_demo_link})
 if(TARGET tal_netif)
     add_dependencies(tal_kv_selftest tal_netif)
 endif()
 if(TARGET tal_bluetooth)
     add_dependencies(tal_kv_selftest tal_bluetooth)
 endif()
-unset(_switch_demo_link)
+unset(_iot_demo_link)
 
 # tal_netif / tal_bluetooth 头经各自 PUBLIC include 传递
 # （demo 源码 #include "tal_netif.h" / ble 触达的 tal_bluetooth.h 保持可达）
 if(TARGET tal_netif)
-    target_link_libraries(switch_demo PRIVATE tal_netif)
+    target_link_libraries(iot_demo PRIVATE tal_netif)
 endif()
 if(TARGET tal_bluetooth)
-    target_link_libraries(switch_demo PRIVATE tal_bluetooth)
+    target_link_libraries(iot_demo PRIVATE tal_bluetooth)
 endif()
 
 # qrcode 无循环依赖，组外链接；开关关闭时目标不注册，跳过
 if(TARGET qrcode)
-    target_link_libraries(switch_demo PRIVATE qrcode)
+    target_link_libraries(iot_demo PRIVATE qrcode)
 endif()
 
 if(ENABLE_ASAN)
-    target_compile_options(switch_demo PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
-    target_link_options(switch_demo PRIVATE -fsanitize=address)
+    target_compile_options(iot_demo PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
+    target_link_options(iot_demo PRIVATE -fsanitize=address)
 endif()

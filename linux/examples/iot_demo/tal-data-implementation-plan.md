@@ -14,7 +14,7 @@
 
 **Tech Stack:** C99、CMake（GLOB 收集）、mbedtls（经 `tal_security` 暴露的 `tal_aes128_cbc_*` / `tal_sha256_ret`）、POSIX stdio（Linux port）。
 
-**设计依据:** `examples/switch_demo/tal-data-design.md`（已确认）
+**设计依据:** `examples/iot_demo/tal-data-design.md`（已确认）
 
 ## Global Constraints
 
@@ -23,9 +23,9 @@
 - **`tal_kv` 的对外 API 与旧头逐字兼容（不得改动）**——上层 78 个调用点零改动是硬要求
 - **区域布局与平台无关**：TAL 只通过 ops 卡的 4 个区域原语访问存储，不出现任何文件名/路径
 - **验证命令（本仓库）**：
-  - 构建：`cd examples/switch_demo/build && cmake --build . -j$(nproc)`（期望 exit 0）
-  - 运行：`cd examples/switch_demo/build && timeout 20 ./switch_demo`（期望 exit 124=常驻正常；日志出现 TLS 握手 + `MQTT direct connected` + QR 22 行）
-  - 自测：`cd examples/switch_demo/build && ./tal_kv_selftest`（期望输出 `ALL TESTS PASSED`，exit 0）
+  - 构建：`cd examples/iot_demo/build && cmake --build . -j$(nproc)`（期望 exit 0）
+  - 运行：`cd examples/iot_demo/build && timeout 20 ./iot_demo`（期望 exit 124=常驻正常；日志出现 TLS 握手 + `MQTT direct connected` + QR 22 行）
+  - 自测：`cd examples/iot_demo/build && ./tal_kv_selftest`（期望输出 `ALL TESTS PASSED`，exit 0）
 - **grep 用 `/usr/bin/grep`**（本机 grep/rg 是 rtk shim，有输出缓存）
 - **每个 Task 结束都要提交**（提交信息用中文 + `Co-Authored-By: Claude Code <noreply@anthropic.com>` 结尾）
 
@@ -39,8 +39,8 @@
 | `port/src/tkl_kv.c`（新） | Linux 区域实现（区域文件）+ `tal_kv_ops_platform` 实例 |
 | `tuyaopen-core/iot-core/tal_system/include/tal_kv.h`（新） | 公开 API：`tal_kv_init/read/write/erase` |
 | `tuyaopen-core/iot-core/tal_system/src/tal_kv.c`（新） | 日志式 K-V 引擎 + AES + ops 分发 |
-| `examples/switch_demo/tal_kv_selftest.c`（新） | 自测程序（区域级 + API 级 + 撕裂写/压缩/重启用例） |
-| `examples/switch_demo/CMakeLists.txt`（改） | 加 `tal_kv_selftest` 目标 |
+| `examples/iot_demo/tal_kv_selftest.c`（新） | 自测程序（区域级 + API 级 + 撕裂写/压缩/重启用例） |
+| `examples/iot_demo/CMakeLists.txt`（改） | 加 `tal_kv_selftest` 目标 |
 | 迁移的文件（Task 5-7） | `tuya_main.c` / `tuya_iot.c` / `tuya_endpoint.c` / `tuya_cert_manager.c` / `tuya_register_center.c` |
 | 删除（Task 8） | `third_party/tal_kv/`、`tal_fs.c/h`、`tkl_flash.c/h`、`tkl_fs.c/h`、构建引用 6 处 |
 
@@ -121,8 +121,8 @@ static int      s_inited;
 **Files:**
 - Create: `tuyaopen-core/iot-core/tal_system/include/tal_kv_ops.h`
 - Create: `port/src/tkl_kv.c`
-- Create: `examples/switch_demo/tal_kv_selftest.c`
-- Modify: `examples/switch_demo/CMakeLists.txt`（在 `add_executable(switch_demo ...)` 之后加自测目标）
+- Create: `examples/iot_demo/tal_kv_selftest.c`
+- Modify: `examples/iot_demo/CMakeLists.txt`（在 `add_executable(iot_demo ...)` 之后加自测目标）
 
 **Interfaces:**
 - Produces: `TAL_KV_REGION_T`、`TAL_KV_OPS_T`、`tal_kv_get_ops()`、port 实例 `tal_kv_ops_platform`
@@ -300,7 +300,7 @@ TAL_KV_OPS_T tal_kv_ops_platform = {
 
 - [ ] **Step 3: 写区域级自测（此时只测区域原语，应当失败——因为还没实现）**
 
-`examples/switch_demo/tal_kv_selftest.c`：
+`examples/iot_demo/tal_kv_selftest.c`：
 
 ```c
 /**
@@ -363,18 +363,18 @@ int main(void)
 
 - [ ] **Step 4: 加自测构建目标**
 
-在 `examples/switch_demo/CMakeLists.txt` 的 `target_link_libraries(switch_demo PRIVATE ${_switch_demo_link})` **之后、`unset(_switch_demo_link)` 之前**插入（**必须在此处**：`${_switch_demo_link}` 更早才被赋值，插早了会拿到空值 → 自测目标没有 include 路径）：
+在 `examples/iot_demo/CMakeLists.txt` 的 `target_link_libraries(iot_demo PRIVATE ${_iot_demo_link})` **之后、`unset(_iot_demo_link)` 之前**插入（**必须在此处**：`${_iot_demo_link}` 更早才被赋值，插早了会拿到空值 → 自测目标没有 include 路径）：
 
 ```cmake
-# tal_kv 自测（独立可执行，链接与 switch_demo 相同的库）
+# tal_kv 自测（独立可执行，链接与 iot_demo 相同的库）
 add_executable(tal_kv_selftest tal_kv_selftest.c)
-target_link_libraries(tal_kv_selftest PRIVATE ${_switch_demo_link})
+target_link_libraries(tal_kv_selftest PRIVATE ${_iot_demo_link})
 ```
 
 - [ ] **Step 5: 构建并运行自测**
 
 ```bash
-cd examples/switch_demo/build && cmake . >/dev/null && cmake --build . --target tal_kv_selftest -j$(nproc) && ./tal_kv_selftest
+cd examples/iot_demo/build && cmake . >/dev/null && cmake --build . --target tal_kv_selftest -j$(nproc) && ./tal_kv_selftest
 ```
 
 Expected: `ALL TESTS PASSED`，exit 0。
@@ -387,7 +387,7 @@ git -C tuyaopen-core add iot-core/tal_system/include/tal_kv_ops.h
 git -C tuyaopen-core commit -m "tal_system: 新增 tal_kv 区域 ops 契约头
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
-git add port/src/tkl_kv.c examples/switch_demo/tal_kv_selftest.c examples/switch_demo/CMakeLists.txt
+git add port/src/tkl_kv.c examples/iot_demo/tal_kv_selftest.c examples/iot_demo/CMakeLists.txt
 git commit -m "port: 新增 tkl_kv 区域实现（区域文件）+ tal_kv 自测骨架
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
@@ -400,7 +400,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 **Files:**
 - Create: `tuyaopen-core/iot-core/tal_system/include/tal_kv.h`
 - Create: `tuyaopen-core/iot-core/tal_system/src/tal_kv.c`
-- Modify: `examples/switch_demo/tal_kv_selftest.c`（追加 API 级用例）
+- Modify: `examples/iot_demo/tal_kv_selftest.c`（追加 API 级用例）
 
 **Interfaces:**
 - Consumes: `TAL_KV_OPS_T` / `tal_kv_get_ops()`（Task 1）
@@ -1083,7 +1083,7 @@ OPERATE_RET tal_kv_erase(const char *name)
 - [ ] **Step 5: 构建并运行自测**
 
 ```bash
-cd examples/switch_demo/build && cmake --build . --target tal_kv_selftest -j$(nproc) && rm -f tuyadb/data.bin && ./tal_kv_selftest
+cd examples/iot_demo/build && cmake --build . --target tal_kv_selftest -j$(nproc) && rm -f tuyadb/data.bin && ./tal_kv_selftest
 ```
 
 Expected: `ALL TESTS PASSED`（Task 3 之前请先 `rm -f tuyadb/data.bin` 从干净区域开始）。
@@ -1095,8 +1095,8 @@ git -C tuyaopen-core add iot-core/tal_system/include/tal_kv.h iot-core/tal_syste
 git -C tuyaopen-core commit -m "tal_system: 新增 tal_kv K-V 引擎（日志式追加 + AES）
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
-git add examples/switch_demo/tal_kv_selftest.c
-git commit -m "switch_demo: tal_kv 自测补充 API 级用例
+git add examples/iot_demo/tal_kv_selftest.c
+git commit -m "iot_demo: tal_kv 自测补充 API 级用例
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -1107,7 +1107,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `tuyaopen-core/iot-core/tal_system/src/tal_kv.c`（`__append` 加 PAD 回卷与压缩；新增 `__compact`）
-- Modify: `examples/switch_demo/tal_kv_selftest.c`（追加压缩/撕裂/重启用例）
+- Modify: `examples/iot_demo/tal_kv_selftest.c`（追加压缩/撕裂/重启用例）
 
 **Interfaces:**
 - Consumes: Task 2 的全部内部函数与状态
@@ -1205,7 +1205,7 @@ int main(int argc, char **argv)
 - [ ] **Step 2: 运行，确认失败**
 
 ```bash
-cd examples/switch_demo/build && cmake --build . --target tal_kv_selftest -j$(nproc) && rm -f tuyadb/data.bin && ./tal_kv_selftest
+cd examples/iot_demo/build && cmake --build . --target tal_kv_selftest -j$(nproc) && rm -f tuyadb/data.bin && ./tal_kv_selftest
 ```
 
 Expected: FAIL（`bulk.*` 写到第 N 次时报空间不足，或 `tal_kv_write` 返回 `OPRT_COM_ERROR`）。
@@ -1369,7 +1369,7 @@ static OPERATE_RET __compact(void)
 - [ ] **Step 4: 运行自测（压缩 + 撕裂用例）**
 
 ```bash
-cd examples/switch_demo/build && cmake --build . --target tal_kv_selftest -j$(nproc) \
+cd examples/iot_demo/build && cmake --build . --target tal_kv_selftest -j$(nproc) \
   && rm -f tuyadb/data.bin && ./tal_kv_selftest \
   && ./tal_kv_selftest reopen-check \
   && rm -f tuyadb/data.bin && ./tal_kv_selftest torn-setup \
@@ -1413,8 +1413,8 @@ git -C tuyaopen-core add iot-core/tal_system/src/tal_kv.c
 git -C tuyaopen-core commit -m "tal_system: tal_kv 增加 GC 压缩与跨区尾回卷
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
-git add examples/switch_demo/tal_kv_selftest.c
-git commit -m "switch_demo: tal_kv 自测补充压缩/撕裂/重启用例
+git add examples/iot_demo/tal_kv_selftest.c
+git commit -m "iot_demo: tal_kv 自测补充压缩/撕裂/重启用例
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -1832,7 +1832,7 @@ static int test_kv_region_full(void)
 ## Task 4（历史）: 迁移 `tuya_main.c`（P0）
 
 **Files:**
-- Modify: `examples/switch_demo/src/tuya_main.c:258`（`tal_kv_init`）
+- Modify: `examples/iot_demo/src/tuya_main.c:258`（`tal_kv_init`）
 
 **Interfaces:**
 - Consumes: `tal_kv_init(seed, key)`（Task 2）
@@ -1857,7 +1857,7 @@ static int test_kv_region_full(void)
 - [ ] **Step 2: 构建 + 运行**
 
 ```bash
-cd examples/switch_demo/build && cmake --build . -j$(nproc) && rm -f tuyadb/data.bin && timeout 20 ./switch_demo
+cd examples/iot_demo/build && cmake --build . -j$(nproc) && rm -f tuyadb/data.bin && timeout 20 ./iot_demo
 ```
 
 Expected: exit 124；日志出现 `TUYA_TLS Success Connect` + `MQTT direct connected` + QR 22 行。
@@ -1865,8 +1865,8 @@ Expected: exit 124；日志出现 `TUYA_TLS Success Connect` + `MQTT direct conn
 - [ ] **Step 3: 提交**
 
 ```bash
-git add examples/switch_demo/src/tuya_main.c
-git commit -m "switch_demo: tal_kv_init 迁移到 tal_kv_init
+git add examples/iot_demo/src/tuya_main.c
+git commit -m "iot_demo: tal_kv_init 迁移到 tal_kv_init
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -1906,7 +1906,7 @@ tal_kv_del(key);                 →   tal_kv_erase(key);
 - [ ] **Step 2: 构建 + 运行**
 
 ```bash
-cd examples/switch_demo/build && cmake --build . -j$(nproc) && rm -f tuyadb/data.bin && timeout 20 ./switch_demo
+cd examples/iot_demo/build && cmake --build . -j$(nproc) && rm -f tuyadb/data.bin && timeout 20 ./iot_demo
 ```
 
 Expected: 同 Task 4（TLS/MQTT/QR 正常）。
@@ -1976,7 +1976,7 @@ cJSON_Delete(root);
 - [ ] **Step 3: 构建 + 运行**
 
 ```bash
-cd examples/switch_demo/build && cmake --build . -j$(nproc) && rm -f tuyadb/data.bin && timeout 20 ./switch_demo
+cd examples/iot_demo/build && cmake --build . -j$(nproc) && rm -f tuyadb/data.bin && timeout 20 ./iot_demo
 ```
 
 Expected: TLS/MQTT/QR 正常（endpoint.domain 会在连接流程中被写读）。
@@ -2011,7 +2011,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 - [ ] **Step 2: 构建 + 运行**
 
 ```bash
-cd examples/switch_demo/build && cmake --build . -j$(nproc) && rm -f tuyadb/data.bin && timeout 20 ./switch_demo
+cd examples/iot_demo/build && cmake --build . -j$(nproc) && rm -f tuyadb/data.bin && timeout 20 ./iot_demo
 ```
 
 Expected: TLS/MQTT/QR 正常（证书管理器会在启动时读证书）。
@@ -2081,7 +2081,7 @@ Expected: 仅剩待删的构建引用与 `tal_kv` 目录自身（`port/include/i
 - [ ] **Step 3: 清空 build 重新 configure（必须）**
 
 ```bash
-rm -rf examples/switch_demo/build && mkdir -p examples/switch_demo/build && cd examples/switch_demo/build && cmake .. && cmake --build . -j$(nproc)
+rm -rf examples/iot_demo/build && mkdir -p examples/iot_demo/build && cd examples/iot_demo/build && cmake .. && cmake --build . -j$(nproc)
 ```
 
 Expected: 配置与构建均 exit 0（`CONFIGURE_DEPENDS` 不会自动摘除已消失的子目录 target，必须清空重建）。
@@ -2089,7 +2089,7 @@ Expected: 配置与构建均 exit 0（`CONFIGURE_DEPENDS` 不会自动摘除已�
 - [ ] **Step 4: 自测 + 运行**
 
 ```bash
-cd examples/switch_demo/build && rm -f tuyadb/data.bin && ./tal_kv_selftest && ./tal_kv_selftest reopen-check && timeout 20 ./switch_demo
+cd examples/iot_demo/build && rm -f tuyadb/data.bin && ./tal_kv_selftest && ./tal_kv_selftest reopen-check && timeout 20 ./iot_demo
 ```
 
 Expected: `ALL TESTS PASSED` / `REOPEN OK` / exit 124 + TLS/MQTT/QR 正常。
@@ -2114,9 +2114,9 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 - [ ] **Step 1: 完整验收（对照设计文档第九节）**
 
 ```bash
-cd /home/share/samba/open-components/tuyaopen-core-examples/linux/examples/switch_demo/build
-rm -f tuyadb/data.bin && timeout 25 ./switch_demo    # 第一次：走激活/绑定
-timeout 25 ./switch_demo                              # 第二次：重启后读回
+cd /home/share/samba/open-components/tuyaopen-core-examples/linux/examples/iot_demo/build
+rm -f tuyadb/data.bin && timeout 25 ./iot_demo    # 第一次：走激活/绑定
+timeout 25 ./iot_demo                              # 第二次：重启后读回
 ```
 
 Expected（两次都）：TLS 握手成功、`MQTT direct connected`、QR 22 行；第二次日志中**不应出现**"首次激活"类路径（数据从区域读回）。另外：
@@ -2131,13 +2131,13 @@ head -c 64 tuyadb/data.bin | od -c | head -3     # 区域内容应为密文（�
 
 - [ ] **Step 3: 更新文档**
 
-- `examples/switch_demo/tal-data-design.md` 状态改为"已实现"
-- `examples/switch_demo/tal-interface-cleanup-candidates.md` 同步（tal_kv/tal_fs 相关条目）
+- `examples/iot_demo/tal-data-design.md` 状态改为"已实现"
+- `examples/iot_demo/tal-interface-cleanup-candidates.md` 同步（tal_kv/tal_fs 相关条目）
 
 - [ ] **Step 4: 提交**
 
 ```bash
-git add examples/switch_demo/tal-data-design.md examples/switch_demo/tal-interface-cleanup-candidates.md
+git add examples/iot_demo/tal-data-design.md examples/iot_demo/tal-interface-cleanup-candidates.md
 git commit -m "docs: tal_kv 落地后同步设计文档与清理清单
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"

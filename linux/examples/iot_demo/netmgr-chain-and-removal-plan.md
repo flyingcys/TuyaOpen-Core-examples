@@ -1,7 +1,7 @@
 # netmgr 链路分析与去除改造方案
 
 > 背景：计划从 tuyaopen-core 去掉 netmgr。注释掉 `tuya_main.c` 中 `netmgr_init()` /
-> `netmgr_conn_set()` 后，switch_demo 不再打印二维码。本文整理完整链路、定位断点、给出改造建议。
+> `netmgr_conn_set()` 后，iot_demo 不再打印二维码。本文整理完整链路、定位断点、给出改造建议。
 
 ## 1. 关键结论（先说答案）
 
@@ -18,7 +18,7 @@ demo 在该事件里打印 QR 等 APP 扫码。
 | C | tuya_iot 主状态机的 `network_check()` 恒 false | `tuya_iot.c:981/1079/1089` |
 | D | （仅 wifi 模式相关）netcfg 启动、BLE 栈、LAN 服务没人带起 | `netconn_wifi.c:281`、`netmgr.c:383/397` |
 
-注：linux 版 switch_demo 实为 **wired demo**（`CMakeLists.txt:29` 只开了 `CONFIG_ENABLE_WIRED`），
+注：linux 版 iot_demo 实为 **wired demo**（`CMakeLists.txt:29` 只开了 `CONFIG_ENABLE_WIRED`），
 `netmgr_conn_set(NETCONN_WIFI, ...)` 那段原本就不参与编译，真正起作用的是 `netmgr_init()`。
 
 ## 2. 链路全景
@@ -109,7 +109,7 @@ static bool user_network_check(void)
 
 ## 5. ESP32 侧注意事项
 
-- esp32 的 `switch_demo/main/tuya_main.c` 目前 netmgr 调用**尚未注释**（untracked 新文件），
+- esp32 的 `iot_demo/main/tuya_main.c` 目前 netmgr 调用**尚未注释**（untracked 新文件），
   改造时与 linux 侧同步。
 - 当前 ESP32 构建 `sdkconfig` 为 WiFi-only（`CONFIG_ENABLE_WIFI=y`，WIRED/BLUETOOTH 均关；
   `sdkconfig.defaults` 的 diff 显示原本是 WIRED demo，注释明言"有线绑定的 demo 需要二维码输出"）。

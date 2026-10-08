@@ -31,9 +31,9 @@ Linux 实现保留旧行为：AES-128-CBC（seed/key 经 SHA256 派生，IV=seed
 
 **评审**：内部独立评审（opus，含 gdb 崩溃路径取证与旧镜像升级实测）结论"可合入、无 Critical"，3 Important + 9 Minor 全部处置或记录在案；对端会话 `linux-67` 两批 PK——它独立复现了字节兼容（真实 seed/key 逐 key 解密）、ASan/UBSan、P2P+local_store 配置构建——最终明确 **"第二版认可合入，无 BLOCKER"**，全部发现闭环。
 
-**升级兼容性（实测）**：恢复的 littlefs + AES 与旧固件**字节兼容**——旧镜像（旧 7 接口固件写入的 `examples/switch_demo/tuyadb/tuyadb`）在新代码下正常挂载，`region`/`regist_key`/`endpoint.cert`/`endpoint.domain` 全部解密出正确明文；旧的单 key `endpoint.domain` 不再被读，5 个新字段 key 缺失返回 NOT_FOUND → 触发 `STATE_ENDPOINT_UPDATE` → iDNS 重取 → 写回 5 key，自愈。
+**升级兼容性（实测）**：恢复的 littlefs + AES 与旧固件**字节兼容**——旧镜像（旧 7 接口固件写入的 `examples/iot_demo/tuyadb/tuyadb`）在新代码下正常挂载，`region`/`regist_key`/`endpoint.cert`/`endpoint.domain` 全部解密出正确明文；旧的单 key `endpoint.domain` 不再被读，5 个新字段 key 缺失返回 NOT_FOUND → 触发 `STATE_ENDPOINT_UPDATE` → iDNS 重取 → 写回 5 key，自愈。
 
-- **复现方法**：`git worktree add /tmp/legacy <改动前提交>` → 在 worktree 中构建并运行一次 `switch_demo`（或自测），生成的 `examples/switch_demo/tuyadb/tuyadb` 即 legacy 镜像 → 拷回当前工作区，用新构建产物挂载并读真实业务 key 验证（`.legacy` 镜像本身不入库，105MB）。
+- **复现方法**：`git worktree add /tmp/legacy <改动前提交>` → 在 worktree 中构建并运行一次 `iot_demo`（或自测），生成的 `examples/iot_demo/tuyadb/tuyadb` 即 legacy 镜像 → 拷回当前工作区，用新构建产物挂载并读真实业务 key 验证（`.legacy` 镜像本身不入库，105MB）。
 - **边界**：若旧区域 `lfs_mount` 失败（superblock 损坏等），`kv_storage_init` 会 `lfs_format` 重建，**旧数据不可恢复**——兼容的前提是旧区域结构完好。
 
 ---
@@ -223,7 +223,7 @@ state：0x01=有效 0x00=墓碑（0x02=PAD 为历史设计保留，当前不产�
 
 | 优先级 | 文件 | 处数 | 说明 |
 |---|---|---|---|
-| **P0** | `examples/switch_demo/src/tuya_main.c` | 1 | `tal_kv_init(&cfg)` → `tal_kv_init(seed, key)`（字面量沿用） |
+| **P0** | `examples/iot_demo/src/tuya_main.c` | 1 | `tal_kv_init(&cfg)` → `tal_kv_init(seed, key)`（字面量沿用） |
 | **P0** | `iot-core/cloud/tuya_iot.c` | 15 | schema/激活数据/devid 的读写删 |
 | **P0** | `iot-core/cloud/tuya_endpoint.c` | 15 | region/regist_key/endpoint.cert；**serialize 2 处改为调用方自行 cJSON 拼字节** |
 | **P0** | `iot-core/cloud/tuya_cert_manager.c` | 15 | 客户端证书/私钥、tls_ca*；注意 `:754/757` 释放的是 KV 分配的指针，改后语义消失 |
@@ -238,7 +238,7 @@ state：0x01=有效 0x00=墓碑（0x02=PAD 为历史设计保留，当前不产�
 ## 九、验收标准
 
 1. 全仓零 `tal_kv` / `littlefs` / `tal_fs` / `tkl_flash` / `tkl_fs` 残留（编译面）
-2. 构建通过；`switch_demo` 运行正常：激活/绑定流程走通（TLS 握手 + MQTT + QR）
+2. 构建通过；`iot_demo` 运行正常：激活/绑定流程走通（TLS 握手 + MQTT + QR）
 3. 区域文件 `./tuyadb/data.bin` 生成；内容为密文记录（不可读）
 4. **重启后数据可读**：跑一次绑定 → 杀掉 → 再跑，绑定状态保持
 5. 边界用例：超长 name、不存在 name、buffer 过小、空数据、**撕裂写**（人为破坏某条记录后读取应返回 NOT_FOUND 而非脏数据）

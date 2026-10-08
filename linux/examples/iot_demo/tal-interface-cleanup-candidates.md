@@ -1,15 +1,15 @@
 # TAL / port 低频与死接口清理候选清单
 
 > **审计日期**：2026-09-30
-> **审计范围**：linux 树（`tuyaopen-core` 子模块 + `port/` + `examples/switch_demo/`）
+> **审计范围**：linux 树（`tuyaopen-core` 子模块 + `port/` + `examples/iot_demo/`）
 > **状态**：**仅记录，尚未执行删除**（用户决定先归档）
 > **背景**：ops 卡注册制收编（契约头 `tuyaopen-core/iot-core/tal_system/include/tal_api_ops.h`）后，为"最小适配"持续清理死接口。零调用接口已在前几轮清理完毕（`tal_realloc`、psram 全族、tal_hash/tal_symmetry/tal_x509 自测、`tal_thread_dump_watermark`、`tkl_watchdog` 等），本清单是**剩余候选**。
 
 ## 计数口径
 
-- 以**编译产物为准**：`examples/switch_demo/build` 下 175 个 `.o` 逐个 `objdump -r` 取重定位点（每处调用/取地址一条），再与源码 `/usr/bin/grep` 交叉。
+- 以**编译产物为准**：`examples/iot_demo/build` 下 175 个 `.o` 逐个 `objdump -r` 取重定位点（每处调用/取地址一条），再与源码 `/usr/bin/grep` 交叉。
 - 宏展开已计入（`Malloc/Free/Calloc` → `tal_malloc/free/calloc`、`PR_*` → `tal_log_print_secure`、`tal_semaphore_wait_forever`、`TAL_FD_*`）；函数指针赋值已计入（cJSON hooks、mbedtls 熵源回调）。
-- 174 个 `.o` 中只有 **111 个真正链接进 `switch_demo`**，其余是静态库中未被引用的成员；计数以 111 个为准。
+- 174 个 `.o` 中只有 **111 个真正链接进 `iot_demo`**，其余是静态库中未被引用的成员；计数以 111 个为准。
 - 未编译面（agent-core / p2p-core / tkl_wifi / tkl_bt / `port/include/init` / tuya_device_timer / tal_bluetooth）不计入调用点数，但单独标注。
 
 ---
@@ -135,5 +135,5 @@
 1. **卡成员 `thread_set_self_name` / `thread_is_self`** 各只有 1 处内部调用，但属线程生命周期语义（设 OS 线程名 / 判断是否删自身）；`set_self_name` 已由用户决策保留，不建议以"低频"为由删除。
 2. **死目录 `port/include/init/`**：已于 2026-10-08 整体删除（CMake 早已排除不编译；唯一障碍是 `tal_wired.c` 的两行死代码，已随之清理）。原备注 3（未编译的旧 init 路径引用已删符号）随目录删除一并消失。
 3. **存疑未评（已处置）**：`tal_wired_get_status/set_ip/get_mac/set_mac` 已随 `tkl_wired → tkl_netif` 改名一并裁剪（3 个零调用 tkl 接口 + 4 个死包装）；`tal_kv_cmd` 已随 tal_kv 重构删除。
-4. **计数口径**：表中"调用点数"为链接进 `switch_demo` 的 111 个 `.o` 中的重定位点数；按全部 174 个 `.o` 口径个别项会 +1~2，不影响结论。
+4. **计数口径**：表中"调用点数"为链接进 `iot_demo` 的 111 个 `.o` 中的重定位点数；按全部 174 个 `.o` 口径个别项会 +1~2，不影响结论。
 6. **tal_kv 重构影响（2026-10-08，本表为审计时点快照）**：tal_kv 已改为"core 4 接口透传 + 实现全在 port"（子模块 `ba58b24` / 外层 `9961ff8`）——`serialize_get/set` 接口已删除、`tal_aes128_cbc_encode/decode` 与 `tal_sha256_ret` 的 KV 侧使用方变为 `port/src/tkl_kv.c`、`tal_fs` 不再被 KV 使用、`tal_kv_cmd` 已删（见备注 4）。表中相应行按新事实理解。
