@@ -3,10 +3,10 @@
 ## 构建
 
 ```bash
-cd examples/switch_demo
+cd examples/iot_demo
 cmake -B build
 cmake --build build -j$(nproc)
-./build/switch_demo
+./build/iot_demo
 ```
 
 凭据可选：`-DTUYA_PRODUCT_ID=.. -DTUYA_OPENSDK_UUID=.. -DTUYA_OPENSDK_AUTHKEY=..`，
