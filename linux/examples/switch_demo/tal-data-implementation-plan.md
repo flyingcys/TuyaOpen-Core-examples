@@ -1,10 +1,10 @@
-# tal_data 实施计划（替换 tal_kv）
+# tal_kv 实施计划（替换 tal_kv）
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 用新的 `tal_data`（4 个 K-V 接口 + 日志式布局引擎 + AES）替换 `tal_kv`，port 侧只需提供"一块数据区 + 4 个区域原语"（Linux 约 40 行）。
+**Goal:** 用新的 `tal_kv`（4 个 K-V 接口 + 日志式布局引擎 + AES）替换 `tal_kv`，port 侧只需提供"一块数据区 + 4 个区域原语"（Linux 约 40 行）。
 
-**Architecture:** 三层——上层（iot-core/应用）只调 `tal_data_*`；TAL 层（core）实现日志式 K-V 引擎（追加记录 + 墓碑 + seq + CRC + GC 压缩）与 AES 加解密；port 层只实现区域原语（`init/read/write/erase @offset`），Linux 用一个区域文件模拟。契约头在 core（`tal_data_ops.h`），实例在 port（`tal_data_ops_platform`），与 `tal_api_ops.h`/`tal_ota_ops.h` 同构。
+**Architecture:** 三层——上层（iot-core/应用）只调 `tal_kv_*`；TAL 层（core）实现日志式 K-V 引擎（追加记录 + 墓碑 + seq + CRC + GC 压缩）与 AES 加解密；port 层只实现区域原语（`init/read/write/erase @offset`），Linux 用一个区域文件模拟。契约头在 core（`tal_kv_ops.h`），实例在 port（`tal_kv_ops_platform`），与 `tal_api_ops.h`/`tal_ota_ops.h` 同构。
 
 **Tech Stack:** C99、CMake（GLOB 收集）、mbedtls（经 `tal_security` 暴露的 `tal_aes128_cbc_*` / `tal_sha256_ret`）、POSIX stdio（Linux port）。
 
@@ -14,12 +14,12 @@
 
 - **文档与注释用中文**（仓库惯例）
 - **不引入新依赖**；加密复用 `tal_aes128_cbc_encode/decode` + `tal_aes_free_data` + `tal_sha256_ret`（`tuya_transport` 的 `tal_security.h`）
-- **`tal_data` 的 4 个 API 签名不得改动**（见 Task 2）
+- **`tal_kv` 的 4 个 API 签名不得改动**（见 Task 2）
 - **区域布局与平台无关**：TAL 只通过 ops 卡的 4 个区域原语访问存储，不出现任何文件名/路径
 - **验证命令（本仓库）**：
   - 构建：`cd examples/switch_demo/build && cmake --build . -j$(nproc)`（期望 exit 0）
   - 运行：`cd examples/switch_demo/build && timeout 20 ./switch_demo`（期望 exit 124=常驻正常；日志出现 TLS 握手 + `MQTT direct connected` + QR 22 行）
-  - 自测：`cd examples/switch_demo/build && ./tal_data_selftest`（期望输出 `ALL TESTS PASSED`，exit 0）
+  - 自测：`cd examples/switch_demo/build && ./tal_kv_selftest`（期望输出 `ALL TESTS PASSED`，exit 0）
 - **grep 用 `/usr/bin/grep`**（本机 grep/rg 是 rtk shim，有输出缓存）
 - **每个 Task 结束都要提交**（提交信息用中文 + `Co-Authored-By: Claude Code <noreply@anthropic.com>` 结尾）
 
@@ -29,12 +29,12 @@
 
 | 文件 | 职责 |
 |---|---|
-| `tuyaopen-core/iot-core/tal_system/include/tal_data_ops.h`（新） | 区域契约：`TAL_DATA_REGION_T` / `TAL_DATA_OPS_T` / `tal_data_get_ops()` |
-| `port/src/tkl_data.c`（新） | Linux 区域实现（区域文件）+ `tal_data_ops_platform` 实例 |
-| `tuyaopen-core/iot-core/tal_system/include/tal_data.h`（新） | 公开 API：`tal_data_init/read/write/erase` |
-| `tuyaopen-core/iot-core/tal_system/src/tal_data.c`（新） | 日志式 K-V 引擎 + AES + ops 分发 |
-| `examples/switch_demo/tal_data_selftest.c`（新） | 自测程序（区域级 + API 级 + 撕裂写/压缩/重启用例） |
-| `examples/switch_demo/CMakeLists.txt`（改） | 加 `tal_data_selftest` 目标 |
+| `tuyaopen-core/iot-core/tal_system/include/tal_kv_ops.h`（新） | 区域契约：`TAL_KV_REGION_T` / `TAL_KV_OPS_T` / `tal_kv_get_ops()` |
+| `port/src/tkl_kv.c`（新） | Linux 区域实现（区域文件）+ `tal_kv_ops_platform` 实例 |
+| `tuyaopen-core/iot-core/tal_system/include/tal_kv.h`（新） | 公开 API：`tal_kv_init/read/write/erase` |
+| `tuyaopen-core/iot-core/tal_system/src/tal_kv.c`（新） | 日志式 K-V 引擎 + AES + ops 分发 |
+| `examples/switch_demo/tal_kv_selftest.c`（新） | 自测程序（区域级 + API 级 + 撕裂写/压缩/重启用例） |
+| `examples/switch_demo/CMakeLists.txt`（改） | 加 `tal_kv_selftest` 目标 |
 | 迁移的文件（Task 5-7） | `tuya_main.c` / `tuya_iot.c` / `tuya_endpoint.c` / `tuya_cert_manager.c` / `tuya_register_center.c` |
 | 删除（Task 8） | `third_party/tal_kv/`、`tal_fs.c/h`、`tkl_flash.c/h`、`tkl_fs.c/h`、构建引用 6 处 |
 
@@ -45,20 +45,20 @@
 ### 区域信息与 ops 卡
 
 ```c
-/* tal_data_ops.h */
+/* tal_kv_ops.h */
 typedef struct {
     uint32_t size;               /* 区域总字节数 */
     uint32_t erase_granularity;  /* 擦除粒度（flash=4096；文件实现可同用 4096） */
-} TAL_DATA_REGION_T;
+} TAL_KV_REGION_T;
 
 typedef struct {
-    OPERATE_RET (*init)(TAL_DATA_REGION_T *region);
+    OPERATE_RET (*init)(TAL_KV_REGION_T *region);
     OPERATE_RET (*read)(uint32_t offset, uint8_t *buf, uint32_t len);
     OPERATE_RET (*write)(uint32_t offset, const uint8_t *buf, uint32_t len);
     OPERATE_RET (*erase)(uint32_t offset, uint32_t len);
-} TAL_DATA_OPS_T;
+} TAL_KV_OPS_T;
 
-TAL_DATA_OPS_T *tal_data_get_ops(void);
+TAL_KV_OPS_T *tal_kv_get_ops(void);
 ```
 
 ### 记录格式（TAL 定义，变长）
@@ -78,24 +78,24 @@ TAL_DATA_OPS_T *tal_data_get_ops(void);
 ### RAM 索引（init 扫描时建立）
 
 ```c
-#define TAL_DATA_NAME_MAX     63
-#define TAL_DATA_INDEX_MAX    64
-#define TAL_DATA_ITEM_MAX     (16 * 1024)   /* 单条明文上限 */
+#define TAL_KV_NAME_MAX     63
+#define TAL_KV_INDEX_MAX    64
+#define TAL_KV_ITEM_MAX     (16 * 1024)   /* 单条明文上限 */
 
 typedef struct {
-    char     name[TAL_DATA_NAME_MAX + 1];
+    char     name[TAL_KV_NAME_MAX + 1];
     uint32_t rec_off;    /* 记录起始偏移 */
     uint32_t rec_len;    /* 记录总长（含 pad） */
     uint32_t data_off;   /* 记录内数据偏移 = rec_off + 12 + namelen */
     uint32_t data_len;   /* 密文长度 */
     uint32_t seq;
-} TAL_DATA_ITEM_T;
+} TAL_KV_ITEM_T;
 ```
 
 ### 环形日志状态（TAL 内部静态）
 
 ```c
-static TAL_DATA_ITEM_T s_index[TAL_DATA_INDEX_MAX];
+static TAL_KV_ITEM_T s_index[TAL_KV_INDEX_MAX];
 static uint32_t s_index_cnt;
 static uint32_t s_max_seq;    /* 已见最大 seq */
 static uint32_t s_tail;       /* 追加点（绝对偏移，不跨区尾） */
@@ -113,31 +113,31 @@ static int      s_inited;
 ## Task 1: 契约头 + port 区域实现 + 区域级自测
 
 **Files:**
-- Create: `tuyaopen-core/iot-core/tal_system/include/tal_data_ops.h`
-- Create: `port/src/tkl_data.c`
-- Create: `examples/switch_demo/tal_data_selftest.c`
+- Create: `tuyaopen-core/iot-core/tal_system/include/tal_kv_ops.h`
+- Create: `port/src/tkl_kv.c`
+- Create: `examples/switch_demo/tal_kv_selftest.c`
 - Modify: `examples/switch_demo/CMakeLists.txt`（在 `add_executable(switch_demo ...)` 之后加自测目标）
 
 **Interfaces:**
-- Produces: `TAL_DATA_REGION_T`、`TAL_DATA_OPS_T`、`tal_data_get_ops()`、port 实例 `tal_data_ops_platform`
+- Produces: `TAL_KV_REGION_T`、`TAL_KV_OPS_T`、`tal_kv_get_ops()`、port 实例 `tal_kv_ops_platform`
 - Consumes: 无
 
 - [ ] **Step 1: 写契约头**
 
-`tuyaopen-core/iot-core/tal_system/include/tal_data_ops.h`：
+`tuyaopen-core/iot-core/tal_system/include/tal_kv_ops.h`：
 
 ```c
 /**
- * @file tal_data_ops.h
- * @brief tal_data 的平台 ops 契约：区域语义（一块数据区 + 区域读写擦）
+ * @file tal_kv_ops.h
+ * @brief tal_kv 的平台 ops 契约：区域语义（一块数据区 + 区域读写擦）
  *
  * port 只需提供一块可读写擦的线性区域（flash 分区 / 区域文件 / EEPROM），
  * K-V 布局与加解密由 TAL 统一实现。移植新平台 = 实现 4 个区域原语。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  */
-#ifndef __TAL_DATA_OPS_H__
-#define __TAL_DATA_OPS_H__
+#ifndef __TAL_KV_OPS_H__
+#define __TAL_KV_OPS_H__
 
 #include "tuya_cloud_types.h"
 
@@ -148,18 +148,18 @@ extern "C" {
 typedef struct {
     uint32_t size;               /* 区域总字节数 */
     uint32_t erase_granularity;  /* 擦除粒度（flash=4096；文件实现可同用 4096） */
-} TAL_DATA_REGION_T;
+} TAL_KV_REGION_T;
 
 typedef struct {
     /* 准备区域并回填 region 信息（建区域文件 / 挂 flash 分区） */
-    OPERATE_RET (*init)(TAL_DATA_REGION_T *region);
+    OPERATE_RET (*init)(TAL_KV_REGION_T *region);
     OPERATE_RET (*read)(uint32_t offset, uint8_t *buf, uint32_t len);
     OPERATE_RET (*write)(uint32_t offset, const uint8_t *buf, uint32_t len);
     /* 擦除 [offset, offset+len)，对齐到 erase_granularity */
     OPERATE_RET (*erase)(uint32_t offset, uint32_t len);
-} TAL_DATA_OPS_T;
+} TAL_KV_OPS_T;
 
-TAL_DATA_OPS_T *tal_data_get_ops(void);
+TAL_KV_OPS_T *tal_kv_get_ops(void);
 
 #ifdef __cplusplus
 }
@@ -170,19 +170,19 @@ TAL_DATA_OPS_T *tal_data_get_ops(void);
 
 - [ ] **Step 2: 写 port 区域实现**
 
-`port/src/tkl_data.c`：
+`port/src/tkl_kv.c`：
 
 ```c
 /**
- * @file tkl_data.c
- * @brief tal_data 平台 ops 卡：Linux 用"区域文件"模拟一块可读写擦的数据区
+ * @file tkl_kv.c
+ * @brief tal_kv 平台 ops 卡：Linux 用"区域文件"模拟一块可读写擦的数据区
  *
  * 区域 = ./tuyadb/data.bin（默认 256KB）；擦除 = 该范围写 0xFF（模拟 flash 擦除态）。
  * 移植其它平台时替换本文件：flash 直接映射分区、EEPROM 直接映射地址空间。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
-#include "tal_data_ops.h"
+#include "tal_kv_ops.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -206,7 +206,7 @@ static OPERATE_RET __region_prefill(FILE *fp)
     return OPRT_OK;
 }
 
-static OPERATE_RET tkl_data_init(TAL_DATA_REGION_T *region)
+static OPERATE_RET tkl_kv_init(TAL_KV_REGION_T *region)
 {
     if (NULL == region) {
         return OPRT_INVALID_PARM;
@@ -232,7 +232,7 @@ static OPERATE_RET tkl_data_init(TAL_DATA_REGION_T *region)
     return OPRT_OK;
 }
 
-static OPERATE_RET tkl_data_read(uint32_t offset, uint8_t *buf, uint32_t len)
+static OPERATE_RET tkl_kv_read(uint32_t offset, uint8_t *buf, uint32_t len)
 {
     if (NULL == s_region_fp || NULL == buf || offset + len > DATA_REGION_SIZE) {
         return OPRT_INVALID_PARM;
@@ -243,7 +243,7 @@ static OPERATE_RET tkl_data_read(uint32_t offset, uint8_t *buf, uint32_t len)
     return (len == fread(buf, 1, len, s_region_fp)) ? OPRT_OK : OPRT_COM_ERROR;
 }
 
-static OPERATE_RET tkl_data_write(uint32_t offset, const uint8_t *buf, uint32_t len)
+static OPERATE_RET tkl_kv_write(uint32_t offset, const uint8_t *buf, uint32_t len)
 {
     if (NULL == s_region_fp || NULL == buf || offset + len > DATA_REGION_SIZE) {
         return OPRT_INVALID_PARM;
@@ -258,7 +258,7 @@ static OPERATE_RET tkl_data_write(uint32_t offset, const uint8_t *buf, uint32_t 
     return OPRT_OK;
 }
 
-static OPERATE_RET tkl_data_erase(uint32_t offset, uint32_t len)
+static OPERATE_RET tkl_kv_erase(uint32_t offset, uint32_t len)
 {
     static uint8_t s_ff[256];
     memset(s_ff, 0xFF, sizeof(s_ff));
@@ -281,29 +281,29 @@ static OPERATE_RET tkl_data_erase(uint32_t offset, uint32_t len)
 }
 
 /* ---------------------------------------------------------------------------
- * 平台 ops 卡：由本文件组装，core 的 tal_data.c 经 extern 引用完成分发。
+ * 平台 ops 卡：由本文件组装，core 的 tal_kv.c 经 extern 引用完成分发。
  * 移植新平台时提供同名卡与 4 个区域原语即可。
  * --------------------------------------------------------------------------- */
-TAL_DATA_OPS_T tal_data_ops_platform = {
-    .init = tkl_data_init,
-    .read = tkl_data_read,
-    .write = tkl_data_write,
-    .erase = tkl_data_erase,
+TAL_KV_OPS_T tal_kv_ops_platform = {
+    .init = tkl_kv_init,
+    .read = tkl_kv_read,
+    .write = tkl_kv_write,
+    .erase = tkl_kv_erase,
 };
 ```
 
 - [ ] **Step 3: 写区域级自测（此时只测区域原语，应当失败——因为还没实现）**
 
-`examples/switch_demo/tal_data_selftest.c`：
+`examples/switch_demo/tal_kv_selftest.c`：
 
 ```c
 /**
- * @file tal_data_selftest.c
- * @brief tal_data 自测：区域原语 + K-V 引擎 + 撕裂写/压缩/重启用例
+ * @file tal_kv_selftest.c
+ * @brief tal_kv 自测：区域原语 + K-V 引擎 + 撕裂写/压缩/重启用例
  *
- * 运行：cd build && ./tal_data_selftest
+ * 运行：cd build && ./tal_kv_selftest
  */
-#include "tal_data_ops.h"
+#include "tal_kv_ops.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -316,14 +316,14 @@ TAL_DATA_OPS_T tal_data_ops_platform = {
         }                                                                                                              \
     } while (0)
 
-/* Task 1 阶段 core 的 getter 尚未实现（Task 2 在 tal_data.c 提供 tal_data_get_ops），
+/* Task 1 阶段 core 的 getter 尚未实现（Task 2 在 tal_kv.c 提供 tal_kv_get_ops），
  * 这里直接 extern 平台实例；Task 2 起可改用 getter。 */
-extern TAL_DATA_OPS_T tal_data_ops_platform;
-#define OPS (&tal_data_ops_platform)
+extern TAL_KV_OPS_T tal_kv_ops_platform;
+#define OPS (&tal_kv_ops_platform)
 
 static int test_region_basic(void)
 {
-    TAL_DATA_REGION_T region = {0};
+    TAL_KV_REGION_T region = {0};
     uint8_t wr[32], rd[32];
 
     CHECK(OPRT_OK == OPS->init(&region));
@@ -360,15 +360,15 @@ int main(void)
 在 `examples/switch_demo/CMakeLists.txt` 的 `target_link_libraries(switch_demo PRIVATE ${_switch_demo_link})` **之后、`unset(_switch_demo_link)` 之前**插入（**必须在此处**：`${_switch_demo_link}` 更早才被赋值，插早了会拿到空值 → 自测目标没有 include 路径）：
 
 ```cmake
-# tal_data 自测（独立可执行，链接与 switch_demo 相同的库）
-add_executable(tal_data_selftest tal_data_selftest.c)
-target_link_libraries(tal_data_selftest PRIVATE ${_switch_demo_link})
+# tal_kv 自测（独立可执行，链接与 switch_demo 相同的库）
+add_executable(tal_kv_selftest tal_kv_selftest.c)
+target_link_libraries(tal_kv_selftest PRIVATE ${_switch_demo_link})
 ```
 
 - [ ] **Step 5: 构建并运行自测**
 
 ```bash
-cd examples/switch_demo/build && cmake . >/dev/null && cmake --build . --target tal_data_selftest -j$(nproc) && ./tal_data_selftest
+cd examples/switch_demo/build && cmake . >/dev/null && cmake --build . --target tal_kv_selftest -j$(nproc) && ./tal_kv_selftest
 ```
 
 Expected: `ALL TESTS PASSED`，exit 0。
@@ -377,12 +377,12 @@ Expected: `ALL TESTS PASSED`，exit 0。
 
 ```bash
 cd /home/share/samba/open-components/tuyaopen-core-examples/linux
-git -C tuyaopen-core add iot-core/tal_system/include/tal_data_ops.h
-git -C tuyaopen-core commit -m "tal_system: 新增 tal_data 区域 ops 契约头
+git -C tuyaopen-core add iot-core/tal_system/include/tal_kv_ops.h
+git -C tuyaopen-core commit -m "tal_system: 新增 tal_kv 区域 ops 契约头
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
-git add port/src/tkl_data.c examples/switch_demo/tal_data_selftest.c examples/switch_demo/CMakeLists.txt
-git commit -m "port: 新增 tkl_data 区域实现（区域文件）+ tal_data 自测骨架
+git add port/src/tkl_kv.c examples/switch_demo/tal_kv_selftest.c examples/switch_demo/CMakeLists.txt
+git commit -m "port: 新增 tkl_kv 区域实现（区域文件）+ tal_kv 自测骨架
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -392,30 +392,30 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ## Task 2: TAL 引擎（init 扫描 + write/read/erase，无压缩）
 
 **Files:**
-- Create: `tuyaopen-core/iot-core/tal_system/include/tal_data.h`
-- Create: `tuyaopen-core/iot-core/tal_system/src/tal_data.c`
-- Modify: `examples/switch_demo/tal_data_selftest.c`（追加 API 级用例）
+- Create: `tuyaopen-core/iot-core/tal_system/include/tal_kv.h`
+- Create: `tuyaopen-core/iot-core/tal_system/src/tal_kv.c`
+- Modify: `examples/switch_demo/tal_kv_selftest.c`（追加 API 级用例）
 
 **Interfaces:**
-- Consumes: `TAL_DATA_OPS_T` / `tal_data_get_ops()`（Task 1）
-- Produces: `tal_data_init(const char *seed, const char *key)`、`tal_data_read(const char *name, uint8_t *buf, size_t buf_size, size_t *out_len)`、`tal_data_write(const char *name, const uint8_t *buf, size_t len)`、`tal_data_erase(const char *name)`
+- Consumes: `TAL_KV_OPS_T` / `tal_kv_get_ops()`（Task 1）
+- Produces: `tal_kv_init(const char *seed, const char *key)`、`tal_kv_read(const char *name, uint8_t *buf, size_t buf_size, size_t *out_len)`、`tal_kv_write(const char *name, const uint8_t *buf, size_t len)`、`tal_kv_erase(const char *name)`
 
 - [ ] **Step 1: 写公开头**
 
-`tuyaopen-core/iot-core/tal_system/include/tal_data.h`：
+`tuyaopen-core/iot-core/tal_system/include/tal_kv.h`：
 
 ```c
 /**
- * @file tal_data.h
+ * @file tal_kv.h
  * @brief K-V 数据存储：init / read / write / erase（上层只关心数据）
  *
  * 对上 4 个接口，不暴露存储细节；布局与加解密由 TAL 实现，port 只提供一块
- * 可读写擦的数据区（见 tal_data_ops.h）。name 限 [A-Za-z0-9._-]、长度 ≤63。
+ * 可读写擦的数据区（见 tal_kv_ops.h）。name 限 [A-Za-z0-9._-]、长度 ≤63。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  */
-#ifndef __TAL_DATA_H__
-#define __TAL_DATA_H__
+#ifndef __TAL_KV_H__
+#define __TAL_KV_H__
 
 #include "tuya_cloud_types.h"
 
@@ -424,17 +424,17 @@ extern "C" {
 #endif
 
 /* 单条明文上限（宏可配） */
-#define TAL_DATA_PLAIN_MAX (16 * 1024)
+#define TAL_KV_PLAIN_MAX (16 * 1024)
 
 /* seed/key 各 16 字节（沿用现有 tal_kv 的密钥形态） */
-OPERATE_RET tal_data_init(const char *seed, const char *key);
+OPERATE_RET tal_kv_init(const char *seed, const char *key);
 
 /* buf 由调用方提供；buf==NULL 时仅回填 *out_len（探测尺寸） */
-OPERATE_RET tal_data_read(const char *name, uint8_t *buf, size_t buf_size, size_t *out_len);
+OPERATE_RET tal_kv_read(const char *name, uint8_t *buf, size_t buf_size, size_t *out_len);
 
-OPERATE_RET tal_data_write(const char *name, const uint8_t *buf, size_t len);
+OPERATE_RET tal_kv_write(const char *name, const uint8_t *buf, size_t len);
 
-OPERATE_RET tal_data_erase(const char *name);
+OPERATE_RET tal_kv_erase(const char *name);
 
 #ifdef __cplusplus
 }
@@ -445,12 +445,12 @@ OPERATE_RET tal_data_erase(const char *name);
 
 - [ ] **Step 2: 写引擎骨架（记录编解码 + CRC + init 扫描）**
 
-`tuyaopen-core/iot-core/tal_system/src/tal_data.c`（本步只到 init 能建索引）：
+`tuyaopen-core/iot-core/tal_system/src/tal_kv.c`（本步只到 init 能建索引）：
 
 ```c
 /**
- * @file tal_data.c
- * @brief tal_data K-V 引擎：日志式布局（追加 + 墓碑 + seq + CRC + GC 压缩）+ AES
+ * @file tal_kv.c
+ * @brief tal_kv K-V 引擎：日志式布局（追加 + 墓碑 + seq + CRC + GC 压缩）+ AES
  *
  * 区域 = 环形日志；记录从低偏移追加，写满时把各 name 的最新记录复制到空闲尾部
  * （分配新 seq）再推进 head。掉电安全：已复制的新 seq 胜出、未复制的用旧记录、
@@ -458,40 +458,40 @@ OPERATE_RET tal_data_erase(const char *name);
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  */
-#include "tal_data.h"
-#include "tal_data_ops.h"
+#include "tal_kv.h"
+#include "tal_kv_ops.h"
 #include "tal_log.h"
 #include "tal_memory.h"
 #include "tal_security.h"
 
 #include <string.h>
 
-/* 平台 ops 卡（port 的 tkl_data.c 定义），core 侧经 getter 分发 */
-extern TAL_DATA_OPS_T tal_data_ops_platform;
+/* 平台 ops 卡（port 的 tkl_kv.c 定义），core 侧经 getter 分发 */
+extern TAL_KV_OPS_T tal_kv_ops_platform;
 
-TAL_DATA_OPS_T *tal_data_get_ops(void)
+TAL_KV_OPS_T *tal_kv_get_ops(void)
 {
-    return &tal_data_ops_platform;
+    return &tal_kv_ops_platform;
 }
 
-#define TAL_DATA_MAGIC       0xDA7A
-#define TAL_DATA_ST_VALID    0x01
-#define TAL_DATA_ST_TOMB     0x00
-#define TAL_DATA_ST_PAD      0x02
-#define TAL_DATA_NAME_MAX    63
-#define TAL_DATA_INDEX_MAX   64
-/* 单条明文上限 TAL_DATA_PLAIN_MAX 由 tal_data.h 提供 */
+#define TAL_KV_MAGIC       0xDA7A
+#define TAL_KV_ST_VALID    0x01
+#define TAL_KV_ST_TOMB     0x00
+#define TAL_KV_ST_PAD      0x02
+#define TAL_KV_NAME_MAX    63
+#define TAL_KV_INDEX_MAX   64
+/* 单条明文上限 TAL_KV_PLAIN_MAX 由 tal_kv.h 提供 */
 
 typedef struct {
-    char     name[TAL_DATA_NAME_MAX + 1];
+    char     name[TAL_KV_NAME_MAX + 1];
     uint32_t rec_off;
     uint32_t rec_len;
     uint32_t data_off;
     uint32_t data_len;
     uint32_t seq;
-} TAL_DATA_ITEM_T;
+} TAL_KV_ITEM_T;
 
-static TAL_DATA_ITEM_T s_index[TAL_DATA_INDEX_MAX];
+static TAL_KV_ITEM_T s_index[TAL_KV_INDEX_MAX];
 static uint32_t s_index_cnt;
 static uint32_t s_max_seq;
 static uint32_t s_tail;
@@ -533,7 +533,7 @@ static OPERATE_RET __name_check(const char *name)
         return OPRT_INVALID_PARM;
     }
     len = strlen(name);
-    if (0 == len || len > TAL_DATA_NAME_MAX) {
+    if (0 == len || len > TAL_KV_NAME_MAX) {
         return OPRT_INVALID_PARM;
     }
     for (size_t i = 0; i < len; i++) {
@@ -562,7 +562,7 @@ static void __rec_encode(uint8_t *rec, uint8_t state, uint32_t seq, const char *
     uint32_t total = __rec_len(namelen, datalen);
 
     memset(rec, 0, total);
-    __wr16(rec + 0, TAL_DATA_MAGIC);
+    __wr16(rec + 0, TAL_KV_MAGIC);
     rec[2] = state;
     __wr32(rec + 3, seq);
     rec[7] = (uint8_t)namelen;
@@ -576,23 +576,23 @@ static void __rec_encode(uint8_t *rec, uint8_t state, uint32_t seq, const char *
 
 /* 解析一条记录；成功返回 OPRT_OK 并回填字段（data 不拷贝，只回填偏移） */
 static OPERATE_RET __rec_decode(const uint8_t *rec, uint32_t buf_len, uint32_t rec_off, uint8_t *state,
-                                uint32_t *seq, char name[TAL_DATA_NAME_MAX + 1], uint32_t *data_off,
+                                uint32_t *seq, char name[TAL_KV_NAME_MAX + 1], uint32_t *data_off,
                                 uint32_t *data_len, uint32_t *rec_len)
 {
     uint32_t namelen, dlen, body, total;
 
-    if (buf_len < 16 || TAL_DATA_MAGIC != __rd16(rec)) {
+    if (buf_len < 16 || TAL_KV_MAGIC != __rd16(rec)) {
         return OPRT_NOT_FOUND;
     }
     namelen = rec[7];
-    if (namelen < 1 || namelen > TAL_DATA_NAME_MAX) {
+    if (namelen < 1 || namelen > TAL_KV_NAME_MAX) {
         return OPRT_NOT_FOUND;
     }
     if (buf_len < 12 + namelen + 4) {
         return OPRT_NOT_FOUND;
     }
     dlen = __rd32(rec + 8 + namelen);
-    if (dlen > TAL_DATA_PLAIN_MAX + 16) {
+    if (dlen > TAL_KV_PLAIN_MAX + 16) {
         return OPRT_NOT_FOUND;
     }
     body = 12 + namelen + dlen;
@@ -625,7 +625,7 @@ static int __index_find(const char *name)
 }
 
 /* 把 (name, seq) 写入索引：已存在且 seq 更大则更新，否则追加 */
-static void __index_put(const TAL_DATA_ITEM_T *item)
+static void __index_put(const TAL_KV_ITEM_T *item)
 {
     int idx = __index_find(item->name);
     if (idx >= 0) {
@@ -634,27 +634,27 @@ static void __index_put(const TAL_DATA_ITEM_T *item)
         }
         return;
     }
-    if (s_index_cnt < TAL_DATA_INDEX_MAX) {
+    if (s_index_cnt < TAL_KV_INDEX_MAX) {
         s_index[s_index_cnt++] = *item;
     } else {
-        PR_WARN("tal_data: index full, drop %s", item->name);
+        PR_WARN("tal_kv: index full, drop %s", item->name);
     }
 }
 
 static OPERATE_RET __ops_init(void)
 {
-    TAL_DATA_REGION_T region = {0};
-    TAL_DATA_OPS_T *ops = tal_data_get_ops();
+    TAL_KV_REGION_T region = {0};
+    TAL_KV_OPS_T *ops = tal_kv_get_ops();
 
     if (NULL == ops || NULL == ops->init) {
         return OPRT_COM_ERROR;
     }
     if (OPRT_OK != ops->init(&region)) {
-        PR_ERR("tal_data: region init fail");
+        PR_ERR("tal_kv: region init fail");
         return OPRT_COM_ERROR;
     }
     if (region.size < 16 * 1024 || 0 == region.erase_granularity) {
-        PR_ERR("tal_data: region too small");
+        PR_ERR("tal_kv: region too small");
         return OPRT_COM_ERROR;
     }
     s_region_size = region.size;
@@ -665,7 +665,7 @@ static OPERATE_RET __ops_init(void)
 /* 全区域扫描：建索引、求 max_seq / tail / head */
 static OPERATE_RET __scan(void)
 {
-    TAL_DATA_OPS_T *ops = tal_data_get_ops();
+    TAL_KV_OPS_T *ops = tal_kv_get_ops();
     uint8_t *buf = NULL;
     uint32_t off = 0, min_seq = 0xFFFFFFFF, min_off = 0, max_seq = 0, max_end = 0;
     int have = 0;
@@ -677,18 +677,18 @@ static OPERATE_RET __scan(void)
 
     s_index_cnt = 0;
     while (off + 16 <= s_region_size) {
-        uint8_t state = 0, name[TAL_DATA_NAME_MAX + 1] = {0};
+        uint8_t state = 0, name[TAL_KV_NAME_MAX + 1] = {0};
         uint32_t seq = 0, data_off = 0, data_len = 0, rec_len = 0, hdr_read;
 
         /* 先读 8 字节定长头，拿到 namelen 后读整条 */
         if (OPRT_OK != ops->read(off, buf, 8)) {
             break;
         }
-        if (TAL_DATA_MAGIC != __rd16(buf)) {
+        if (TAL_KV_MAGIC != __rd16(buf)) {
             break;                                    /* 到空闲区（0xFF）为止 */
         }
         uint32_t namelen = buf[7];
-        if (namelen < 1 || namelen > TAL_DATA_NAME_MAX) {
+        if (namelen < 1 || namelen > TAL_KV_NAME_MAX) {
             break;
         }
         uint32_t need = 12 + namelen + 4;             /* 到 datalen 结尾，先读这部分 */
@@ -710,7 +710,7 @@ static OPERATE_RET __scan(void)
         tal_free(hdr);
         (void)hdr_read;
 
-        if (off + total > s_region_size || total > TAL_DATA_PLAIN_MAX + 128) {
+        if (off + total > s_region_size || total > TAL_KV_PLAIN_MAX + 128) {
             break;
         }
         uint8_t *rec = tal_malloc(total);
@@ -725,17 +725,17 @@ static OPERATE_RET __scan(void)
         }
         tal_free(rec);
 
-        if (TAL_DATA_ST_VALID == state) {
-            TAL_DATA_ITEM_T item;
+        if (TAL_KV_ST_VALID == state) {
+            TAL_KV_ITEM_T item;
             memset(&item, 0, sizeof(item));
-            strncpy(item.name, name, TAL_DATA_NAME_MAX);
+            strncpy(item.name, name, TAL_KV_NAME_MAX);
             item.rec_off = off;
             item.rec_len = rec_len;
             item.data_off = data_off;
             item.data_len = data_len;
             item.seq = seq;
             __index_put(&item);
-        } else if (TAL_DATA_ST_TOMB == state) {
+        } else if (TAL_KV_ST_TOMB == state) {
             /* 墓碑参与 seq 比较：seq 更大（或相等）的墓碑移除同名索引项；
              * 否则 erase 会在重启后被旧 VALID 记录"复活" */
             int idx = __index_find(name);
@@ -774,7 +774,7 @@ static OPERATE_RET __scan(void)
     return OPRT_OK;
 }
 
-OPERATE_RET tal_data_init(const char *seed, const char *key)
+OPERATE_RET tal_kv_init(const char *seed, const char *key)
 {
     uint8_t digest[32] = {0};
 
@@ -807,10 +807,10 @@ OPERATE_RET tal_data_init(const char *seed, const char *key)
 
 - [ ] **Step 3: 追加 API 级自测用例（应当失败——write/read 还没实现）**
 
-在 `tal_data_selftest.c` 的 `main()` 前追加：
+在 `tal_kv_selftest.c` 的 `main()` 前追加：
 
 ```c
-#include "tal_data.h"
+#include "tal_kv.h"
 
 #define SELFTEST_REGION "./tuyadb/data.bin"
 
@@ -819,52 +819,52 @@ static int test_kv_basic(void)
     uint8_t wr[64], rd[64];
     size_t out_len = 0;
 
-    CHECK(OPRT_OK == tal_data_init("0123456789abcdef", "fedcba9876543210"));
+    CHECK(OPRT_OK == tal_kv_init("0123456789abcdef", "fedcba9876543210"));
 
     for (size_t i = 0; i < sizeof(wr); i++) {
         wr[i] = (uint8_t)(i + 1);
     }
-    CHECK(OPRT_OK == tal_data_write("test.kv", wr, sizeof(wr)));
+    CHECK(OPRT_OK == tal_kv_write("test.kv", wr, sizeof(wr)));
 
     memset(rd, 0, sizeof(rd));
-    CHECK(OPRT_OK == tal_data_read("test.kv", rd, sizeof(rd), &out_len));
+    CHECK(OPRT_OK == tal_kv_read("test.kv", rd, sizeof(rd), &out_len));
     CHECK(out_len == sizeof(wr));
     CHECK(0 == memcmp(wr, rd, sizeof(wr)));
 
     /* 连续第二次读取同一 key：IV 必须每次从派生值重取，不能被 CBC 就地改写污染
      * （只回退 read 侧 iv 副本时，仅此断言会失败；write 侧的由上面的用例覆盖） */
     memset(rd, 0, sizeof(rd));
-    CHECK(OPRT_OK == tal_data_read("test.kv", rd, sizeof(rd), &out_len));
+    CHECK(OPRT_OK == tal_kv_read("test.kv", rd, sizeof(rd), &out_len));
     CHECK(out_len == sizeof(wr) && 0 == memcmp(wr, rd, sizeof(wr)));
 
     /* 探测尺寸 */
-    CHECK(OPRT_OK == tal_data_read("test.kv", NULL, 0, &out_len));
+    CHECK(OPRT_OK == tal_kv_read("test.kv", NULL, 0, &out_len));
     CHECK(out_len == sizeof(wr));
 
     /* buffer 过小 → 回填真实长度 */
-    CHECK(OPRT_INVALID_PARM == tal_data_read("test.kv", rd, 8, &out_len));
+    CHECK(OPRT_INVALID_PARM == tal_kv_read("test.kv", rd, 8, &out_len));
     CHECK(out_len == sizeof(wr));
 
     /* 不存在 → NOT_FOUND */
-    CHECK(OPRT_NOT_FOUND == tal_data_read("no.such", rd, sizeof(rd), &out_len));
+    CHECK(OPRT_NOT_FOUND == tal_kv_read("no.such", rd, sizeof(rd), &out_len));
 
     /* 覆盖写 */
     memset(wr, 0x5A, 16);
-    CHECK(OPRT_OK == tal_data_write("test.kv", wr, 16));
-    CHECK(OPRT_OK == tal_data_read("test.kv", rd, sizeof(rd), &out_len));
+    CHECK(OPRT_OK == tal_kv_write("test.kv", wr, 16));
+    CHECK(OPRT_OK == tal_kv_read("test.kv", rd, sizeof(rd), &out_len));
     CHECK(out_len == 16 && 0 == memcmp(wr, rd, 16));
 
     /* 删除（幂等） */
-    CHECK(OPRT_OK == tal_data_erase("test.kv"));
-    CHECK(OPRT_OK == tal_data_erase("test.kv"));
-    CHECK(OPRT_NOT_FOUND == tal_data_read("test.kv", rd, sizeof(rd), &out_len));
+    CHECK(OPRT_OK == tal_kv_erase("test.kv"));
+    CHECK(OPRT_OK == tal_kv_erase("test.kv"));
+    CHECK(OPRT_NOT_FOUND == tal_kv_read("test.kv", rd, sizeof(rd), &out_len));
 
     /* name 规则 */
-    CHECK(OPRT_INVALID_PARM == tal_data_write("bad/name", wr, 16));
-    CHECK(OPRT_INVALID_PARM == tal_data_write("", wr, 16));
-    CHECK(OPRT_INVALID_PARM == tal_data_write("ok.name", NULL, 16));
-    CHECK(OPRT_INVALID_PARM == tal_data_write("ok.name", wr, 0));      /* 空数据 */
-    CHECK(OPRT_INVALID_PARM == tal_data_write("ok.name", wr, TAL_DATA_PLAIN_MAX + 1));  /* 超长 */
+    CHECK(OPRT_INVALID_PARM == tal_kv_write("bad/name", wr, 16));
+    CHECK(OPRT_INVALID_PARM == tal_kv_write("", wr, 16));
+    CHECK(OPRT_INVALID_PARM == tal_kv_write("ok.name", NULL, 16));
+    CHECK(OPRT_INVALID_PARM == tal_kv_write("ok.name", wr, 0));      /* 空数据 */
+    CHECK(OPRT_INVALID_PARM == tal_kv_write("ok.name", wr, TAL_KV_PLAIN_MAX + 1));  /* 超长 */
     return 0;
 }
 ```
@@ -877,20 +877,20 @@ static int test_kv_basic(void)
     }
 ```
 
-同时把 Task 1 留下的 `extern TAL_DATA_OPS_T tal_data_ops_platform;` 就地改用 core 的 getter（本任务已在 `tal_data.c` 提供）：
+同时把 Task 1 留下的 `extern TAL_KV_OPS_T tal_kv_ops_platform;` 就地改用 core 的 getter（本任务已在 `tal_kv.c` 提供）：
 
 ```c
-#define OPS (tal_data_get_ops())
+#define OPS (tal_kv_get_ops())
 ```
 
 - [ ] **Step 4: 实现 write / read / erase（追加式）**
 
-在 `tal_data.c` 的 `tal_data_init` 之后追加：
+在 `tal_kv.c` 的 `tal_kv_init` 之后追加：
 
 ```c
 static OPERATE_RET __append(const uint8_t *rec, uint32_t rec_len)
 {
-    TAL_DATA_OPS_T *ops = tal_data_get_ops();
+    TAL_KV_OPS_T *ops = tal_kv_get_ops();
     uint32_t free_space = (s_head - s_tail + s_region_size) % s_region_size;
 
     if (0 == free_space) {
@@ -909,7 +909,7 @@ static OPERATE_RET __append(const uint8_t *rec, uint32_t rec_len)
     return OPRT_OK;
 }
 
-OPERATE_RET tal_data_write(const char *name, const uint8_t *buf, size_t len)
+OPERATE_RET tal_kv_write(const char *name, const uint8_t *buf, size_t len)
 {
     uint8_t *ct = NULL, *rec = NULL;
     uint8_t iv_local[16];
@@ -919,10 +919,10 @@ OPERATE_RET tal_data_write(const char *name, const uint8_t *buf, size_t len)
     if (!s_inited) {
         return OPRT_COM_ERROR;
     }
-    if (OPRT_OK != __name_check(name) || NULL == buf || 0 == len || len > TAL_DATA_PLAIN_MAX) {
+    if (OPRT_OK != __name_check(name) || NULL == buf || 0 == len || len > TAL_KV_PLAIN_MAX) {
         return OPRT_INVALID_PARM;
     }
-    if (__index_find(name) < 0 && s_index_cnt >= TAL_DATA_INDEX_MAX) {
+    if (__index_find(name) < 0 && s_index_cnt >= TAL_KV_INDEX_MAX) {
         return OPRT_COM_ERROR;                       /* 索引已满：先拒绝，避免"写成功但读不到" */
     }
     /* mbedtls CBC 会就地改写传入的 iv，必须传局部副本（否则全局 IV 被永久污染） */
@@ -936,13 +936,13 @@ OPERATE_RET tal_data_write(const char *name, const uint8_t *buf, size_t len)
         tal_aes_free_data(ct);
         return OPRT_MALLOC_FAILED;
     }
-    __rec_encode(rec, TAL_DATA_ST_VALID, ++s_max_seq, name, ct, ct_len);
+    __rec_encode(rec, TAL_KV_ST_VALID, ++s_max_seq, name, ct, ct_len);
     ret = __append(rec, rec_len);
     if (OPRT_OK == ret) {
-        TAL_DATA_ITEM_T item;
+        TAL_KV_ITEM_T item;
         int idx;
         memset(&item, 0, sizeof(item));
-        strncpy(item.name, name, TAL_DATA_NAME_MAX);
+        strncpy(item.name, name, TAL_KV_NAME_MAX);
         item.rec_off = s_tail - rec_len;
         item.rec_len = rec_len;
         item.data_off = item.rec_off + 12 + (uint32_t)strlen(name);
@@ -951,7 +951,7 @@ OPERATE_RET tal_data_write(const char *name, const uint8_t *buf, size_t len)
         idx = __index_find(name);
         if (idx >= 0) {
             s_index[idx] = item;
-        } else if (s_index_cnt < TAL_DATA_INDEX_MAX) {
+        } else if (s_index_cnt < TAL_KV_INDEX_MAX) {
             s_index[s_index_cnt++] = item;
         }
     } else {
@@ -962,14 +962,14 @@ OPERATE_RET tal_data_write(const char *name, const uint8_t *buf, size_t len)
     return ret;
 }
 
-OPERATE_RET tal_data_read(const char *name, uint8_t *buf, size_t buf_size, size_t *out_len)
+OPERATE_RET tal_kv_read(const char *name, uint8_t *buf, size_t buf_size, size_t *out_len)
 {
-    TAL_DATA_OPS_T *ops = tal_data_get_ops();
+    TAL_KV_OPS_T *ops = tal_kv_get_ops();
     int idx;
     uint8_t *rec = NULL, *ct = NULL, *pt = NULL;
     uint8_t state = 0;
     uint8_t iv_local[16];
-    char rname[TAL_DATA_NAME_MAX + 1];
+    char rname[TAL_KV_NAME_MAX + 1];
     uint32_t seq = 0, doff = 0, dlen = 0, rlen = 0, data_in_rec;
     uint32_t pt_len = 0;
 
@@ -991,7 +991,7 @@ OPERATE_RET tal_data_read(const char *name, uint8_t *buf, size_t buf_size, size_
     if (OPRT_OK != ops->read(s_index[idx].rec_off, rec, s_index[idx].rec_len) ||
         OPRT_OK != __rec_decode(rec, s_index[idx].rec_len, s_index[idx].rec_off, &state, &seq, rname, &doff, &dlen,
                                 &rlen) ||
-        TAL_DATA_ST_VALID != state || 0 != strcmp(rname, name)) {
+        TAL_KV_ST_VALID != state || 0 != strcmp(rname, name)) {
         tal_free(rec);
         return OPRT_NOT_FOUND;                       /* 含"索引项指向的记录 name 不符"的悬垂防护 */
     }
@@ -1036,7 +1036,7 @@ OPERATE_RET tal_data_read(const char *name, uint8_t *buf, size_t buf_size, size_
     return OPRT_OK;
 }
 
-OPERATE_RET tal_data_erase(const char *name)
+OPERATE_RET tal_kv_erase(const char *name)
 {
     uint8_t *rec = NULL;
     uint32_t rec_len;
@@ -1058,7 +1058,7 @@ OPERATE_RET tal_data_erase(const char *name)
     if (NULL == rec) {
         return OPRT_MALLOC_FAILED;
     }
-    __rec_encode(rec, TAL_DATA_ST_TOMB, ++s_max_seq, name, NULL, 0);
+    __rec_encode(rec, TAL_KV_ST_TOMB, ++s_max_seq, name, NULL, 0);
     ret = __append(rec, rec_len);
     if (OPRT_OK == ret) {
         for (uint32_t i = (uint32_t)idx; i + 1 < s_index_cnt; i++) {
@@ -1076,7 +1076,7 @@ OPERATE_RET tal_data_erase(const char *name)
 - [ ] **Step 5: 构建并运行自测**
 
 ```bash
-cd examples/switch_demo/build && cmake --build . --target tal_data_selftest -j$(nproc) && rm -f tuyadb/data.bin && ./tal_data_selftest
+cd examples/switch_demo/build && cmake --build . --target tal_kv_selftest -j$(nproc) && rm -f tuyadb/data.bin && ./tal_kv_selftest
 ```
 
 Expected: `ALL TESTS PASSED`（Task 3 之前请先 `rm -f tuyadb/data.bin` 从干净区域开始）。
@@ -1084,12 +1084,12 @@ Expected: `ALL TESTS PASSED`（Task 3 之前请先 `rm -f tuyadb/data.bin` 从�
 - [ ] **Step 6: 提交**
 
 ```bash
-git -C tuyaopen-core add iot-core/tal_system/include/tal_data.h iot-core/tal_system/src/tal_data.c
-git -C tuyaopen-core commit -m "tal_system: 新增 tal_data K-V 引擎（日志式追加 + AES）
+git -C tuyaopen-core add iot-core/tal_system/include/tal_kv.h iot-core/tal_system/src/tal_kv.c
+git -C tuyaopen-core commit -m "tal_system: 新增 tal_kv K-V 引擎（日志式追加 + AES）
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
-git add examples/switch_demo/tal_data_selftest.c
-git commit -m "switch_demo: tal_data 自测补充 API 级用例
+git add examples/switch_demo/tal_kv_selftest.c
+git commit -m "switch_demo: tal_kv 自测补充 API 级用例
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -1099,8 +1099,8 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ## Task 3: 压缩（GC）+ 跨区尾回卷 + 掉电/撕裂专项用例
 
 **Files:**
-- Modify: `tuyaopen-core/iot-core/tal_system/src/tal_data.c`（`__append` 加 PAD 回卷与压缩；新增 `__compact`）
-- Modify: `examples/switch_demo/tal_data_selftest.c`（追加压缩/撕裂/重启用例）
+- Modify: `tuyaopen-core/iot-core/tal_system/src/tal_kv.c`（`__append` 加 PAD 回卷与压缩；新增 `__compact`）
+- Modify: `examples/switch_demo/tal_kv_selftest.c`（追加压缩/撕裂/重启用例）
 
 **Interfaces:**
 - Consumes: Task 2 的全部内部函数与状态
@@ -1108,7 +1108,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 
 - [ ] **Step 1: 写压缩用例（应当失败）**
 
-在 `tal_data_selftest.c` 追加：
+在 `tal_kv_selftest.c` 追加：
 
 ```c
 static int test_kv_compaction(void)
@@ -1121,13 +1121,13 @@ static int test_kv_compaction(void)
     for (int i = 0; i < 64; i++) {
         memset(blob, (uint8_t)i, sizeof(blob));
         snprintf(name, sizeof(name), "bulk.%d", i % 4);     /* 4 个 key 轮换 */
-        CHECK(OPRT_OK == tal_data_write(name, blob, sizeof(blob)));
+        CHECK(OPRT_OK == tal_kv_write(name, blob, sizeof(blob)));
     }
     /* 压缩后所有 key 仍可读，且内容为最后一次写入的 */
     for (int i = 0; i < 4; i++) {
         snprintf(name, sizeof(name), "bulk.%d", i);
         memset(rd, 0, sizeof(rd));
-        CHECK(OPRT_OK == tal_data_read(name, rd, sizeof(rd), &out_len));
+        CHECK(OPRT_OK == tal_kv_read(name, rd, sizeof(rd), &out_len));
         CHECK(out_len == sizeof(blob));
         CHECK(rd[0] == (uint8_t)(60 + i));                  /* 最后一轮 i=60..63 */
     }
@@ -1148,7 +1148,7 @@ static int test_kv_reopen(void)
     size_t out_len = 0;
 
     memset(wr, 0x3C, sizeof(wr));
-    CHECK(OPRT_OK == tal_data_write("persist.key", wr, sizeof(wr)));
+    CHECK(OPRT_OK == tal_kv_write("persist.key", wr, sizeof(wr)));
 
     /* 模拟重启：重置引擎状态后重新 init（不删区域文件） */
     /* 说明：引擎内部有 s_inited 标志；测试通过重新 exec 本程序并带参数实现 */
@@ -1183,8 +1183,8 @@ int main(int argc, char **argv)
         /* 重启后校验：上一轮写的 persist.key 仍可读 */
         uint8_t rd[32];
         size_t out_len = 0;
-        CHECK(OPRT_OK == tal_data_init("0123456789abcdef", "fedcba9876543210"));
-        CHECK(OPRT_OK == tal_data_read("persist.key", rd, sizeof(rd), &out_len));
+        CHECK(OPRT_OK == tal_kv_init("0123456789abcdef", "fedcba9876543210"));
+        CHECK(OPRT_OK == tal_kv_read("persist.key", rd, sizeof(rd), &out_len));
         CHECK(out_len == sizeof(rd));
         for (size_t i = 0; i < sizeof(rd); i++) {
             CHECK(0x3C == rd[i]);
@@ -1198,14 +1198,14 @@ int main(int argc, char **argv)
 - [ ] **Step 2: 运行，确认失败**
 
 ```bash
-cd examples/switch_demo/build && cmake --build . --target tal_data_selftest -j$(nproc) && rm -f tuyadb/data.bin && ./tal_data_selftest
+cd examples/switch_demo/build && cmake --build . --target tal_kv_selftest -j$(nproc) && rm -f tuyadb/data.bin && ./tal_kv_selftest
 ```
 
-Expected: FAIL（`bulk.*` 写到第 N 次时报空间不足，或 `tal_data_write` 返回 `OPRT_COM_ERROR`）。
+Expected: FAIL（`bulk.*` 写到第 N 次时报空间不足，或 `tal_kv_write` 返回 `OPRT_COM_ERROR`）。
 
 - [ ] **Step 3: 实现 PAD 回卷 + 压缩**
 
-把 `tal_data.c` 的 `__append` 替换为：
+把 `tal_kv.c` 的 `__append` 替换为：
 
 ```c
 static OPERATE_RET __compact(void);
@@ -1232,7 +1232,7 @@ static OPERATE_RET __append(const uint8_t *rec, uint32_t rec_len)
 
 static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len)
 {
-    TAL_DATA_OPS_T *ops = tal_data_get_ops();
+    TAL_KV_OPS_T *ops = tal_kv_get_ops();
     uint32_t free_space = (s_head - s_tail + s_region_size) % s_region_size;
 
     if (0 == free_space) {
@@ -1247,7 +1247,7 @@ static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len)
                 return OPRT_MALLOC_FAILED;
             }
             memset(pad, 0xFF, pad_len);               /* 未用尾部保持擦除态 0xFF */
-            __rec_encode(pad, TAL_DATA_ST_PAD, ++s_max_seq, "pad", NULL, 0);
+            __rec_encode(pad, TAL_KV_ST_PAD, ++s_max_seq, "pad", NULL, 0);
             if (OPRT_OK != ops->write(s_tail, pad, pad_len)) {
                 tal_free(pad);
                 s_max_seq--;
@@ -1275,7 +1275,7 @@ static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len)
 static OPERATE_RET __compact(void)
 {
     uint32_t live_len = 0, free_space, old_tail;
-    TAL_DATA_ITEM_T old_index[TAL_DATA_INDEX_MAX];
+    TAL_KV_ITEM_T old_index[TAL_KV_INDEX_MAX];
     uint32_t old_cnt = s_index_cnt;
     OPERATE_RET ret = OPRT_OK;
 
@@ -1295,13 +1295,13 @@ static OPERATE_RET __compact(void)
 
     for (uint32_t i = 0; i < old_cnt; i++) {
         uint8_t *rec = NULL;
-        TAL_DATA_ITEM_T item = old_index[i];
+        TAL_KV_ITEM_T item = old_index[i];
 
         rec = tal_malloc(item.rec_len);
         if (NULL == rec) {
             return OPRT_MALLOC_FAILED;
         }
-        if (OPRT_OK != tal_data_get_ops()->read(item.rec_off, rec, item.rec_len)) {
+        if (OPRT_OK != tal_kv_get_ops()->read(item.rec_off, rec, item.rec_len)) {
             tal_free(rec);
             return OPRT_COM_ERROR;
         }
@@ -1314,7 +1314,7 @@ static OPERATE_RET __compact(void)
                 tal_free(rec);
                 return OPRT_MALLOC_FAILED;
             }
-            if (OPRT_OK != tal_data_get_ops()->read(item.data_off, ct, item.data_len)) {
+            if (OPRT_OK != tal_kv_get_ops()->read(item.data_off, ct, item.data_len)) {
                 tal_free(ct);
                 tal_free(rec);
                 return OPRT_COM_ERROR;
@@ -1325,7 +1325,7 @@ static OPERATE_RET __compact(void)
                 tal_free(rec);
                 return OPRT_MALLOC_FAILED;
             }
-            __rec_encode(new_rec, TAL_DATA_ST_VALID, ++s_max_seq, item.name, ct, item.data_len);
+            __rec_encode(new_rec, TAL_KV_ST_VALID, ++s_max_seq, item.name, ct, item.data_len);
             ret = __append_rec(new_rec, new_len);
             if (OPRT_OK == ret) {
                 /* s_tail 可能回卷到 0，做回卷安全的偏移计算 */
@@ -1350,8 +1350,8 @@ static OPERATE_RET __compact(void)
         uint32_t era_beg = (s_head / s_erase_gran) * s_erase_gran;
         uint32_t era_end = (old_tail / s_erase_gran) * s_erase_gran;   /* 不含新副本所在扇区 */
         if (era_end > era_beg) {
-            if (OPRT_OK != tal_data_get_ops()->erase(era_beg, era_end - era_beg)) {
-                PR_WARN("tal_data: reclaim erase fail (%u,%u)", era_beg, era_end - era_beg);
+            if (OPRT_OK != tal_kv_get_ops()->erase(era_beg, era_end - era_beg)) {
+                PR_WARN("tal_kv: reclaim erase fail (%u,%u)", era_beg, era_end - era_beg);
             }
         }
     }
@@ -1362,11 +1362,11 @@ static OPERATE_RET __compact(void)
 - [ ] **Step 4: 运行自测（压缩 + 撕裂用例）**
 
 ```bash
-cd examples/switch_demo/build && cmake --build . --target tal_data_selftest -j$(nproc) \
-  && rm -f tuyadb/data.bin && ./tal_data_selftest \
-  && ./tal_data_selftest reopen-check \
-  && rm -f tuyadb/data.bin && ./tal_data_selftest torn-setup \
-  && ./tal_data_selftest torn-check
+cd examples/switch_demo/build && cmake --build . --target tal_kv_selftest -j$(nproc) \
+  && rm -f tuyadb/data.bin && ./tal_kv_selftest \
+  && ./tal_kv_selftest reopen-check \
+  && rm -f tuyadb/data.bin && ./tal_kv_selftest torn-setup \
+  && ./tal_kv_selftest torn-check
 ```
 
 `main()` 中追加两个撕裂模式（在 `reopen-check` 分支之后）：
@@ -1376,12 +1376,12 @@ cd examples/switch_demo/build && cmake --build . --target tal_data_selftest -j$(
         /* 干净区域上只写一条记录 → 记录必然从偏移 0 开始，数据区偏移 = 12 + namelen */
         uint8_t wr[256];
         memset(wr, 0x11, sizeof(wr));
-        CHECK(OPRT_OK == tal_data_init("0123456789abcdef", "fedcba9876543210"));
-        CHECK(OPRT_OK == tal_data_write("torn.key", wr, sizeof(wr)));
+        CHECK(OPRT_OK == tal_kv_init("0123456789abcdef", "fedcba9876543210"));
+        CHECK(OPRT_OK == tal_kv_write("torn.key", wr, sizeof(wr)));
         {
             uint8_t bad = 0x00;
             uint32_t data_off = 12 + (uint32_t)strlen("torn.key");
-            CHECK(OPRT_OK == tal_data_get_ops()->write(data_off, &bad, 1));  /* 破坏数据首字节 */
+            CHECK(OPRT_OK == tal_kv_get_ops()->write(data_off, &bad, 1));  /* 破坏数据首字节 */
         }
         printf("TORN SETUP OK\n");
         return 0;
@@ -1389,9 +1389,9 @@ cd examples/switch_demo/build && cmake --build . --target tal_data_selftest -j$(
     if (argc > 1 && 0 == strcmp(argv[1], "torn-check")) {
         uint8_t rd[256];
         size_t out_len = 0;
-        CHECK(OPRT_OK == tal_data_init("0123456789abcdef", "fedcba9876543210"));
+        CHECK(OPRT_OK == tal_kv_init("0123456789abcdef", "fedcba9876543210"));
         /* 重扫时该记录 CRC 失败 → 视为不存在 */
-        CHECK(OPRT_NOT_FOUND == tal_data_read("torn.key", rd, sizeof(rd), &out_len));
+        CHECK(OPRT_NOT_FOUND == tal_kv_read("torn.key", rd, sizeof(rd), &out_len));
         printf("TORN CHECK OK\n");
         return 0;
     }
@@ -1402,12 +1402,12 @@ Expected: `ALL TESTS PASSED` / `REOPEN OK` / `TORN SETUP OK` / `TORN CHECK OK`�
 - [ ] **Step 5: 提交**
 
 ```bash
-git -C tuyaopen-core add iot-core/tal_system/src/tal_data.c
-git -C tuyaopen-core commit -m "tal_system: tal_data 增加 GC 压缩与跨区尾回卷
+git -C tuyaopen-core add iot-core/tal_system/src/tal_kv.c
+git -C tuyaopen-core commit -m "tal_system: tal_kv 增加 GC 压缩与跨区尾回卷
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
-git add examples/switch_demo/tal_data_selftest.c
-git commit -m "switch_demo: tal_data 自测补充压缩/撕裂/重启用例
+git add examples/switch_demo/tal_kv_selftest.c
+git commit -m "switch_demo: tal_kv 自测补充压缩/撕裂/重启用例
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -1446,7 +1446,7 @@ static uint32_t __garbage_len(void)
 /* 追加一条记录：只写空闲间隙；跨区尾仅在"回卷后不越过 head"时允许 PAD 回卷 */
 static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len)
 {
-    TAL_DATA_OPS_T *ops = tal_data_get_ops();
+    TAL_KV_OPS_T *ops = tal_kv_get_ops();
 
     if (s_tail + rec_len > s_region_size) {
         uint32_t pad_len = s_region_size - s_tail;
@@ -1460,7 +1460,7 @@ static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len)
                 return OPRT_MALLOC_FAILED;
             }
             memset(pad, 0xFF, pad_len);
-            __rec_encode(pad, TAL_DATA_ST_PAD, ++s_max_seq, "pad", NULL, 0);
+            __rec_encode(pad, TAL_KV_ST_PAD, ++s_max_seq, "pad", NULL, 0);
             if (OPRT_OK != ops->write(s_tail, pad, pad_len)) {
                 tal_free(pad);
                 s_max_seq--;
@@ -1504,7 +1504,7 @@ static OPERATE_RET __append(const uint8_t *rec, uint32_t rec_len)
 static OPERATE_RET __compact(void)
 {
     uint32_t live_len = 0, old_tail, old_head, copy_start;
-    TAL_DATA_ITEM_T old_index[TAL_DATA_INDEX_MAX];
+    TAL_KV_ITEM_T old_index[TAL_KV_INDEX_MAX];
     uint32_t old_cnt;
 
     for (uint32_t i = 0; i < s_index_cnt; i++) {
@@ -1530,7 +1530,7 @@ static OPERATE_RET __compact(void)
     s_tail = copy_start;
 
     for (uint32_t i = 0; i < old_cnt; i++) {
-        TAL_DATA_ITEM_T item = old_index[i];
+        TAL_KV_ITEM_T item = old_index[i];
         uint8_t *ct = NULL, *new_rec = NULL;
         uint32_t new_len;
         OPERATE_RET ret;
@@ -1539,7 +1539,7 @@ static OPERATE_RET __compact(void)
         if (NULL == ct) {
             return OPRT_MALLOC_FAILED;
         }
-        if (OPRT_OK != tal_data_get_ops()->read(item.data_off, ct, item.data_len)) {
+        if (OPRT_OK != tal_kv_get_ops()->read(item.data_off, ct, item.data_len)) {
             tal_free(ct);
             return OPRT_COM_ERROR;
         }
@@ -1549,7 +1549,7 @@ static OPERATE_RET __compact(void)
             tal_free(ct);
             return OPRT_MALLOC_FAILED;
         }
-        __rec_encode(new_rec, TAL_DATA_ST_VALID, ++s_max_seq, item.name, ct, item.data_len);
+        __rec_encode(new_rec, TAL_KV_ST_VALID, ++s_max_seq, item.name, ct, item.data_len);
         ret = __append_rec(new_rec, new_len);
         if (OPRT_OK == ret) {
             /* 用新的 s_tail 反推副本位置（回卷安全） */
@@ -1570,8 +1570,8 @@ static OPERATE_RET __compact(void)
     {
         uint32_t era_beg = (old_head / s_erase_gran) * s_erase_gran;
         if (copy_start > era_beg) {
-            if (OPRT_OK != tal_data_get_ops()->erase(era_beg, copy_start - era_beg)) {
-                PR_WARN("tal_data: reclaim erase fail (%u,%u)", era_beg, copy_start - era_beg);
+            if (OPRT_OK != tal_kv_get_ops()->erase(era_beg, copy_start - era_beg)) {
+                PR_WARN("tal_kv: reclaim erase fail (%u,%u)", era_beg, copy_start - era_beg);
             }
         }
     }
@@ -1589,7 +1589,7 @@ static OPERATE_RET __compact(void)
  * 回收擦除后的 0xFF 空洞因此可被跳过。 */
 static OPERATE_RET __scan(void)
 {
-    TAL_DATA_OPS_T *ops = tal_data_get_ops();
+    TAL_KV_OPS_T *ops = tal_kv_get_ops();
     uint8_t *chunk = NULL;
     const uint32_t CHUNK = 512;
     uint32_t off = 0, min_seq = 0xFFFFFFFF, min_off = 0, max_seq = 0, max_end = 0;
@@ -1603,7 +1603,7 @@ static OPERATE_RET __scan(void)
     s_index_cnt = 0;
     while (off + 16 <= s_region_size) {
         uint32_t scan = 0, limit = (s_region_size - off < CHUNK) ? (s_region_size - off) : CHUNK;
-        uint8_t state = 0, name[TAL_DATA_NAME_MAX + 1] = {0};
+        uint8_t state = 0, name[TAL_KV_NAME_MAX + 1] = {0};
         uint32_t seq = 0, data_off = 0, data_len = 0, rec_len = 0;
         uint32_t namelen, dlen, total;
         uint8_t *rec = NULL;
@@ -1612,7 +1612,7 @@ static OPERATE_RET __scan(void)
             break;
         }
         /* 在块内找 magic */
-        while (scan + 2 <= limit && TAL_DATA_MAGIC != __rd16(chunk + scan)) {
+        while (scan + 2 <= limit && TAL_KV_MAGIC != __rd16(chunk + scan)) {
             scan++;
         }
         if (scan + 2 > limit) {
@@ -1627,13 +1627,13 @@ static OPERATE_RET __scan(void)
             break;
         }
         namelen = hdr[7];
-        if (namelen < 1 || namelen > TAL_DATA_NAME_MAX) {
+        if (namelen < 1 || namelen > TAL_KV_NAME_MAX) {
             off++;                                   /* 假 magic → 前进 1 字节 */
             continue;
         }
         dlen = __rd32(hdr + 8 + namelen);
         total = __rec_len(namelen, dlen);
-        if (total > TAL_DATA_PLAIN_MAX + 128 || off + total > s_region_size) {
+        if (total > TAL_KV_PLAIN_MAX + 128 || off + total > s_region_size) {
             off++;
             continue;
         }
@@ -1650,17 +1650,17 @@ static OPERATE_RET __scan(void)
         }
         tal_free(rec);
 
-        if (TAL_DATA_ST_VALID == state) {
-            TAL_DATA_ITEM_T item;
+        if (TAL_KV_ST_VALID == state) {
+            TAL_KV_ITEM_T item;
             memset(&item, 0, sizeof(item));
-            strncpy(item.name, name, TAL_DATA_NAME_MAX);
+            strncpy(item.name, name, TAL_KV_NAME_MAX);
             item.rec_off = off;
             item.rec_len = rec_len;
             item.data_off = data_off;
             item.data_len = data_len;
             item.seq = seq;
             __index_put(&item);
-        } else if (TAL_DATA_ST_TOMB == state) {
+        } else if (TAL_KV_ST_TOMB == state) {
             /* 墓碑参与 seq 比较：seq 更大（或相等）的墓碑移除同名索引项；
              * 否则 erase 会在重启后被旧 VALID 记录"复活"。
              * 不变量：依赖"扫描顺序内 seq 单调"（后扫到的记录 seq 不大于先扫到的）；
@@ -1709,9 +1709,9 @@ static OPERATE_RET __scan(void)
     uint8_t old_blob[512], rd_old[512];
     size_t out_old = 0;
     memset(old_blob, 0x33, sizeof(old_blob));
-    CHECK(OPRT_OK == tal_data_write("old.key", old_blob, sizeof(old_blob)));
+    CHECK(OPRT_OK == tal_kv_write("old.key", old_blob, sizeof(old_blob)));
     /* ... 64 次 bulk 覆盖写（触发压缩） ... */
-    CHECK(OPRT_OK == tal_data_read("old.key", rd_old, sizeof(rd_old), &out_old));
+    CHECK(OPRT_OK == tal_kv_read("old.key", rd_old, sizeof(rd_old), &out_old));
     CHECK(out_old == sizeof(old_blob) && 0 == memcmp(old_blob, rd_old, out_old));
 ```
 
@@ -1737,7 +1737,7 @@ static OPERATE_RET __append(const uint8_t *rec, uint32_t rec_len)
 ```c
 static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len)
 {
-    TAL_DATA_OPS_T *ops = tal_data_get_ops();
+    TAL_KV_OPS_T *ops = tal_kv_get_ops();
 
     if (s_tail + rec_len > s_region_size) {
         return OPRT_COM_ERROR;                       /* 区域满：绝不覆盖已有记录 */
@@ -1749,7 +1749,7 @@ static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len)
     return OPRT_OK;
 }
 ```
-4. `__scan` **恢复 Task 2 的顺序扫描版本**（`tal_data.c` 现 HEAD 里的空洞容忍分块扫描删掉，回到"顺序读、magic 不符即日志尾"的版本 + 保留墓碑分支与不变量注释 + `s_tail = max_end`）
+4. `__scan` **恢复 Task 2 的顺序扫描版本**（`tal_kv.c` 现 HEAD 里的空洞容忍分块扫描删掉，回到"顺序读、magic 不符即日志尾"的版本 + 保留墓碑分支与不变量注释 + `s_tail = max_end`）
 5. 删除自测里 `test_kv_compaction` 的 64×8KB 覆盖写（会撑爆区域），改为两个用例：
 ```c
 static int test_kv_overwrite(void)
@@ -1760,23 +1760,23 @@ static int test_kv_overwrite(void)
     char name[16];
 
     memset(old_blob, 0x33, sizeof(old_blob));
-    CHECK(OPRT_OK == tal_data_write("old.key", old_blob, sizeof(old_blob)));
+    CHECK(OPRT_OK == tal_kv_write("old.key", old_blob, sizeof(old_blob)));
 
     for (int i = 0; i < 20; i++) {
         memset(blob, (uint8_t)i, sizeof(blob));
         snprintf(name, sizeof(name), "ovw.%d", i % 4);
-        CHECK(OPRT_OK == tal_data_write(name, blob, sizeof(blob)));
+        CHECK(OPRT_OK == tal_kv_write(name, blob, sizeof(blob)));
     }
     for (int i = 0; i < 4; i++) {
         snprintf(name, sizeof(name), "ovw.%d", i);
         memset(rd, 0, sizeof(rd));
-        CHECK(OPRT_OK == tal_data_read(name, rd, sizeof(rd), &out_len));
+        CHECK(OPRT_OK == tal_kv_read(name, rd, sizeof(rd), &out_len));
         CHECK(out_len == sizeof(blob));
         CHECK(rd[0] == (uint8_t)(16 + i));           /* 最后一轮 i=16..19 */
     }
     /* 老 key 经 20 次覆盖后仍可读且内容不变 */
     memset(rd, 0, sizeof(rd));
-    CHECK(OPRT_OK == tal_data_read("old.key", rd, sizeof(rd), &out_len));
+    CHECK(OPRT_OK == tal_kv_read("old.key", rd, sizeof(rd), &out_len));
     CHECK(out_len == sizeof(old_blob) && 0 == memcmp(old_blob, rd, out_len));
     return 0;
 }
@@ -1792,7 +1792,7 @@ static int test_kv_region_full(void)
     for (int i = 0; i < 128; i++) {
         memset(blob, (uint8_t)(i & 0xFF), sizeof(blob));
         snprintf(name, sizeof(name), "full.%d", i);
-        if (OPRT_OK != tal_data_write(name, blob, sizeof(blob))) {
+        if (OPRT_OK != tal_kv_write(name, blob, sizeof(blob))) {
             full = 1;
             break;
         }
@@ -1803,7 +1803,7 @@ static int test_kv_region_full(void)
     for (int i = 0; i < written; i++) {              /* 已写入的全部可读且内容正确 */
         snprintf(name, sizeof(name), "full.%d", i);
         memset(rd, 0, sizeof(rd));
-        CHECK(OPRT_OK == tal_data_read(name, rd, sizeof(rd), &out_len));
+        CHECK(OPRT_OK == tal_kv_read(name, rd, sizeof(rd), &out_len));
         CHECK(out_len == sizeof(blob));
         CHECK(rd[0] == (uint8_t)(i & 0xFF));
     }
@@ -1824,7 +1824,7 @@ static int test_kv_region_full(void)
 - Modify: `examples/switch_demo/src/tuya_main.c:258`（`tal_kv_init`）
 
 **Interfaces:**
-- Consumes: `tal_data_init(seed, key)`（Task 2）
+- Consumes: `tal_kv_init(seed, key)`（Task 2）
 
 - [ ] **Step 1: 替换调用**
 
@@ -1838,10 +1838,10 @@ static int test_kv_region_full(void)
 改为（seed/key 字面量原样保留）：
 
 ```c
-    tal_data_init("<原 seed 字面量>", "<原 key 字面量>");
+    tal_kv_init("<原 seed 字面量>", "<原 key 字面量>");
 ```
 
-头文件：`#include "tal_api.h"` 已聚合 `tal_data.h`（Task 8 会把 `tal_api.h` 的 `tal_kv.h` 换成 `tal_data.h`）；本步先在 `tuya_main.c` 显式加 `#include "tal_data.h"`。
+头文件：`#include "tal_api.h"` 已聚合 `tal_kv.h`（Task 8 会把 `tal_api.h` 的 `tal_kv.h` 换成 `tal_kv.h`）；本步先在 `tuya_main.c` 显式加 `#include "tal_kv.h"`。
 
 - [ ] **Step 2: 构建 + 运行**
 
@@ -1855,7 +1855,7 @@ Expected: exit 124；日志出现 `TUYA_TLS Success Connect` + `MQTT direct conn
 
 ```bash
 git add examples/switch_demo/src/tuya_main.c
-git commit -m "switch_demo: tal_kv_init 迁移到 tal_data_init
+git commit -m "switch_demo: tal_kv_init 迁移到 tal_kv_init
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -1868,7 +1868,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 - Modify: `tuyaopen-core/iot-core/cloud/tuya_iot.c`（:130/139/152/160/195/206/226/228/558/1121/1122/1387/1395/1402/1409）
 
 **Interfaces:**
-- Consumes: `tal_data_read/write/erase`
+- Consumes: `tal_kv_read/write/erase`
 
 - [ ] **Step 1: 机械替换（模式如下）**
 
@@ -1878,19 +1878,19 @@ uint8_t *value = NULL; size_t len = 0;
 tal_kv_get(key, &value, &len);   ...   tal_kv_free(value);
 /* → 改为调用方 buffer（按各 key 的规模取 512 / 4096） */
 uint8_t buf[512]; size_t len = 0;
-if (OPRT_OK == tal_data_read(key, buf, sizeof(buf), &len)) { ... }
+if (OPRT_OK == tal_kv_read(key, buf, sizeof(buf), &len)) { ... }
 
 /* 写 */
-tal_kv_set(key, value, len);     →   tal_data_write(key, value, len);
+tal_kv_set(key, value, len);     →   tal_kv_write(key, value, len);
 
 /* 删 */
-tal_kv_del(key);                 →   tal_data_erase(key);
+tal_kv_del(key);                 →   tal_kv_erase(key);
 ```
 
 注意点：
 - `activated_data_read()` 读的是 JSON 文本，buffer 取 4096 并确保以 `\0` 结尾（`buf[len] = '\0'`）
 - `:558` 的 `tal_kv_set("<ns>.devid")` 在 reset 前保存 devId，语义不变
-- `:1121/1122` 的解绑清理改为 `tal_data_erase`
+- `:1121/1122` 的解绑清理改为 `tal_kv_erase`
 
 - [ ] **Step 2: 构建 + 运行**
 
@@ -1904,7 +1904,7 @@ Expected: 同 Task 4（TLS/MQTT/QR 正常）。
 
 ```bash
 git -C tuyaopen-core add iot-core/cloud/tuya_iot.c
-git -C tuyaopen-core commit -m "cloud: tuya_iot 的 KV 调用迁移到 tal_data
+git -C tuyaopen-core commit -m "cloud: tuya_iot 的 KV 调用迁移到 tal_kv
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -1917,11 +1917,11 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 - Modify: `tuyaopen-core/iot-core/cloud/tuya_endpoint.c`（:46/52/72/79/81/88/111/135/169/205/250-253）
 
 **Interfaces:**
-- Consumes: `tal_data_read/write/erase`；cJSON（`tuyaopen-core` 已依赖 `libcjson`）
+- Consumes: `tal_kv_read/write/erase`；cJSON（`tuyaopen-core` 已依赖 `libcjson`）
 
 - [ ] **Step 1: 普通键按 Task 5 的模式替换**
 
-`region` / `regist_key` / `endpoint.cert` 三类：`tal_kv_get/set/del` → `tal_data_read/write/erase`。
+`region` / `regist_key` / `endpoint.cert` 三类：`tal_kv_get/set/del` → `tal_kv_read/write/erase`。
 
 - [ ] **Step 2: `endpoint.domain` 的 serialize 改为调用方自行拼字节**
 
@@ -1939,7 +1939,7 @@ tal_kv_serialize_set("endpoint.domain", db, 5);
 ```c
 /* 读 */
 uint8_t buf[1024]; size_t len = 0;
-if (OPRT_OK == tal_data_read("endpoint.domain", buf, sizeof(buf) - 1, &len)) {
+if (OPRT_OK == tal_kv_read("endpoint.domain", buf, sizeof(buf) - 1, &len)) {
     buf[len] = '\0';
     cJSON *root = cJSON_Parse((const char *)buf);
     if (NULL != root) {
@@ -1954,7 +1954,7 @@ cJSON_AddStringToObject(root, "atop.host", ...);   /* 字段名与旧 kv_seriali
 ...
 char *out = cJSON_PrintUnformatted(root);
 if (NULL != out) {
-    tal_data_write("endpoint.domain", (const uint8_t *)out, strlen(out));
+    tal_kv_write("endpoint.domain", (const uint8_t *)out, strlen(out));
     cJSON_free(out);
 }
 cJSON_Delete(root);
@@ -1974,7 +1974,7 @@ Expected: TLS/MQTT/QR 正常（endpoint.domain 会在连接流程中被写读）
 
 ```bash
 git -C tuyaopen-core add iot-core/cloud/tuya_endpoint.c
-git -C tuyaopen-core commit -m "cloud: tuya_endpoint 的 KV 调用迁移到 tal_data（serialize 改由调用方拼 JSON）
+git -C tuyaopen-core commit -m "cloud: tuya_endpoint 的 KV 调用迁移到 tal_kv（serialize 改由调用方拼 JSON）
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -1988,7 +1988,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 - Modify: `tuyaopen-core/iot-core/cloud/tuya_register_center.c`（5 处）
 
 **Interfaces:**
-- Consumes: `tal_data_read/write/erase`
+- Consumes: `tal_kv_read/write/erase`
 
 - [ ] **Step 1: 按 Task 5 模式替换；证书/私钥读用 4096 buffer**
 
@@ -2009,7 +2009,7 @@ Expected: TLS/MQTT/QR 正常（证书管理器会在启动时读证书）。
 
 ```bash
 git -C tuyaopen-core add iot-core/cloud/tuya_cert_manager.c iot-core/cloud/tuya_register_center.c
-git -C tuyaopen-core commit -m "cloud: cert_manager/register_center 的 KV 调用迁移到 tal_data
+git -C tuyaopen-core commit -m "cloud: cert_manager/register_center 的 KV 调用迁移到 tal_kv
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -2038,349 +2038,10 @@ Expected: 无输出。
 
 ```bash
 git -C tuyaopen-core add iot-core/cloud/tuya_device_timer.c agent-core/tuya_ai_service/svc_ai_basic/src/tuya_ai_client.c p2p-core/svc_ipc_core/src/tuya_ipc_p2p_common.c
-git -C tuyaopen-core commit -m "device_timer/ai_client/p2p: KV 调用迁移到 tal_data（当前未编译，同步改动）
+git -C tuyaopen-core commit -m "device_timer/ai_client/p2p: KV 调用迁移到 tal_kv（当前未编译，同步改动）
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
-
----
-
-## Task 4-修正：tal_kv 兼容层（**取代 Task 4 ~ Task 8 的全部迁移工作**）
-
-> 2026-10-08 用户决策：**上层保持 `tal_kv_*` 命名**，底层换 `tal_data`/`tkl_data` → iot-core / examples / p2p 的 **78 个调用点零改动**。原 Task 4–8（逐点迁移）作废。
-
-**Files:**
-- Create: `tuyaopen-core/third_party/tal_kv_compat/CMakeLists.txt`（**target 名必须叫 `tal_kv`**）
-- Create: `tuyaopen-core/third_party/tal_kv_compat/include/tal_kv.h`（旧 API 声明 + 类型）
-- Create: `tuyaopen-core/third_party/tal_kv_compat/src/tal_kv_compat.c`（实现）
-- Modify: `tuyaopen-core/third_party/CMakeLists.txt`（`add_subdirectory(tal_kv)` → `add_subdirectory(tal_kv_compat)`）
-- Modify: `tuyaopen-core/third_party/Kconfig`（`rsource "tal_kv/Kconfig"` → 删）
-
-**Interfaces:**
-- Consumes: `tal_data_init/read/write/erase`（Task 2/3 已交付）
-- Produces: `tal_kv_init/set/get/free/del/serialize_set/serialize_get` + `kv_db_t`/`kv_tp_t`/`tal_kv_cfg_t`（与旧 `tal_kv.h` 逐字兼容，**去掉** `tal_kv_cmd` 与 `tal_lfs_get`）
-
-**为什么必须同名**：`iot-core/tal_system/include/tal_api.h:55` 有 `#include "tal_kv.h"`；`iot-core/CMakeLists.txt:62`、`iot-core/tal_system/CMakeLists.txt:14`、agent-core/p2p 的 CMake 都 `target_link_libraries(... tal_kv)`。同名后这些引用**全部原样解析，iot-core 一个文件都不用改**。
-
-- [ ] **Step 1: 写 `tal_kv.h`（从旧头逐字保留 API 与类型，删两个函数）**
-
-```c
-/**
- * @file tal_kv.h
- * @brief K-V 存储（兼容层）：对外 API 与旧 tal_kv 逐字一致，实现改为 tal_data
- *
- * 上层（iot-core / 应用 / p2p）继续用 tal_kv_* 命名，底层由 tal_data（日志式
- * 引擎 + AES）与 port 的 tkl_data（区域原语）承载。
- *
- * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
- */
-#ifndef __TAL_KV_H__
-#define __TAL_KV_H__
-
-#include "tuya_cloud_types.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#define TAL_LV_KEY_LEN 16
-
-typedef enum {
-    KV_CHAR = 0,
-    KV_BYTE,
-    KV_SHORT,
-    KV_USHORT,
-    KV_INT,
-    KV_BOOL,
-    KV_STRING,
-    KV_RAW,
-} kv_tp_t;
-
-typedef struct {
-    char *key;
-    kv_tp_t tp;
-    void *val;
-    uint16_t len;
-} kv_db_t;
-
-typedef struct {
-    char seed[TAL_LV_KEY_LEN + 1];
-    char key[TAL_LV_KEY_LEN + 1];
-} tal_kv_cfg_t;
-
-int tal_kv_init(tal_kv_cfg_t *kv_cfg);
-int tal_kv_set(const char *key, const uint8_t *value, size_t length);
-int tal_kv_get(const char *key, uint8_t **value, size_t *length);
-int tal_kv_free(uint8_t *value);
-int tal_kv_del(const char *key);
-int tal_kv_serialize_set(const char *key, kv_db_t *db, size_t dbcnt);
-int tal_kv_serialize_get(const char *key, kv_db_t *db, size_t dbcnt);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif
-```
-
-> ⚠️ **实施时必须先读旧头逐字核对**：`tuyaopen-core/third_party/tal_kv/include/tal_kv.h` 的 `kv_tp_t` 枚举顺序、`kv_db_t`/`tal_kv_cfg_t` 字段名与顺序、函数签名——**必须逐字一致**（调用点要零改动编译）。上面是依据摸底报告的骨架，**以旧头为准**。
-
-- [ ] **Step 2: 写 `tal_kv_compat.c`（8 个 API over tal_data）**
-
-```c
-/**
- * @file tal_kv_compat.c
- * @brief tal_kv 兼容层实现：旧 API → tal_data（含 get 的分配语义与 serialize 的 cJSON）
- */
-#include "tal_kv.h"
-#include "tal_data.h"
-#include "tal_memory.h"
-#include "tal_log.h"
-
-#include "cJSON.h"
-
-#include <string.h>
-
-#define KV_COMPAT_MAX_BLOB (16 * 1024)   /* 与 tal_data 单条上限一致 */
-
-int tal_kv_init(tal_kv_cfg_t *kv_cfg)
-{
-    if (NULL == kv_cfg) {
-        return OPRT_INVALID_PARM;
-    }
-    return tal_data_init(kv_cfg->seed, kv_cfg->key);
-}
-
-int tal_kv_set(const char *key, const uint8_t *value, size_t length)
-{
-    return tal_data_write(key, value, length);
-}
-
-/* 旧语义：value 为出参堆指针，调用方用 tal_kv_free 释放 */
-int tal_kv_get(const char *key, uint8_t **value, size_t *length)
-{
-    size_t len = 0;
-    uint8_t *buf = NULL;
-    OPERATE_RET ret;
-
-    if (NULL == value || NULL == length) {
-        return OPRT_INVALID_PARM;
-    }
-    ret = tal_data_read(key, NULL, 0, &len);          /* 探测尺寸 */
-    if (OPRT_OK != ret) {
-        return ret;                                   /* 含 NOT_FOUND */
-    }
-    buf = tal_malloc(len + 1);
-    if (NULL == buf) {
-        return OPRT_MALLOC_FAILED;
-    }
-    ret = tal_data_read(key, buf, len, &len);
-    if (OPRT_OK != ret) {
-        tal_free(buf);
-        return ret;
-    }
-    buf[len] = '\0';                                  /* 旧实现末尾补 \0，兼容字符串用法 */
-    *value = buf;
-    *length = len;
-    return OPRT_OK;
-}
-
-int tal_kv_free(uint8_t *value)
-{
-    if (NULL != value) {
-        tal_free(value);
-    }
-    return OPRT_OK;
-}
-
-int tal_kv_del(const char *key)
-{
-    return tal_data_erase(key);
-}
-
-/* 把 kv_db_t 数组序列化成 JSON 落盘（旧 kv_serialize 的等价实现；无需兼容旧落盘格式） */
-int tal_kv_serialize_set(const char *key, kv_db_t *db, size_t dbcnt)
-{
-    cJSON *root = NULL, *arr = NULL;
-    char *out = NULL;
-    OPERATE_RET ret = OPRT_OK;
-
-    if (NULL == key || NULL == db) {
-        return OPRT_INVALID_PARM;
-    }
-    root = cJSON_CreateObject();
-    arr = cJSON_CreateArray();
-    if (NULL == root || NULL == arr) {
-        cJSON_Delete(root);
-        cJSON_Delete(arr);
-        return OPRT_MALLOC_FAILED;
-    }
-    cJSON_AddItemToObject(root, "db", arr);
-    for (size_t i = 0; i < dbcnt; i++) {
-        cJSON *item = cJSON_CreateObject();
-        if (NULL == item) {
-            cJSON_Delete(root);
-            return OPRT_MALLOC_FAILED;
-        }
-        cJSON_AddStringToObject(item, "k", db[i].key ? db[i].key : "");
-        cJSON_AddNumberToObject(item, "t", (double)db[i].tp);
-        cJSON_AddNumberToObject(item, "l", (double)db[i].len);
-        if (NULL != db[i].val && db[i].len > 0) {
-            /* 值统一按十六进制字符串存，读回时按 tp 还原 */
-            char *hex = tal_malloc((size_t)db[i].len * 2 + 1);
-            if (NULL == hex) {
-                cJSON_Delete(item);
-                cJSON_Delete(root);
-                return OPRT_MALLOC_FAILED;
-            }
-            for (uint16_t j = 0; j < db[i].len; j++) {
-                sprintf(hex + j * 2, "%02x", ((uint8_t *)db[i].val)[j]);
-            }
-            cJSON_AddStringToObject(item, "v", hex);
-            tal_free(hex);
-        }
-        cJSON_AddItemToArray(arr, item);
-    }
-    out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (NULL == out) {
-        return OPRT_COM_ERROR;
-    }
-    ret = tal_data_write(key, (const uint8_t *)out, strlen(out));
-    cJSON_free(out);
-    return ret;
-}
-
-int tal_kv_serialize_get(const char *key, kv_db_t *db, size_t dbcnt)
-{
-    size_t len = 0;
-    uint8_t *buf = NULL;
-    cJSON *root = NULL, *arr = NULL;
-    OPERATE_RET ret;
-
-    if (NULL == key || NULL == db) {
-        return OPRT_INVALID_PARM;
-    }
-    ret = tal_data_read(key, NULL, 0, &len);
-    if (OPRT_OK != ret) {
-        return ret;
-    }
-    buf = tal_malloc(len + 1);
-    if (NULL == buf) {
-        return OPRT_MALLOC_FAILED;
-    }
-    if (OPRT_OK != tal_data_read(key, buf, len, &len)) {
-        tal_free(buf);
-        return OPRT_COM_ERROR;
-    }
-    buf[len] = '\0';
-    root = cJSON_Parse((const char *)buf);
-    tal_free(buf);
-    if (NULL == root) {
-        return OPRT_COM_ERROR;
-    }
-    arr = cJSON_GetObjectItem(root, "db");
-    if (NULL == arr || !cJSON_IsArray(arr)) {
-        cJSON_Delete(root);
-        return OPRT_COM_ERROR;
-    }
-    for (size_t i = 0; i < dbcnt; i++) {
-        cJSON *item = cJSON_GetArrayItem(arr, (int)i);
-        cJSON *jk, *jt, *jl, *jv;
-        if (NULL == item || NULL == db[i].key || NULL == db[i].val) {
-            continue;
-        }
-        jk = cJSON_GetObjectItem(item, "k");
-        jt = cJSON_GetObjectItem(item, "t");
-        jl = cJSON_GetObjectItem(item, "l");
-        jv = cJSON_GetObjectItem(item, "v");
-        if (NULL == jk || NULL == jt || NULL == jl || !cJSON_IsString(jk)) {
-            continue;
-        }
-        if (0 != strcmp(jk->valuestring, db[i].key)) {
-            continue;                                 /* 按 key 匹配，顺序无关 */
-        }
-        db[i].tp = (kv_tp_t)(int)cJSON_GetNumberValue(jt);
-        uint16_t want = (uint16_t)cJSON_GetNumberValue(jl);
-        uint8_t *dst = (uint8_t *)db[i].val;
-        uint16_t cap = db[i].len;                     /* 入参 len = 调用方缓冲容量 */
-        db[i].len = (want < cap) ? want : cap;
-        if (NULL != jv && cJSON_IsString(jv)) {
-            for (uint16_t j = 0; j < db[i].len; j++) {
-                unsigned int byte = 0;
-                sscanf(jv->valuestring + j * 2, "%02x", &byte);
-                dst[j] = (uint8_t)byte;
-            }
-        }
-    }
-    cJSON_Delete(root);
-    return OPRT_OK;
-}
-```
-
-> ⚠️ `serialize_get` 的**入参语义**必须与旧实现一致（旧实现是把 `db[i].len` 当**缓冲容量**还是当**期望长度**？读 `third_party/tal_kv/src/kv_serialize.c` 核对后照抄；上面的 cap 语义是猜测，**以旧实现为准**）。
-
-- [ ] **Step 3: 写 `CMakeLists.txt`（target 名必须是 `tal_kv`）**
-
-```cmake
-# tal_kv 兼容层：对外保持旧 API 与 target 名，实现改为 tal_data
-file(GLOB_RECURSE _tal_kv_compat_srcs CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
-)
-
-add_library(tal_kv STATIC)
-target_sources(tal_kv PRIVATE ${_tal_kv_compat_srcs})
-target_include_directories(tal_kv PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-)
-target_link_libraries(tal_kv
-    PUBLIC tal_system
-    PRIVATE tuyaopen-headers libcjson
-)
-unset(_tal_kv_compat_srcs)
-```
-
-- [ ] **Step 4: 切构建引用**
-
-- `third_party/CMakeLists.txt:10`：`add_subdirectory(tal_kv)` → `add_subdirectory(tal_kv_compat)`
-- `third_party/Kconfig:7`：删掉 `rsource "tal_kv/Kconfig"`（`menu "third party"` 留空即可）
-- **`tuyaopen-core.cmake`、`iot-core/**`、`agent-core/**`、`p2p-core/**` 一律不动**（target 名与头名未变）
-
-- [ ] **Step 5: 构建验证（iot-core 零改动的前提下）**
-
-```bash
-cd examples/switch_demo/build && cmake . >/dev/null && cmake --build . -j$(nproc)
-```
-
-Expected: exit 0；`nm` 确认 `tal_kv_init/tal_kv_get/tal_kv_set/tal_kv_del/tal_kv_serialize_get/set` 符号存在且由兼容层提供。
-
-- [ ] **Step 6: 运行验证（数据链路真跑通）**
-
-```bash
-cd examples/switch_demo/build && rm -rf tuyadb && timeout 25 ./switch_demo
-```
-
-Expected: 与改造前一致——TLS 握手 ×2、`MQTT direct connected`、QR 22 行；`./tuyadb/data.bin` 被创建且内容为密文。
-
-- [ ] **Step 7: 提交**
-
-```bash
-git -C tuyaopen-core add third_party/tal_kv_compat third_party/CMakeLists.txt third_party/Kconfig
-git -C tuyaopen-core commit -m "third_party: 新增 tal_kv 兼容层（旧 API over tal_data），iot-core 零改动
-
-Co-Authored-By: Claude Code <noreply@anthropic.com>"
-git add -A -- ':(exclude)corehttp-coremqtt/coreHTTP-v2.0.1' ':(exclude)corehttp-coremqtt/coreHTTP-v3.1.3' ':(exclude)corehttp-coremqtt/coreMQTT-v1.0.1' ':(exclude)corehttp-coremqtt/coreMQTT-v5.0.2'
-git commit -m "tuyaopen-core: 子模块指针更新（tal_kv 兼容层）
-
-Co-Authored-By: Claude Code <noreply@anthropic.com>"
-```
-
----
-
-## Task 5 ~ Task 8（**作废**）
-
-> 原计划：逐点迁移 `tuya_main.c` / `tuya_iot.c` / `tuya_endpoint.c` / `tuya_cert_manager.c` / `tuya_register_center.c` / 未编译的 3 个文件（共 78 处）到 `tal_data_*`。
-> **2026-10-08 用户决策：上层保持 `tal_kv_*` 命名 → 这些迁移全部取消**，由 Task 4-修正 的兼容层承载。下文的迁移清单仅作历史记录。
 
 ---
 
@@ -2409,7 +2070,7 @@ Expected: 仅剩待删的构建引用与 `tal_kv` 目录自身（`port/include/i
 - [ ] **Step 3: 清空 build 重新 configure（必须）**
 
 ```bash
-rm -rf examples/switch_demo/build && mkdir -p examples/switch_demo/build && cd examples/switch_demo/build && cmake ../.. && cmake --build . -j$(nproc)
+rm -rf examples/switch_demo/build && mkdir -p examples/switch_demo/build && cd examples/switch_demo/build && cmake .. && cmake --build . -j$(nproc)
 ```
 
 Expected: 配置与构建均 exit 0（`CONFIGURE_DEPENDS` 不会自动摘除已消失的子目录 target，必须清空重建）。
@@ -2417,7 +2078,7 @@ Expected: 配置与构建均 exit 0（`CONFIGURE_DEPENDS` 不会自动摘除已�
 - [ ] **Step 4: 自测 + 运行**
 
 ```bash
-cd examples/switch_demo/build && rm -f tuyadb/data.bin && ./tal_data_selftest && ./tal_data_selftest reopen-check && timeout 20 ./switch_demo
+cd examples/switch_demo/build && rm -f tuyadb/data.bin && ./tal_kv_selftest && ./tal_kv_selftest reopen-check && timeout 20 ./switch_demo
 ```
 
 Expected: `ALL TESTS PASSED` / `REOPEN OK` / exit 124 + TLS/MQTT/QR 正常。
@@ -2426,7 +2087,7 @@ Expected: `ALL TESTS PASSED` / `REOPEN OK` / exit 124 + TLS/MQTT/QR 正常。
 
 ```bash
 git -C tuyaopen-core add -A
-git -C tuyaopen-core commit -m "third_party: 删除 tal_kv（含 littlefs）与 tal_fs，改用 tal_data
+git -C tuyaopen-core commit -m "third_party: 删除 tal_kv（含 littlefs）与 tal_fs，改用 tal_kv
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 git add -A -- ':(exclude)corehttp-coremqtt/coreHTTP-v2.0.1' ':(exclude)corehttp-coremqtt/coreHTTP-v3.1.3' ':(exclude)corehttp-coremqtt/coreMQTT-v1.0.1' ':(exclude)corehttp-coremqtt/coreMQTT-v5.0.2'
@@ -2466,7 +2127,7 @@ head -c 64 tuyadb/data.bin | od -c | head -3     # 区域内容应为密文（�
 
 ```bash
 git add examples/switch_demo/tal-data-design.md examples/switch_demo/tal-interface-cleanup-candidates.md
-git commit -m "docs: tal_data 落地后同步设计文档与清理清单
+git commit -m "docs: tal_kv 落地后同步设计文档与清理清单
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```

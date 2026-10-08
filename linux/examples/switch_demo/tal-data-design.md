@@ -1,8 +1,8 @@
-# tal_data 设计（替换 tal_kv）
+# tal_kv 设计（替换 tal_kv）
 
 > 设计日期：2026-10-08（含 4K 扇区 flash 场景的修订，最终采用日志式布局）
 > 状态：**设计已确认，待实现**
-> 目标：删除 `tuyaopen-core/third_party/tal_kv`（含 littlefs），用全新的 `tal_data` 四接口替代；tkl 侧用 ops 卡注册制放在 port 下，**port 只提供一块存储区域 + 区域读写擦**（区域语义），KV 布局与加解密由 TAL 统一实现。
+> 目标：删除 `tuyaopen-core/third_party/tal_kv`（含 littlefs），用全新的 `tal_kv` 四接口替代；tkl 侧用 ops 卡注册制放在 port 下，**port 只提供一块存储区域 + 区域读写擦**（区域语义），KV 布局与加解密由 TAL 统一实现。
 
 ## 一、背景与设计取舍
 
@@ -15,18 +15,18 @@
 索引式布局每次 `write` 都要重写整个索引副本（4KB）→ 在 flash 上等于**每次写触发一次扇区擦除**：频繁写的 key（如 DP 版本缓存）会在数月内磨穿索引扇区；日志式只追加记录、擦除仅在压缩时发生，磨损低若干数量级，且掉电一致性天然（追加 + 记录级 CRC）。代价是需要压缩逻辑（见四、五节）。
 
 ```
-tal_data (TAL：4 个公开 API + 日志式 KV 引擎 + AES 加解密 + ops 分发)
-  └─ ops 卡（tal_data_ops.h / tal_data_get_ops()，区域语义：init/read/write/erase @offset）
-       └─ tkl_data (port：一块区域 + 区域读写擦，Linux 实现 = 一个区域文件)
+tal_kv (TAL：4 个公开 API + 日志式 KV 引擎 + AES 加解密 + ops 分发)
+  └─ ops 卡（tal_kv_ops.h / tal_kv_get_ops()，区域语义：init/read/write/erase @offset）
+       └─ tkl_kv (port：一块区域 + 区域读写擦，Linux 实现 = 一个区域文件)
 ```
 
-## 二、公开 API（`tal_data.h`，对上 4 个接口）
+## 二、公开 API（`tal_kv.h`，对上 4 个接口）
 
 ```c
-OPERATE_RET tal_data_init(const char *seed, const char *key);
-OPERATE_RET tal_data_read(const char *name, uint8_t *buf, size_t buf_size, size_t *out_len);
-OPERATE_RET tal_data_write(const char *name, const uint8_t *buf, size_t len);
-OPERATE_RET tal_data_erase(const char *name);
+OPERATE_RET tal_kv_init(const char *seed, const char *key);
+OPERATE_RET tal_kv_read(const char *name, uint8_t *buf, size_t buf_size, size_t *out_len);
+OPERATE_RET tal_kv_write(const char *name, const uint8_t *buf, size_t len);
+OPERATE_RET tal_kv_erase(const char *name);
 ```
 
 - `init(seed, key)`：准备区域 + 全区域扫描建索引 + 派生 AES 密钥；重复调用幂等
@@ -34,27 +34,27 @@ OPERATE_RET tal_data_erase(const char *name);
 - `write`：同名覆盖（追加新记录，旧记录自然失效）
 - `erase`：追加墓碑记录；name 不存在视为成功（幂等）
 
-## 三、ops 卡契约（`tal_data_ops.h`，区域语义）
+## 三、ops 卡契约（`tal_kv_ops.h`，区域语义）
 
 ```c
 typedef struct {
     uint32_t size;               /* 区域总字节数 */
     uint32_t erase_granularity;  /* 擦除粒度（flash=4096；文件实现可同用 4096） */
-} TAL_DATA_REGION_T;
+} TAL_KV_REGION_T;
 
 typedef struct {
     /* 准备区域并回填 region 信息（建区域文件 / 挂 flash 分区） */
-    OPERATE_RET (*init)(TAL_DATA_REGION_T *region);
+    OPERATE_RET (*init)(TAL_KV_REGION_T *region);
     OPERATE_RET (*read)(uint32_t offset, uint8_t *buf, uint32_t len);
     OPERATE_RET (*write)(uint32_t offset, const uint8_t *buf, uint32_t len);
     /* 擦除 [offset, offset+len)，对齐到 erase_granularity */
     OPERATE_RET (*erase)(uint32_t offset, uint32_t len);
-} TAL_DATA_OPS_T;
+} TAL_KV_OPS_T;
 
-TAL_DATA_OPS_T *tal_data_get_ops(void);
+TAL_KV_OPS_T *tal_kv_get_ops(void);
 ```
 
-与 `tal_api_ops.h` / `tal_ota_ops.h` 同构：契约头在 core、实例在 port（`tal_data_ops_platform`）、强引用（省略 `tkl_data.c` 会链接失败）。
+与 `tal_api_ops.h` / `tal_ota_ops.h` 同构：契约头在 core、实例在 port（`tal_kv_ops_platform`）、强引用（省略 `tkl_kv.c` 会链接失败）。
 
 **移植契约与实现量**：新平台只需实现 4 个区域原语——
 
@@ -68,7 +68,7 @@ TAL_DATA_OPS_T *tal_data_get_ops(void);
 
 | 层 | 职责 | 代码量 |
 |---|---|---|
-| 上层（iot-core / 应用） | 只调 `tal_data_read/write/erase(name, …)`，不关心存储 | 迁移 46 处（机械替换） |
+| 上层（iot-core / 应用） | 只调 `tal_kv_read/write/erase(name, …)`，不关心存储 | 迁移 46 处（机械替换） |
 | TAL（core） | ① K-V 布局引擎（日志式：追加 + 墓碑 + 压缩 + 掉电保护）② AES 加解密 ③ ops 分发 | ~350 行 |
 | port（每平台） | 一块区域 + 4 个原语 | ~20-40 行 |
 
@@ -141,7 +141,7 @@ state：0x01=有效 0x00=墓碑 0x02=PAD（回卷填充）
 
 | 删除项 | 理由 |
 |---|---|
-| `tuyaopen-core/third_party/tal_kv/` 整目录 | 被 tal_data 替代（含 littlefs 1.7MB） |
+| `tuyaopen-core/third_party/tal_kv/` 整目录 | 被 tal_kv 替代（含 littlefs 1.7MB） |
 | `iot-core/tal_system/src/tal_fs.c` + `include/tal_fs.h` | 全仓唯一消费者是 tal_kv |
 | `port/src/tkl_flash.c` + `port/include/flash/tkl_flash.h` | 唯一消费者是 littlefs 块设备 |
 | `port/src/tkl_fs.c` + `port/include/system/tkl_fs.h` | 消费者是 tal_fs + tkl_flash（均删）+ 未编译的 p2p `local_store`（将来启用需补） |
@@ -152,15 +152,15 @@ state：0x01=有效 0x00=墓碑 0x02=PAD（回卷填充）
 
 ## 八、迁移清单（**2026-10-08 决策：改用兼容层，上层零改动**）
 
-> 用户决策：**上层保持 `tal_kv_*` 命名**，底层换 `tal_data`/`tkl_data` → iot-core / examples / p2p 的 78 个调用点**一个都不用改**。
+> 用户决策：**上层保持 `tal_kv_*` 命名**，底层换 `tal_kv`/`tkl_kv` → iot-core / examples / p2p 的 78 个调用点**一个都不用改**。
 >
-> 新增 **`tal_kv` 兼容层**（`third_party/tal_kv_compat/`，target 名与头名沿用 `tal_kv`）：实现旧的 8 个 API over `tal_data`（`get` 保留"分配返回 + `tal_kv_free`"语义，`serialize_get/set` 用 cJSON 重新实现）。因 target 名/头名未变，`tal_api.h:55` 的 include、`tuyaopen-core.cmake` 与 iot-core/agent-core/p2p 的 CMake 引用**全部原样解析**。
+> 新增 **`tal_kv` 兼容层**（`third_party/tal_kv_compat/`，target 名与头名沿用 `tal_kv`）：实现旧的 8 个 API over `tal_kv`（`get` 保留"分配返回 + `tal_kv_free`"语义，`serialize_get/set` 用 cJSON 重新实现）。因 target 名/头名未变，`tal_api.h:55` 的 include、`tuyaopen-core.cmake` 与 iot-core/agent-core/p2p 的 CMake 引用**全部原样解析**。
 >
 > 下表原为逐点迁移清单，**已作废**，仅作历史记录。
 
 | 优先级 | 文件 | 处数 | 说明 |
 |---|---|---|---|
-| **P0** | `examples/switch_demo/src/tuya_main.c` | 1 | `tal_kv_init(&cfg)` → `tal_data_init(seed, key)`（字面量沿用） |
+| **P0** | `examples/switch_demo/src/tuya_main.c` | 1 | `tal_kv_init(&cfg)` → `tal_kv_init(seed, key)`（字面量沿用） |
 | **P0** | `iot-core/cloud/tuya_iot.c` | 15 | schema/激活数据/devid 的读写删 |
 | **P0** | `iot-core/cloud/tuya_endpoint.c` | 15 | region/regist_key/endpoint.cert；**serialize 2 处改为调用方自行 cJSON 拼字节** |
 | **P0** | `iot-core/cloud/tuya_cert_manager.c` | 15 | 客户端证书/私钥、tls_ca*；注意 `:754/757` 释放的是 KV 分配的指针，改后语义消失 |
@@ -168,9 +168,9 @@ state：0x01=有效 0x00=墓碑 0x02=PAD（回卷填充）
 | **P3** | `tuya_device_timer.c` / `tuya_ai_client.c` / `tuya_ipc_p2p_common.c` | 28 | 当前未编译，同步改以免将来断 |
 
 调用范式转换：
-- `tal_kv_get(k,&v,&len)` + `tal_kv_free(v)` → `tal_data_read(k, buf, sizeof(buf), &len)`（20 处需按各自数据规模给出 buffer）
-- `tal_kv_set(k,v,len)` → `tal_data_write(k,v,len)`（机械替换）
-- `tal_kv_del(k)` → `tal_data_erase(k)`（机械替换）
+- `tal_kv_get(k,&v,&len)` + `tal_kv_free(v)` → `tal_kv_read(k, buf, sizeof(buf), &len)`（20 处需按各自数据规模给出 buffer）
+- `tal_kv_set(k,v,len)` → `tal_kv_write(k,v,len)`（机械替换）
+- `tal_kv_del(k)` → `tal_kv_erase(k)`（机械替换）
 
 ## 九、验收标准
 

@@ -1,13 +1,13 @@
 /**
- * @file tkl_data.c
- * @brief tal_data 平台 ops 卡：Linux 用"区域文件"模拟一块可读写擦的数据区
+ * @file tkl_kv.c
+ * @brief tal_kv 平台 ops 卡：Linux 用"区域文件"模拟一块可读写擦的数据区
  *
  * 区域 = ./tuyadb/data.bin（默认 256KB）；擦除 = 该范围写 0xFF（模拟 flash 擦除态）。
  * 移植其它平台时替换本文件：flash 直接映射分区、EEPROM 直接映射地址空间。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
-#include "tal_data_ops.h"
+#include "tal_kv_ops.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -33,7 +33,7 @@ static OPERATE_RET data_region_prefill(FILE *fp)
     return OPRT_OK;
 }
 
-static OPERATE_RET tkl_data_init(TAL_DATA_REGION_T *region)
+static OPERATE_RET tkl_kv_init(TAL_KV_REGION_T *region)
 {
     if (NULL == region) {
         return OPRT_INVALID_PARM;
@@ -79,7 +79,7 @@ static OPERATE_RET tkl_data_init(TAL_DATA_REGION_T *region)
     return OPRT_OK;
 }
 
-static OPERATE_RET tkl_data_read(uint32_t offset, uint8_t *buf, uint32_t len)
+static OPERATE_RET tkl_kv_read(uint32_t offset, uint8_t *buf, uint32_t len)
 {
     if (NULL == s_region_fp || NULL == buf || offset > DATA_REGION_SIZE || len > DATA_REGION_SIZE - offset) {
         return OPRT_INVALID_PARM;
@@ -90,7 +90,7 @@ static OPERATE_RET tkl_data_read(uint32_t offset, uint8_t *buf, uint32_t len)
     return (len == fread(buf, 1, len, s_region_fp)) ? OPRT_OK : OPRT_COM_ERROR;
 }
 
-static OPERATE_RET tkl_data_write(uint32_t offset, const uint8_t *buf, uint32_t len)
+static OPERATE_RET tkl_kv_write(uint32_t offset, const uint8_t *buf, uint32_t len)
 {
     if (NULL == s_region_fp || NULL == buf || offset > DATA_REGION_SIZE || len > DATA_REGION_SIZE - offset) {
         return OPRT_INVALID_PARM;
@@ -105,7 +105,7 @@ static OPERATE_RET tkl_data_write(uint32_t offset, const uint8_t *buf, uint32_t 
     return OPRT_OK;
 }
 
-static OPERATE_RET tkl_data_erase(uint32_t offset, uint32_t len)
+static OPERATE_RET tkl_kv_erase(uint32_t offset, uint32_t len)
 {
     static uint8_t s_ff[256];
     memset(s_ff, 0xFF, sizeof(s_ff));
@@ -128,12 +128,12 @@ static OPERATE_RET tkl_data_erase(uint32_t offset, uint32_t len)
 }
 
 /* ---------------------------------------------------------------------------
- * 平台 ops 卡：由本文件组装，core 的 tal_data.c 经 extern 引用完成分发。
+ * 平台 ops 卡：由本文件组装，core 的 tal_kv.c 经 extern 引用完成分发。
  * 移植新平台时提供同名卡与 4 个区域原语即可。
  * --------------------------------------------------------------------------- */
-TAL_DATA_OPS_T tal_data_ops_platform = {
-    .init = tkl_data_init,
-    .read = tkl_data_read,
-    .write = tkl_data_write,
-    .erase = tkl_data_erase,
+TAL_KV_OPS_T tal_kv_ops_platform = {
+    .init = tkl_kv_init,
+    .read = tkl_kv_read,
+    .write = tkl_kv_write,
+    .erase = tkl_kv_erase,
 };

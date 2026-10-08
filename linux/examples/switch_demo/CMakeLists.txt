@@ -125,9 +125,9 @@ endif()
 list(APPEND _switch_demo_link -Wl,--end-group tuyaopen-port tuyaopen-headers)
 target_link_libraries(switch_demo PRIVATE ${_switch_demo_link})
 
-# tal_data 自测（独立可执行，链接与 switch_demo 相同的库）
-add_executable(tal_data_selftest tal_data_selftest.c)
-target_link_libraries(tal_data_selftest PRIVATE ${_switch_demo_link})
+# tal_kv 自测（独立可执行，链接与 switch_demo 相同的库）
+add_executable(tal_kv_selftest tal_kv_selftest.c)
+target_link_libraries(tal_kv_selftest PRIVATE ${_switch_demo_link})
 unset(_switch_demo_link)
 
 # tal_wired / tal_bluetooth 头经各自 PUBLIC include 传递
