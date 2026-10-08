@@ -20,19 +20,34 @@ tal_kv (TAL：4 个公开 API + 日志式 KV 引擎 + AES 加解密 + ops 分发
        └─ tkl_kv (port：一块区域 + 区域读写擦，Linux 实现 = 一个区域文件)
 ```
 
-## 二、公开 API（`tal_kv.h`，对上 4 个接口）
+## 二、公开 API（`tal_kv.h`）—— 与旧 tal_kv 逐字兼容
+
+**对外门面 = 旧 `tal_kv` 全套**（用户最终决策，2026-10-08）：签名与旧头**逐字一致**，故上层 78 个调用点**零改动**；新引擎作为内部 static 实现。
 
 ```c
-OPERATE_RET tal_kv_init(const char *seed, const char *key);
-OPERATE_RET tal_kv_read(const char *name, uint8_t *buf, size_t buf_size, size_t *out_len);
-OPERATE_RET tal_kv_write(const char *name, const uint8_t *buf, size_t len);
-OPERATE_RET tal_kv_erase(const char *name);
+int tal_kv_init(tal_kv_cfg_t *kv_cfg);                              /* cfg 提供 seed/key */
+int tal_kv_set(const char *key, const uint8_t *value, size_t length);
+int tal_kv_get(const char *key, uint8_t **value, size_t *length);   /* 分配返回，末尾补 '\0' */
+int tal_kv_free(uint8_t *value);
+int tal_kv_del(const char *key);
+int tal_kv_serialize_set(const char *key, kv_db_t *db, size_t dbcnt);
+int tal_kv_serialize_get(const char *key, kv_db_t *db, size_t dbcnt);
 ```
 
-- `init(seed, key)`：准备区域 + 全区域扫描建索引 + 派生 AES 密钥；重复调用幂等
-- `read`：调用方提供 buffer 与尺寸，`*out_len` 回填实际长度；**无 free 接口**
-- `write`：同名覆盖（追加新记录，旧记录自然失效）
-- `erase`：追加墓碑记录；name 不存在视为成功（幂等）
+类型 `kv_tp_t` / `kv_db_t` / `tal_kv_cfg_t` / `TAL_LV_KEY_LEN` 同样逐字保留；`tal_kv_cmd`（CLI）与 `tal_lfs_get` 随旧链路删除。
+
+**内部引擎（static，不对外）**：
+
+```c
+static OPERATE_RET __engine_init(const char *seed, const char *key);
+static OPERATE_RET __engine_read(const char *name, uint8_t *buf, size_t buf_size, size_t *out_len);
+static OPERATE_RET __engine_write(const char *name, const uint8_t *buf, size_t len);
+static OPERATE_RET __engine_erase(const char *name);
+```
+
+- `tal_kv_get` 用"探测尺寸 → 分配 → 复读 → 补 `\0`"包住引擎的"调用方给 buffer"语义，调用方用 `tal_kv_free` 释放
+- `tal_kv_serialize_*` 沿用旧 `kv_serialize.c` 语义（cJSON 实现；`db[i].len` 在 STRING 下是缓冲容量、在 RAW 下是编码前长度）
+- **线程安全**：旧实现持 `lfs_mutex`，新实现在**公开 API 层**持一把 `s_kv_mutex`（`tal_kv_init` 创建；`tal_kv_get` 的探测+复读整段持锁；引擎 static 函数不加锁以避免重入）
 
 ## 三、ops 卡契约（`tal_kv_ops.h`，区域语义）
 
@@ -76,19 +91,19 @@ TAL_KV_OPS_T *tal_kv_get_ops(void);
 - **port 做 name→bytes**（每 name 一个文件）：Linux 最直观，但 flash 平台做不了（要么自带 FS、要么自己写 K-V），与"port 尽量简单"冲突
 - **port 只给定长扇区**（read/write/erase_sector）：port 更简，但 TAL 需自己做扇区内分配——复杂度转移且更死板，小数据写放大严重
 
-## 四、区域布局（TAL 定义，与平台无关）—— 日志式
+## 四、区域布局（TAL 定义，与平台无关）—— 线性追加日志
 
-区域是一段**环形日志**：记录从低偏移向高偏移追加，写满后压缩回收。
+区域是一段**只追加的线性日志**：记录从偏移 0 顺序追加，**从不回卷、从不压缩、从不擦除**；区域满即报错（见第五、六节）。
 
 ```
 偏移 0                                                          size
-┌──────────────────────────────┬────────────────┬───────────────┐
-│ 已写区（有效记录 + 墓碑 + 失效旧记录）│  空闲（0xFF）   │
-└──────────────────────────────┴────────────────┴───────────────┘
-       ↑ head（最老记录）              ↑ tail（追加点）
+┌──────────────────────────────────────────────┬───────────────┐
+│ 已写区（有效记录 + 墓碑 + 被覆盖的旧记录）        │  空闲（0xFF）  │
+└──────────────────────────────────────────────┴───────────────┘
+                                                ↑ tail（追加点）
 ```
 
-**记录格式（变长，不跨区域末尾——放不下时写 PAD 记录后回卷到 0）**：
+**记录格式（变长，不跨区域末尾——放不下即视为区域满）**：
 
 ```
 ┌───────┬───────┬──────┬─────────┬───────┬──────┬───────┐
@@ -96,10 +111,10 @@ TAL_KV_OPS_T *tal_kv_get_ops(void);
 │  2B   │  1B   │ 4B   │   1B    │ ≤63B  │      │  4B   │
 └───────┴───────┴──────┴─────────┴───────┴──────┴───────┘
 （name 之后为 datalen(4B) + data(密文)，crc32 覆盖 magic 之后到 data 结束）
-state：0x01=有效 0x00=墓碑 0x02=PAD（回卷填充）
+state：0x01=有效 0x00=墓碑（0x02=PAD 为历史设计保留，当前不产生）
 ```
 
-- **seq**：单调递增序号（每次 write/erase +1），用于解决"同名多条记录谁最新"与压缩期间新旧副本并存的问题
+- **seq**：单调递增序号（每次 write/erase +1），用于"同名多条记录谁最新"——`init` 扫描时取每个 name 的 seq 最大者；墓碑按同规则移除同名索引项（否则 erase 会在重启后被旧记录"复活"）
 - **数据区内容为 AES 密文**（加密在 TAL，port 只见字节）
 
 ## 五、数据流
@@ -131,7 +146,7 @@ state：0x01=有效 0x00=墓碑 0x02=PAD（回卷填充）
 | `read` 的 `buf` 为 NULL | 合法：仅回填 `*out_len`（探测尺寸），返回 `OPRT_OK` |
 | `read` 时 name 不存在、或记录 CRC 校验失败（撕裂写） | `OPRT_NOT_FOUND` |
 | `read` 时明文长度 > `buf_size` | `OPRT_INVALID_PARM`，`*out_len` 回填真实长度 |
-| 区域满（压缩也无法腾出空间） | `OPRT_COM_ERROR` |
+| 区域满（追加空间不足） | `OPRT_COM_ERROR`（**先判后写，绝不覆盖已有记录**） |
 | 加解密失败 / port IO 失败 | `OPRT_COM_ERROR` / 透传 |
 
 - name 字符集与现有 key 完全兼容（`region`、`endpoint.cert`、`<uuid>.devid`(42 字符)、`tls_ca%d` 等均合法）
@@ -150,11 +165,9 @@ state：0x01=有效 0x00=墓碑 0x02=PAD（回卷填充）
 
 删后需**清空 build 目录重新 configure**（`CONFIGURE_DEPENDS` 不会摘除已消失的子目录 target）。
 
-## 八、迁移清单（**2026-10-08 决策：改用兼容层，上层零改动**）
+## 八、迁移清单（**2026-10-08 决策：公开 API 即旧 tal_kv 全套 → 上层零改动，无需迁移**）
 
-> 用户决策：**上层保持 `tal_kv_*` 命名**，底层换 `tal_kv`/`tkl_kv` → iot-core / examples / p2p 的 78 个调用点**一个都不用改**。
->
-> 新增 **`tal_kv` 兼容层**（`third_party/tal_kv_compat/`，target 名与头名沿用 `tal_kv`）：实现旧的 8 个 API over `tal_kv`（`get` 保留"分配返回 + `tal_kv_free`"语义，`serialize_get/set` 用 cJSON 重新实现）。因 target 名/头名未变，`tal_api.h:55` 的 include、`tuyaopen-core.cmake` 与 iot-core/agent-core/p2p 的 CMake 引用**全部原样解析**。
+> 用户决策：`tal_kv` 模块的**对外门面保持旧 API**（头名/符号/签名逐字不变），新引擎作内部实现 → iot-core / examples / p2p 的 78 个调用点**一个都不用改**，也不需要独立的兼容层文件。
 >
 > 下表原为逐点迁移清单，**已作废**，仅作历史记录。
 
@@ -179,15 +192,17 @@ state：0x01=有效 0x00=墓碑 0x02=PAD（回卷填充）
 3. 区域文件 `./tuyadb/data.bin` 生成；内容为密文记录（不可读）
 4. **重启后数据可读**：跑一次绑定 → 杀掉 → 再跑，绑定状态保持
 5. 边界用例：超长 name、不存在 name、buffer 过小、空数据、**撕裂写**（人为破坏某条记录后读取应返回 NOT_FOUND 而非脏数据）
-6. **压缩正确性**：构造"区域接近写满"场景，触发压缩后所有 name 仍可读；**压缩中途掉电模拟**（人为截断新副本）后重启，旧数据仍可读
+6. **区域满安全**：持续写大数据直到返回 `OPRT_COM_ERROR`，**已写入的 key 必须全部仍可读**（不得覆盖/丢失）；并发用例（多线程各写各 key）验证锁的有效性
 
 ## 十、风险与限制
 
 1. **init 扫描开销**：全区域顺序扫描（默认 256KB）——Linux 微秒级；SPI flash 约几十 ms，仅在启动时发生
-2. **压缩是必需路径**：触发条件是"追加空间不足"；压缩本身需要 `空闲 ≥ 有效数据量 + 新记录`，否则报区域满。若某场景长期"有效数据接近区域容量"，需增大区域（宏可配）
-3. **磨损**：追加式天然分散；压缩时才发生擦除（搬移后的旧区）。相比索引式的"每次写一次擦"，磨损低若干数量级
+2. **区域满**：追加空间不足即报 `OPRT_COM_ERROR`（**先判后写，绝不覆盖**）。**不做回收** → 覆盖写与删除都持续占用空间，**区域必须按平台写入总量开得足够大**（本仓库默认 256KB）；写满后连 `erase` 也会失败（墓碑同样要追加）。将来若需长寿命循环写，需单独立项引入压缩（届时重新设计并评审）
+3. **磨损**：线性追加天然分散擦写（写满前不发生擦除），比"原地更新"方案磨损更低
 4. **密钥仍由应用硬编码**（与现状一致）；将来可改为安全存储提供
 5. `tal-interface-cleanup-candidates.md` 中关于 tal_kv/tal_fs 的"保留"条目需同步更新
 6. **两个加密 API 的实现地雷（Task 2 实测踩到）**：
    - mbedtls CBC **会就地改写传入的 IV**——实现必须每次调用前把全局 IV 拷到局部副本再传（旧 `tal_kv` 正是这样规避），否则全局 IV 被污染后**每次解密首 16 字节全错**，属静默数据损坏
    - `tal_aes128_cbc_decode` 返回的是**密文长度**，需再用 `tal_aes_get_actual_length()` 按 PKCS7 求实际明文长度
+7. **撕裂写后的就地重写限制（移植 flash 平台时需评估）**：`init` 扫描遇非法记录即断为日志尾，`s_tail` 指向该记录起点 → 下次追加会**就地重写**该偏移；真 NOR flash 未擦除无法可靠重写，可能陷入"写坏→再写坏"的卡尾。当前 Linux 文件实现无此问题（可覆盖写）
+8. **port IO 失败被当日志尾**：`init` 扫描中任何 `ops->read` 失败都被当作日志结束 → 瞬时 IO 错误可能让 tail 停在半途、后续写覆盖其后数据。Linux 文件实现下不可达，移植时需加固（区分"读到空闲区"与"读失败"）

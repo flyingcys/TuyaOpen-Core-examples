@@ -1818,7 +1818,11 @@ static int test_kv_region_full(void)
 
 ---
 
-## Task 4: 迁移 `tuya_main.c`（P0）
+## Task 4: 【已由"公开 API 落地"任务取代——见设计文档第二节】
+
+> 2026-10-08 最终决策：公开 API 即旧 tal_kv 全套 → 上层零改动，原 Task 4~8 的逐点迁移**全部取消**。以下 Task 4~8 内容仅作历史记录。
+
+## Task 4（历史）: 迁移 `tuya_main.c`（P0）
 
 **Files:**
 - Modify: `examples/switch_demo/src/tuya_main.c:258`（`tal_kv_init`）
