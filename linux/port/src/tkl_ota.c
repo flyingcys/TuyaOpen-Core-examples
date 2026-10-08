@@ -24,24 +24,6 @@
 static FILE *s_upgrade_fd = NULL;
 
 /**
-* @brief get ota ability
-*
-* @param[out] image_size:  max image size
-* @param[out] type:        ota type
-*
-* @note This API is used for get chip ota ability
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-static OPERATE_RET tkl_ota_get_ability(uint32_t *image_size, TUYA_OTA_TYPE_E *type)
-{
-    *image_size = -1;
-    *type = TUYA_OTA_FULL | TUYA_OTA_DIFF;
-
-    return OPRT_OK;
-}
-
-/**
 * @brief ota start notify
 *
 * @param[in] image_size:  image size
@@ -132,7 +114,6 @@ static OPERATE_RET tkl_ota_end_notify(BOOL_T reset)
  * tal_ota_* 分发。OTA 为平台可选能力，与主卡（tkl_runtime.c）解耦。
  * --------------------------------------------------------------------------- */
 TAL_OTA_OPS_T tal_ota_ops_platform = {
-    .get_ability = tkl_ota_get_ability,
     .start_notify = tkl_ota_start_notify,
     .data_process = tkl_ota_data_process,
     .end_notify = tkl_ota_end_notify,

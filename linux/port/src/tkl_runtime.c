@@ -723,20 +723,6 @@ static OPERATE_RET tkl_thread_is_self(const TKL_THREAD_HANDLE thread, BOOL_T *is
     return OPRT_OK;
 }
 
-/**
-* @brief Diagnose the thread(dump task stack, etc.)
-*
-* @param[in] thread: thread handle
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-static OPERATE_RET tkl_thread_diagnose(const TKL_THREAD_HANDLE thread)
-{
-    (void)thread;
-
-    return OPRT_NOT_SUPPORTED;
-}
-
 /* ---------------------------------------------------------------------------
  * queue 实现（原 port/src/tkl_queue.c，ops 卡私有）
  * --------------------------------------------------------------------------- */
@@ -1205,7 +1191,6 @@ TAL_API_OPS_T tal_api_ops_platform = {
     .thread_release = tkl_thread_release,
     .thread_set_self_name = tkl_thread_set_self_name,
     .thread_is_self = tkl_thread_is_self,
-    .thread_diagnose = tkl_thread_diagnose,
     //! queue
     .queue_create_init = tkl_queue_create_init,
     .queue_post = tkl_queue_post,
