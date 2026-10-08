@@ -5,8 +5,9 @@
  *      a) 编译命令/IDE 全局宏：-DENABLE_WIFI=1（只传要开启的）
  *      b) 取消注释下方对应 #define
  *      注意：开关值必须与实际参与编译的源文件一致，否则链接失败。
- *      （原示例的 ENABLE_WIFI → tal_wifi/netcfg/port 的 tkl_wifi 链路已随这些
- *      模块整体删除而消失，该开关当前无源码消费者。）
+ *      （ENABLE_WIFI 的消费者现为 p2p 的 pj_tuyaos_local_ip.c（有 WiFi 时取 WiFi
+ *      接口 IP）；Linux port 已无 WiFi 实现（tal_wifi/tkl_wifi 均已删除），
+ *      该开关在 Linux 上开启不会报错、但对应分支取不到 WiFi 地址。）
  *   2. 板级宏：LINUX 平台的默认值
  *   3. 参数默认值：全部 #ifndef 保护，可被 -D 覆盖
  */
