@@ -24,7 +24,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -46,7 +45,11 @@
  * 把 __flash_* 映射到实际分区，且 __flash_erase 必须调块擦除命令
  * （写 0xFF 对 NOR flash 是 no-op）。
  * ===== */
+/* 与 linux_wifi.h 协同的可覆盖点：构建可 -DFLASH_FILE_PATH=... 统一改目录
+ * （内联原 tkl_flash.c 时保留其 #ifndef guard，否则注入时两处目录分裂） */
+#ifndef FLASH_FILE_PATH
 #define FLASH_FILE_PATH    "./tuyadb"
+#endif
 #define FLASH_FILE_NAME    FLASH_FILE_PATH "/tuyadb"
 #define FLASH_FILE_SIZE    (256 * 1024 * 1024)
 #define FLASH_PARTITION_SZ (1 << 12)                                /* 4KB，littlefs 的 block/read/prog 粒度 */
@@ -60,7 +63,7 @@ static FILE *s_flash_file;
 /* 首次创建时预填 0xFF（模拟擦除态；littlefs 依赖未写区域为 0xFF） */
 static OPERATE_RET __flash_file_prefill(void)
 {
-    char *data = malloc(FLASH_PARTITION_SZ);
+    char *data = tal_malloc(FLASH_PARTITION_SZ);
     if (NULL == data) {
         return OPRT_MALLOC_FAILED;
     }
@@ -68,11 +71,11 @@ static OPERATE_RET __flash_file_prefill(void)
     memset(data, 0xff, FLASH_PARTITION_SZ);
     for (uint32_t offset = 0; offset < FLASH_FILE_SIZE; offset += FLASH_PARTITION_SZ) {
         if (FLASH_PARTITION_SZ != fwrite(data, 1, FLASH_PARTITION_SZ, s_flash_file)) {
-            free(data);
+            tal_free(data);
             return OPRT_FILE_WRITE_FAILED;
         }
     }
-    free(data);
+    tal_free(data);
 
     fflush(s_flash_file);
     int fd = fileno(s_flash_file);
@@ -103,6 +106,7 @@ static OPERATE_RET __flash_open(void)
         if (OPRT_OK != __flash_file_prefill()) {
             fclose(s_flash_file);
             s_flash_file = NULL;
+            remove(FLASH_FILE_NAME); /* 清掉半成品：否则下次 access 命中、永不再预填 */
             return OPRT_FILE_WRITE_FAILED;
         }
     } else {

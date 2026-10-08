@@ -11,7 +11,7 @@
 | 层 | 内容 |
 |---|---|
 | core | `tal_kv.h`（`init/set/get/del` 4 接口 + `tal_kv_cfg_t`/`TAL_LV_KEY_LEN`）、`tal_kv_ops.h`（`TAL_KV_OPS_T` 四函数指针）、`tal_kv.c`（`TAL_KV_EXEC_OP` 透传，约 60 行） |
-| port（Linux） | `port/src/tkl_kv.c`：旧 littlefs 实现改造（`tkl_kv_init/set/get/del` + `tal_kv_ops_platform`）；配套恢复 `port/littlefs/`、`port/src/tkl_flash.c`、`port/include/system/lfs_config.h`（源自子模块 `8fa1d6a^` / 外层 `ecc0d10^`） |
+| port（Linux） | `port/src/tkl_kv.c`：旧 littlefs 实现改造（`tkl_kv_init/set/get/del` + `tal_kv_ops_platform`），并**内联 flash 模拟**（原 tkl_flash.c：`./tuyadb/tuyadb` 文件 + UF 分区，标准 C IO，不依赖 tkl_fs）；配套恢复 `port/littlefs/`、`port/include/system/lfs_config.h`（源自子模块 `8fa1d6a^`） |
 | port（其他平台） | 换平台 = 换一个 `tkl_kv.c`（ESP32 可映射 NVS），core 零改动 |
 
 **接口收敛**（旧 7 → 新 4）：
@@ -23,7 +23,9 @@
 **分工原则**：存储介质、记录格式、加密、序列化**全部是 port 内部细节**；core 不做任何 KV 逻辑。
 Linux 实现保留旧行为：AES-128-CBC（seed/key 经 SHA256 派生，IV=seed）+ mutex 线程安全 + littlefs（自带磨损均衡与掉电保护）。
 
-**提交**：子模块 `ba58b24`…`43a79bc`、外层 `9961ff8`…`ffa62d7`（2026-10-08）。
+**介质契约（port 实现相关）**：Linux 文件实现的 `erase` 为 **no-op**——文件可覆盖写，靠预填 0xFF + littlefs 的 CRC 提交语义维持；**真 flash 平台必须实现块擦除命令**（写 0xFF 对 NOR 是 no-op），并把 `tkl_kv.c` 的 `__flash_*` 替换为实际分区访问。`FLASH_FILE_PATH` 与 `port/src/tkl_wifi/linux_wifi.h` 是协同的可覆盖点（构建可 `-D` 注入统一改目录）。
+
+**提交**：子模块 `ba58b24`…`43a79bc`、外层 `9961ff8` 起（2026-10-08；后续增量见 git log）。
 
 **验证**：干净目录单独构建测试目标 exit 0；全量构建 exit 0；自测（10 用例黑盒）新旧存储路径各 ALL TESTS PASSED（含变异反证）；e2e exit 124 + TLS×2 + MQTT + QR 22 行；压力探针 160KB 写入（>96KB 分区）触发 littlefs 块回收全验证；ASan + UBSan 自测全绿。
 
