@@ -122,32 +122,6 @@ OPERATE_RET tkl_net_fd_set(int fd, TUYA_FD_SET_T *fds)
     return ret;
 }
 
-#if defined(ENABLE_TUYA_P2P)
-/* p2p 专用：仅 p2p-core/pjproject 的 sock_select_tal.c 经 tal_net_fd_clear 调用 */
-/**
- * @brief Clear file descriptor from set
- *
- * @param[in] fd: file descriptor
- * @param[in] fds: set of file descriptor
- *
- * @note This API is used to clear file descriptor from set.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tkl_net_fd_clear(int fd, TUYA_FD_SET_T *fds)
-{
-    int ret = OPRT_OK;
-
-    if ((fd < 0) || (fds == NULL)) {
-        return -3000 + fd;
-    }
-
-    FD_CLR(fd, TAL_TO_SYS_FD_SET(fds));
-
-    return ret;
-}
-#endif /* ENABLE_TUYA_P2P */
 
 /**
  * @brief Check file descriptor is in set
@@ -354,31 +328,6 @@ TUYA_ERRNO tkl_net_connect(const int fd, const TUYA_IP_ADDR_T addr, const uint16
     sock_addr.sin_addr.s_addr = htonl(tmp_addr);
 
     ret = connect(fd, (struct sockaddr *)&sock_addr, sizeof(struct sockaddr_in));
-    return ret;
-}
-
-/**
- * @brief Connect to network with raw data
- *
- * @param[in] fd: file descriptor
- * @param[in] p_socket: raw socket data
- * @param[in] len: data lenth
- *
- * @note This API is used for connecting to network with raw data.
- *
- * @return 0 on success. Others on error, please refer to the error no of the
- * target system
- */
-TUYA_ERRNO tkl_net_connect_raw(const int fd, void *p_socket_addr, const int len)
-{
-    int ret = -1;
-
-    if (fd < 0) {
-        return -3000 + fd;
-    }
-
-    ret = connect(fd, (struct sockaddr *)p_socket_addr, len);
-
     return ret;
 }
 
@@ -725,28 +674,6 @@ OPERATE_RET tkl_net_setsockopt(const int fd, const TUYA_OPT_LEVEL level, const T
 }
 
 /**
- * @brief Get socket options
- *
- * @param[in] fd: file descriptor
- * @param[in] level: getting level
- * @param[in] optname: the name of the option
- * @param[out] optval: the value of option
- * @param[out] optlen: the length of the option value
- *
- * @note This API is used for getting socket options.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tkl_net_getsockopt(const int fd, const TUYA_OPT_LEVEL level, const TUYA_OPT_NAME optname,
-                                     void *optval, int *optlen)
-{
-    int ret = -1;
-
-    ret = getsockopt(fd, level, optname, optval, (socklen_t *)optlen);
-
-    return ret;
-}
 
 /**
  * @brief Set timeout option of socket fd
@@ -777,36 +704,6 @@ OPERATE_RET tkl_net_set_timeout(const int fd, const int ms_timeout, const TUYA_T
     return ret;
 }
 
-#if defined(ENABLE_TUYA_P2P)
-/* p2p 专用：仅 p2p-core/pjproject 的 sock_tal.c 经 tal_net_set_bufsize 调用 */
-/**
- * @brief Set buffer_size option of socket fd
- *
- * @param[in] fd: file descriptor
- * @param[in] buf_size: buffer size in byte
- * @param[in] type: transfer type, receive or send
- *
- * @note This API is used for setting buffer_size option of socket fd.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tkl_net_set_bufsize(const int fd, const int buf_size, const TUYA_TRANS_TYPE_E type)
-{
-    int ret = -1;
-
-    if (fd < 0) {
-        return -3000 + fd;
-    }
-
-    int size = buf_size;
-    int optname = ((type == TRANS_RECV) ? SO_RCVBUF : SO_SNDBUF);
-
-    ret = tkl_net_setsockopt(fd, SOL_SOCKET, optname, (const char *)&size, sizeof(size));
-
-    return ret;
-}
-#endif /* ENABLE_TUYA_P2P */
 
 /**
  * @brief Enable reuse option of socket fd
@@ -859,27 +756,6 @@ OPERATE_RET tkl_net_disable_nagle(const int fd)
 }
 
 /**
- * @brief Enable broadcast option of socket fd
- *
- * @param[in] fd: file descriptor
- *
- * @note This API is used to enable broadcast option of socket fd.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tkl_net_set_broadcast(const int fd)
-{
-    int ret = -1;
-
-    if (fd < 0) {
-        return -3000 + fd;
-    }
-    int flag = 1;
-    ret = tkl_net_setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (const char *)&flag, sizeof(int));
-
-    return ret;
-}
 
 /**
  * @brief Get address information by domain
@@ -949,31 +825,6 @@ OPERATE_RET tkl_net_set_keepalive(int fd, const BOOL_T alive, const uint32_t idl
 }
 
 /**
- * @brief Get ip address by socket fd
- *
- * @param[in] fd: file descriptor
- * @param[out] addr: ip address
- *
- * @note This API is used for getting ip address by socket fd.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tkl_net_get_socket_ip(int fd, TUYA_IP_ADDR_T *addr)
-{
-    int ret = -1;
-
-    struct sockaddr_in sock_addr;
-    memset(&sock_addr, 0, sizeof(sock_addr));
-    socklen_t len = sizeof(sock_addr);
-
-    if (0 == getsockname(fd, (struct sockaddr *)&sock_addr, &len)) {
-        *addr = ntohl(sock_addr.sin_addr.s_addr);
-        ret = OPRT_OK;
-    }
-
-    return ret;
-}
 
 /**
  * @brief Change ip string to address
@@ -1014,7 +865,65 @@ char *tkl_net_addr2str(TUYA_IP_ADDR_T ipaddr)
     return inet_ntoa(hostaddr);
 }
 
+
+
+/* ===== p2p 专用接口（ENABLE_TUYA_P2P，仅 p2p-core/pjproject 使用）=====
+ * 由 port 的 CMake 从 CONFIG_ENABLE_TUYA_P2P 映射注入；不用 p2p 的平台无需
+ * 适配这 5 个接口，对应卡成员为 NULL（core 侧 TAL_NET_EXEC_OP 有兜底）。
+ * ===== */
 #if defined(ENABLE_TUYA_P2P)
+/* p2p 专用：仅 p2p-core/pjproject 的 sock_select_tal.c 经 tal_net_fd_clear 调用 */
+/**
+ * @brief Clear file descriptor from set
+ *
+ * @param[in] fd: file descriptor
+ * @param[in] fds: set of file descriptor
+ *
+ * @note This API is used to clear file descriptor from set.
+ *
+ * @return OPRT_OK on success. Others on error, please refer to
+ * tuya_error_code.h
+ */
+OPERATE_RET tkl_net_fd_clear(int fd, TUYA_FD_SET_T *fds)
+{
+    int ret = OPRT_OK;
+
+    if ((fd < 0) || (fds == NULL)) {
+        return -3000 + fd;
+    }
+
+    FD_CLR(fd, TAL_TO_SYS_FD_SET(fds));
+
+    return ret;
+}
+/* p2p 专用：仅 p2p-core/pjproject 的 sock_tal.c 经 tal_net_set_bufsize 调用 */
+/**
+ * @brief Set buffer_size option of socket fd
+ *
+ * @param[in] fd: file descriptor
+ * @param[in] buf_size: buffer size in byte
+ * @param[in] type: transfer type, receive or send
+ *
+ * @note This API is used for setting buffer_size option of socket fd.
+ *
+ * @return OPRT_OK on success. Others on error, please refer to
+ * tuya_error_code.h
+ */
+OPERATE_RET tkl_net_set_bufsize(const int fd, const int buf_size, const TUYA_TRANS_TYPE_E type)
+{
+    int ret = -1;
+
+    if (fd < 0) {
+        return -3000 + fd;
+    }
+
+    int size = buf_size;
+    int optname = ((type == TRANS_RECV) ? SO_RCVBUF : SO_SNDBUF);
+
+    ret = tkl_net_setsockopt(fd, SOL_SOCKET, optname, (const char *)&size, sizeof(size));
+
+    return ret;
+}
 /* p2p 专用：仅 p2p-core/pjproject 的 sock_tal.c 经 tal_net_shutdown 调用 */
 /**
  * @brief Disable send and/or receive on a socket
@@ -1036,9 +945,6 @@ TUYA_ERRNO tkl_net_shutdown(const int fd, const int how)
 
     return shutdown(fd, how);
 }
-#endif /* ENABLE_TUYA_P2P */
-
-#if defined(ENABLE_TUYA_P2P)
 /* p2p 专用：仅 p2p-core/pjproject 的 sock_tal.c 经 tal_net_getsockname /
  * tal_net_getpeername 调用（地址探测，用于 ICE 候选） */
 /**
@@ -1128,21 +1034,14 @@ TAL_NETWORK_CARD_T tal_network_card_platform = {
         {
             .get_errno = tkl_net_get_errno,
             .fd_set = tkl_net_fd_set,
-#if defined(ENABLE_TUYA_P2P)
-            .fd_clear = tkl_net_fd_clear,
-#endif
             .fd_isset = tkl_net_fd_isset,
             .fd_zero = tkl_net_fd_zero,
             .select = tkl_net_select,
             .get_nonblock = tkl_net_get_nonblock,
             .set_block = tkl_net_set_block,
             .close = tkl_net_close,
-#if defined(ENABLE_TUYA_P2P)
-            .shutdown = tkl_net_shutdown,
-#endif
             .socket_create = tkl_net_socket_create,
             .connect = tkl_net_connect,
-            .connect_raw = tkl_net_connect_raw,
             .bind = tkl_net_bind,
             .listen = tkl_net_listen,
             .send = tkl_net_send,
@@ -1152,22 +1051,20 @@ TAL_NETWORK_CARD_T tal_network_card_platform = {
             .recv_nd_size = tkl_net_recv_nd_size,
             .recvfrom = tkl_net_recvfrom,
             .set_timeout = tkl_net_set_timeout,
-#if defined(ENABLE_TUYA_P2P)
-            .set_bufsize = tkl_net_set_bufsize,
-#endif
             .set_reuse = tkl_net_set_reuse,
             .disable_nagle = tkl_net_disable_nagle,
-            .set_broadcast = tkl_net_set_broadcast,
             .gethostbyname = tkl_net_gethostbyname,
             .set_keepalive = tkl_net_set_keepalive,
-            .get_socket_ip = tkl_net_get_socket_ip,
-#if defined(ENABLE_TUYA_P2P)
-            .getsockname = tkl_net_getsockname,
-            .getpeername = tkl_net_getpeername,
-#endif
             .str2addr = tkl_net_str2addr,
             .addr2str = tkl_net_addr2str,
             .setsockopt = tkl_net_setsockopt,
-            .getsockopt = tkl_net_getsockopt,
+#if defined(ENABLE_TUYA_P2P)
+            /* p2p 专用成员（实现见本文件 p2p 集中块） */
+            .fd_clear = tkl_net_fd_clear,
+            .shutdown = tkl_net_shutdown,
+            .set_bufsize = tkl_net_set_bufsize,
+            .getsockname = tkl_net_getsockname,
+            .getpeername = tkl_net_getpeername,
+#endif
         },
 };

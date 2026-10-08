@@ -24,19 +24,6 @@
  */
 OPERATE_RET tkl_net_set_timeout(const int fd, const int ms_timeout, const TUYA_TRANS_TYPE_E type);
 
-#if defined(ENABLE_TUYA_P2P)
-/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：仅 p2p-core/pjproject 经 tal_net_set_bufsize 调用 */
-/**
- * @brief Set buffer_size option of socket fd
- *
- * @param[in] fd: file descriptor
- * @param[in] buf_size: buffer size in byte
- * @param[in] type: transfer type, receive or send
- *
- * @return OPRT_OK on success. Others on error
- */
-OPERATE_RET tkl_net_set_bufsize(const int fd, const int buf_size, const TUYA_TRANS_TYPE_E type);
-#endif
 
 /**
  * @brief Enable reuse option of socket fd
@@ -56,14 +43,6 @@ OPERATE_RET tkl_net_set_reuse(const int fd);
  */
 OPERATE_RET tkl_net_disable_nagle(const int fd);
 
-/**
- * @brief Enable broadcast option of socket fd
- *
- * @param[in] fd: file descriptor
- *
- * @return OPRT_OK on success. Others on error
- */
-OPERATE_RET tkl_net_set_broadcast(const int fd);
 
 /**
  * @brief Set keepalive option of socket fd to monitor the connection
@@ -79,31 +58,6 @@ OPERATE_RET tkl_net_set_broadcast(const int fd);
 OPERATE_RET tkl_net_set_keepalive(int fd, const BOOL_T alive, const uint32_t idle, const uint32_t intr,
                                   const uint32_t cnt);
 
-#if defined(ENABLE_TUYA_P2P)
-/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：sock_tal.c 经 tal_net_getsockname /
- * tal_net_getpeername 做地址探测（ICE 候选） */
-/**
- * @brief Get the local address a socket fd is bound to
- *
- * @param[in] fd: file descriptor
- * @param[out] addr: local ip address in host byte order, may be NULL
- * @param[out] port: local port in host byte order, may be NULL
- *
- * @return OPRT_OK on success. Others on error
- */
-OPERATE_RET tkl_net_getsockname(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port);
-
-/**
- * @brief Get the address of the peer connected to a socket fd
- *
- * @param[in] fd: file descriptor
- * @param[out] addr: peer ip address in host byte order, may be NULL
- * @param[out] port: peer port in host byte order, may be NULL
- *
- * @return OPRT_OK on success. Others on error
- */
-OPERATE_RET tkl_net_getpeername(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port);
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -132,20 +86,6 @@ TUYA_ERRNO tkl_net_get_errno(void);
 */
 OPERATE_RET tkl_net_fd_set(const int fd, TUYA_FD_SET_T* fds);
 
-#if defined(ENABLE_TUYA_P2P)
-/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：sock_select_tal.c 经 tal_net_fd_clear 调用 */
-/**
-* @brief Clear file descriptor from set
-*
-* @param[in] fd: file descriptor
-* @param[in] fds: set of file descriptor
-*
-* @note This API is used to clear file descriptor from set.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_net_fd_clear(const int fd, TUYA_FD_SET_T* fds);
-#endif
 
 /**
 * @brief Check file descriptor is in set
@@ -219,20 +159,6 @@ OPERATE_RET tkl_net_set_block(const int fd, const BOOL_T block);
 */
 TUYA_ERRNO tkl_net_close(const int fd);
 
-#if defined(ENABLE_TUYA_P2P)
-/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：sock_tal.c 经 tal_net_shutdown 调用 */
-/**
-* @brief Shutdown file descriptors
-*
-* @param[in] fd: file descriptor
-* @param[in] how: shutdown type
-*
-* @note This API is used to shutdown file descriptors.
-*
-* @return 0 on success. Others on error, please refer to the error no of the target system
-*/
-TUYA_ERRNO tkl_net_shutdown(const int fd, const int how);
-#endif
 
 /**
 * @brief Create a tcp/udp socket
@@ -258,18 +184,6 @@ int tkl_net_socket_create(const TUYA_PROTOCOL_TYPE_E type);
 */
 TUYA_ERRNO tkl_net_connect(const int fd, const TUYA_IP_ADDR_T addr, const uint16_t port);
 
-/**
-* @brief Connect to network with raw data
-*
-* @param[in] fd: file descriptor
-* @param[in] p_socket: raw socket data
-* @param[in] len: data lenth
-*
-* @note This API is used for connecting to network with raw data.
-*
-* @return 0 on success. Others on error, please refer to the error no of the target system
-*/
-TUYA_ERRNO tkl_net_connect_raw(const int fd, void *p_socket_addr, const int len);
 
 /**
 * @brief Bind to network
@@ -414,17 +328,6 @@ OPERATE_RET tkl_net_socket_bind(const int fd, const char *ip);
 */
 OPERATE_RET tkl_net_set_cloexec(const int fd);
  
-/**
-* @brief Get ip address by socket fd
-*
-* @param[in] fd: file descriptor
-* @param[out] addr: ip address
-*
-* @note This API is used for getting ip address by socket fd.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_net_get_socket_ip(const int fd, TUYA_IP_ADDR_T *addr);
 
 /**
 * @brief Change ip string to address
@@ -463,24 +366,76 @@ char* tkl_net_addr2str(const TUYA_IP_ADDR_T ipaddr);
 */
 OPERATE_RET tkl_net_setsockopt(const int fd, const TUYA_OPT_LEVEL level, const TUYA_OPT_NAME optname, const void *optval, const int optlen);
 
-/**
-* @brief Get socket options
-*
-* @param[in] fd: file descriptor
-* @param[in] level: getting level
-* @param[in] optname: the name of the option
-* @param[out] optval: the value of option
-* @param[out] optlen: the length of the option value
-*
-* @note This API is used for getting socket options.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_net_getsockopt(const int fd, const TUYA_OPT_LEVEL level, const TUYA_OPT_NAME optname, void *optval, int *optlen);
 
 #ifdef __cplusplus
 }
 #endif
+
+
+/* ===== p2p 专用接口（ENABLE_TUYA_P2P，仅 p2p-core/pjproject 使用）=====
+ * 由 port 的 CMake 从 CONFIG_ENABLE_TUYA_P2P 映射注入；不用 p2p 的平台无需
+ * 适配这 5 个接口。
+ * ===== */
+#if defined(ENABLE_TUYA_P2P)
+/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：仅 p2p-core/pjproject 经 tal_net_set_bufsize 调用 */
+/**
+ * @brief Set buffer_size option of socket fd
+ *
+ * @param[in] fd: file descriptor
+ * @param[in] buf_size: buffer size in byte
+ * @param[in] type: transfer type, receive or send
+ *
+ * @return OPRT_OK on success. Others on error
+ */
+OPERATE_RET tkl_net_set_bufsize(const int fd, const int buf_size, const TUYA_TRANS_TYPE_E type);
+/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：sock_tal.c 经 tal_net_getsockname /
+ * tal_net_getpeername 做地址探测（ICE 候选） */
+/**
+ * @brief Get the local address a socket fd is bound to
+ *
+ * @param[in] fd: file descriptor
+ * @param[out] addr: local ip address in host byte order, may be NULL
+ * @param[out] port: local port in host byte order, may be NULL
+ *
+ * @return OPRT_OK on success. Others on error
+ */
+OPERATE_RET tkl_net_getsockname(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port);
+
+/**
+ * @brief Get the address of the peer connected to a socket fd
+ *
+ * @param[in] fd: file descriptor
+ * @param[out] addr: peer ip address in host byte order, may be NULL
+ * @param[out] port: peer port in host byte order, may be NULL
+ *
+ * @return OPRT_OK on success. Others on error
+ */
+OPERATE_RET tkl_net_getpeername(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port);
+/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：sock_select_tal.c 经 tal_net_fd_clear 调用 */
+/**
+* @brief Clear file descriptor from set
+*
+* @param[in] fd: file descriptor
+* @param[in] fds: set of file descriptor
+*
+* @note This API is used to clear file descriptor from set.
+*
+* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
+*/
+OPERATE_RET tkl_net_fd_clear(const int fd, TUYA_FD_SET_T* fds);
+/* p2p 专用（CONFIG_ENABLE_TUYA_P2P）：sock_tal.c 经 tal_net_shutdown 调用 */
+/**
+* @brief Shutdown file descriptors
+*
+* @param[in] fd: file descriptor
+* @param[in] how: shutdown type
+*
+* @note This API is used to shutdown file descriptors.
+*
+* @return 0 on success. Others on error, please refer to the error no of the target system
+*/
+TUYA_ERRNO tkl_net_shutdown(const int fd, const int how);
+#endif /* ENABLE_TUYA_P2P */
 
 #endif // __TAL_NETWORK_H__
 
