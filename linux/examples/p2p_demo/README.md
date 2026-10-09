@@ -22,7 +22,9 @@ cd build && ./p2p_demo
 
 凭据可选：默认取 `src/tuya_config.h` 的 PID/UUID/AuthKey，可用
 `-DTUYA_PRODUCT_ID=.. -DTUYA_OPENSDK_UUID=.. -DTUYA_OPENSDK_AUTHKEY=..` 覆盖，或在
-`src/tuya_config_secrets.h`（参考 `.example` 模板）里配置，也支持同名环境变量。视频源在构建时
+`src/tuya_config_secrets.h`（参考 `.example` 模板）里配置，也支持同名环境变量。
+凭据优先级：**`-D` / 环境变量 > `tuya_config_secrets.h` > `tuya_config.h` 默认值**
+（secrets 模板的 `#define` 带 `#ifndef` 守卫，不会覆盖命令行注入）。视频源在构建时
 复制到 `build/demo_video.264`，从 `build/` 目录运行即可（在别处运行按可执行文件所在目录解析）。
 
 运行后行为：

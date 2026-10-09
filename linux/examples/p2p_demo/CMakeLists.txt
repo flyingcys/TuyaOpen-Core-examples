@@ -194,6 +194,10 @@ add_executable(vcam_selftest
 target_include_directories(vcam_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+
+# 与 media_chain_selftest 一致：让 -DCONFIG_P2P_DEMO_H264_FILE 等覆盖也作用于
+# vcam 自测，否则用户换视频源后自测会静默测内置视频
+target_compile_definitions(vcam_selftest PRIVATE ${_p2p_demo_media_defs})
 target_link_libraries(vcam_selftest PRIVATE ${_p2p_demo_link})
 
 # 媒体链路自测（独立可执行，链接与 p2p_demo 相同的库组）：

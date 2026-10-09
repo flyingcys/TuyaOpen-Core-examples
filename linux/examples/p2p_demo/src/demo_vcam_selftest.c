@@ -20,6 +20,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "demo_vcam.h"
@@ -31,11 +32,18 @@
 #define VCAM_SELFTEST_FPS    15
 #define VCAM_SELFTEST_WAIT_MS 10000 /* 收帧等待上限，超时判失败 */
 
-/* 内置 demo_video.264 的绝对真值（ffprobe/NAL 直方图口径，换视频需同步更新） */
+/* 内置 demo_video.264 的绝对真值（ffprobe/NAL 直方图口径，换视频需同步更新）。
+ * 绝对口径的判定按"文件大小 == 内置视频大小"（见 main），换任何别的视频自动降为宽松口径 */
 #define VCAM_SELFTEST_EXPECT_AU       540u      /* AU 总数 */
 #define VCAM_SELFTEST_EXPECT_IDR      9u        /* IDR AU 数（GOP=60） */
 #define VCAM_SELFTEST_EXPECT_FIRST_AU 54923u    /* 首个 AU（SPS+PPS+SEI+IDR）字节数 */
 #define VCAM_SELFTEST_EXPECT_MAX_AU   (64u * 1024u) /* 单 AU 上限（P2P 帧槽 256KB 内） */
+#define VCAM_SELFTEST_BUNDLED_SIZE    4465130u      /* 内置视频字节数（绝对口径的判定依据） */
+
+/* 视频源路径：未注入时兜底 "demo_video.264"（与 tuya_ipc_demo.c 同口径） */
+#ifndef P2P_DEMO_H264_FILE
+#define P2P_DEMO_H264_FILE "demo_video.264"
+#endif
 
 /* 回调运行在 vcam 线程：计数用 volatile，帧明细由回调线程写、主线程在
  * close（等待线程退出）之后读 */
@@ -89,29 +97,47 @@ static const char *__selftest_default_path(void)
     ssize_t     n   = 0;
     char       *slash = NULL;
 
+    /* P2P_DEMO_H264_FILE 可被 Kconfig/-D 覆盖（CMake 注入本目标） */
+    if (0 == access(P2P_DEMO_H264_FILE, R_OK)) {
+        return P2P_DEMO_H264_FILE;
+    }
     n = readlink("/proc/self/exe", link, sizeof(link) - 1);
     if (n <= 0) {
-        return "demo_video.264";
+        return P2P_DEMO_H264_FILE;
     }
     link[n] = '\0';
     slash   = strrchr(link, '/');
     if (NULL == slash) {
-        return "demo_video.264";
+        return P2P_DEMO_H264_FILE;
     }
     slash[1] = '\0';
-    snprintf(exe_dir_path, sizeof(exe_dir_path), "%sdemo_video.264", link);
+    snprintf(exe_dir_path, sizeof(exe_dir_path), "%s%s", link, P2P_DEMO_H264_FILE);
     if (0 == access(exe_dir_path, R_OK)) {
         return exe_dir_path;
     }
 
-    return "demo_video.264";
+    return P2P_DEMO_H264_FILE;
+}
+
+/**
+ * @brief 文件大小（用于判定是否内置视频；取不到返回 0）
+ */
+static uint32_t __selftest_file_size(const char *path)
+{
+    struct stat st;
+
+    if (path == NULL || 0 != stat(path, &st)) {
+        return 0;
+    }
+    return (uint32_t)st.st_size;
 }
 
 int main(int argc, char *argv[])
 {
     const char *path = (argc > 1) ? argv[1] : __selftest_default_path();
-    /* 内置视频走绝对口径；自定义文件真值未知，只做宽松下界 */
-    BOOL_T      bundled   = (argc <= 1) ? TRUE : FALSE;
+    /* 内置视频走绝对口径（按文件大小判定，含 -D 覆盖后的路径）；
+     * 自定义文件真值未知，只做宽松下界 */
+    BOOL_T      bundled   = (__selftest_file_size(path) == VCAM_SELFTEST_BUNDLED_SIZE) ? TRUE : FALSE;
     OPERATE_RET rt        = OPRT_OK;
     uint32_t    i         = 0;
     uint32_t    waited_ms = 0;
