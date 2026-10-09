@@ -3,16 +3,17 @@
  * @brief 虚拟摄像头实现：Annex-B 样片 → AU 索引 → 按帧率循环喂帧。
  *
  * 上游 demo 的视频源是 tdl_camera（DVP 摄像头 + T5 硬编 H264），Linux 上
- * 没有对应实现，这里用样片文件顶替：整文件读入内存（样片约 200KB），
+ * 没有对应实现，这里用视频文件顶替：整文件读入内存（内置视频约 4.3MB），
  * 按 Annex-B 起始码扫描出 NAL，再按 AU 边界建索引；一个 vcam 线程按
  * 1000/fps ms 的节拍回调 AU，用绝对时间戳做漂移校正（不裸 sleep 累积误差），
  * 到文件末尾循环回第 0 帧。
  *
- * AU 切分规则（与上游 demo 对编码帧的假设一致：AUD 开头、AU 内单 VCL）：
+ * AU 切分规则（兼容带 AUD 与不带 AUD 的码流；内置 demo_video.264 无 AUD）：
  *   - 遇 AUD（NAL type 9）→ 开新 AU（AUD 属于新 AU）
  *   - 遇 VCL（type 1..5）且当前 AU 已有 VCL → 开新 AU
  *   - 其余非 VCL（SPS/PPS/SEI）并入当前 AU
  *   - AU 内出现 type 5（IDR）→ is_i_frame = TRUE
+ *   - 约定每 AU 单 VCL（多 slice 码流不在支持范围）
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
@@ -312,14 +313,16 @@ OPERATE_RET demo_vcam_open(const char *path, uint32_t fps, DEMO_VCAM_FRAME_CB cb
         return OPRT_COM_ERROR;
     }
 
-    /* 1) 整文件读入（样片约 200KB，允许全量驻留） */
+    /* 1) 整文件读入（内置视频约 4.3MB，允许全量驻留） */
     fp = fopen(path, "rb");
     if (NULL == fp) {
         PR_ERR("vcam open: cannot open sample '%s'", path);
         return OPRT_NOT_EXIST;
     }
     if (0 != fseek(fp, 0, SEEK_END) || (fsize = ftell(fp)) <= 0 || fsize > DEMO_VCAM_MAX_FILE_SIZE) {
-        PR_ERR("vcam open: sample '%s' size invalid (%ld)", path, fsize);
+        /* 失败原因含大小上限，换大文件时不用猜 */
+        PR_ERR("vcam open: file '%s' size invalid (%ld), limit %u", path, fsize,
+               (uint32_t)DEMO_VCAM_MAX_FILE_SIZE);
         fclose(fp);
         return OPRT_INVALID_PARM;
     }
@@ -470,4 +473,32 @@ OPERATE_RET demo_vcam_request_i_frame(void)
 BOOL_T demo_vcam_is_open(void)
 {
     return s_vcam.running;
+}
+
+OPERATE_RET demo_vcam_get_stats(uint32_t *au_num, uint32_t *i_num, uint32_t *max_len, BOOL_T *first_is_i)
+{
+    uint32_t i;
+    uint32_t maxl = 0;
+
+    if (!s_vcam.running || s_vcam.aus == NULL) {
+        return OPRT_COM_ERROR;
+    }
+    for (i = 0; i < s_vcam.au_num; i++) {
+        if (s_vcam.aus[i].len > maxl) {
+            maxl = s_vcam.aus[i].len;
+        }
+    }
+    if (au_num != NULL) {
+        *au_num = s_vcam.au_num;
+    }
+    if (i_num != NULL) {
+        *i_num = s_vcam.i_num;
+    }
+    if (max_len != NULL) {
+        *max_len = maxl;
+    }
+    if (first_is_i != NULL) {
+        *first_is_i = (s_vcam.au_num > 0) ? s_vcam.aus[0].is_i : FALSE;
+    }
+    return OPRT_OK;
 }

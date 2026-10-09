@@ -1,9 +1,9 @@
 /**
  * @file demo_vcam.h
- * @brief 虚拟摄像头（virtual camera）：把内置 H.264 样片按帧率循环喂给回调。
+ * @brief 虚拟摄像头（virtual camera）：把内置 H.264 视频按帧率循环喂给回调。
  *
- * Linux 上没有摄像头也没有 T5 的硬编码器，本模块用 ffmpeg 生成的 Annex-B
- * 样片（assets/demo_video.264，CMake 复制到构建目录）顶替上游 tdl_camera：
+ * Linux 上没有摄像头也没有 T5 的硬编码器，本模块用上游 demo 自带的 Annex-B
+ * 视频（assets/demo_video.264，CMake 复制到构建目录）顶替上游 tdl_camera：
  * open 时整文件读入并按 AU（access unit）边界建索引，起一个线程按 fps
  * 节拍逐 AU 回调，到文件末尾循环回第 0 帧。
  *
@@ -78,6 +78,17 @@ OPERATE_RET demo_vcam_request_i_frame(void);
  * @return TRUE 已打开
  */
 BOOL_T demo_vcam_is_open(void);
+
+/**
+ * @brief 查询当前索引统计（诊断/自测用；open 成功后可用）
+ *
+ * @param[out] au_num    AU 总数
+ * @param[out] i_num     IDR AU 数
+ * @param[out] max_len   最大 AU 字节数
+ * @param[out] first_is_i 首个 AU 是否为 IDR
+ * @return OPRT_OK；未打开返回 OPRT_COM_ERROR
+ */
+OPERATE_RET demo_vcam_get_stats(uint32_t *au_num, uint32_t *i_num, uint32_t *max_len, BOOL_T *first_is_i);
 
 #ifdef __cplusplus
 }
