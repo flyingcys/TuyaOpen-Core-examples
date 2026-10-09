@@ -8,10 +8,11 @@
  * platform means providing this one file (implementation + card) in its port.
  *
  * Ops reached only from one optional module are compiled in under that
- * module's switch (the ENABLE_TUYA_P2P blocks below): with the switch off
- * they are neither defined nor wired into the card, so a new port only has to
- * provide the ops its own configuration actually calls. core's TAL_NET_EXEC_OP
- * checks card members for NULL and reports the op as unavailable at runtime.
+ * module's switch (the ENABLE_LOCAL_LINK / ENABLE_TUYA_P2P /
+ * ENABLE_AI_COMPONENTS blocks below): with the switch off they are neither
+ * defined nor wired into the card, so a new port only has to provide the ops
+ * its own configuration actually calls. core's TAL_NET_EXEC_OP checks card
+ * members for NULL and reports the op as unavailable at runtime.
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
@@ -417,66 +418,6 @@ TUYA_ERRNO tkl_net_bind(const int fd, const TUYA_IP_ADDR_T addr, const uint16_t 
 }
 
 /**
- * @brief Listen to network
- *
- * @param[in] fd: file descriptor
- * @param[in] backlog: max count of backlog connection
- *
- * @note This API is used for listening to network.
- *
- * @return 0 on success. Others on error, please refer to the error no of the
- * target system
- */
-TUYA_ERRNO tkl_net_listen(const int fd, const int backlog)
-{
-    int ret = -1;
-
-    if (fd < 0) {
-        return -3000 + fd;
-    }
-
-    ret = listen(fd, backlog);
-
-    return ret;
-}
-
-/**
- * @brief Listen to network
- *
- * @param[in] fd: file descriptor
- * @param[out] addr: the accept ip addr
- * @param[out] port: the accept port number
- *
- * @note This API is used for listening to network.
- *
- * @return 0 on success. Others on error, please refer to the error no of the
- * target system
- */
-int tkl_net_accept(const int fd, TUYA_IP_ADDR_T *addr, uint16_t *port)
-{
-    int ret = -1;
-
-    if (fd < 0) {
-        return -3000 + fd;
-    }
-
-    struct sockaddr_in sock_addr;
-    socklen_t len = sizeof(struct sockaddr_in);
-    ret = accept(fd, (struct sockaddr *)&sock_addr, &len);
-    if (ret < 0) {
-        return -1;
-    }
-    if (addr) {
-        *addr = ntohl((sock_addr.sin_addr.s_addr));
-    }
-    if (port) {
-        *port = ntohs((sock_addr.sin_port));
-    }
-
-    return ret;
-}
-
-/**
  * @brief Send data to network
  *
  * @param[in] fd: file descriptor
@@ -497,42 +438,6 @@ TUYA_ERRNO tkl_net_send(const int fd, const void *buf, const uint32_t nbytes)
     }
 
     ret = send(fd, buf, nbytes, 0);
-
-    return ret;
-}
-
-/**
- * @brief Send data to specified server
- *
- * @param[in] fd: file descriptor
- * @param[in] buf: send data buffer
- * @param[in] nbytes: buffer lenth
- * @param[in] addr: address information of server
- * @param[in] port: port information of server
- *
- * @note This API is used for sending data to network
- *
- * @return 0 on success. Others on error, please refer to the error no of the
- * target system
- */
-TUYA_ERRNO tkl_net_send_to(const int fd, const void *buf, const uint32_t nbytes, const TUYA_IP_ADDR_T addr,
-                                 const uint16_t port)
-{
-    int ret = -1;
-
-    if ((fd < 0) || (buf == NULL) || (nbytes == 0)) {
-        return -3000 + fd;
-    }
-
-    uint16_t tmp_port = port;
-    TUYA_IP_ADDR_T tmp_addr = addr;
-
-    struct sockaddr_in sock_addr;
-    sock_addr.sin_family = AF_INET;
-    sock_addr.sin_port = htons(tmp_port);
-    sock_addr.sin_addr.s_addr = htonl(tmp_addr);
-
-    ret = sendto(fd, buf, nbytes, 0, (struct sockaddr *)&sock_addr, sizeof(sock_addr));
 
     return ret;
 }
@@ -563,87 +468,6 @@ TUYA_ERRNO tkl_net_recv(const int fd, void *buf, const uint32_t nbytes)
             tal_system_sleep(10);
             ret = recv(fd, buf, nbytes, 0);
         }
-    }
-
-    return ret;
-}
-
-/**
- * @brief Receive data from network with need size
- *
- * @param[in] fd: file descriptor
- * @param[in] buf: receive data buffer
- * @param[in] nbytes: buffer lenth
- * @param[in] nd_size: the need size
- *
- * @note This API is used for receiving data from network with need size
- *
- * @return >0 on success. Others on error
- */
-int tkl_net_recv_nd_size(const int fd, void *buf, const uint32_t buf_size, const uint32_t nd_size)
-{
-    int ret = -1;
-
-    if ((fd < 0) || (NULL == buf) || (buf_size == 0) || (nd_size == 0) || (buf_size < nd_size)) {
-        return -3000 + fd;
-    }
-
-    uint32_t rd_size = 0;
-
-    while (rd_size < nd_size) {
-        ret = recv(fd, ((uint8_t *)buf + rd_size), nd_size - rd_size, 0);
-        if (ret <= 0) {
-            if (UNW_EWOULDBLOCK == tkl_net_get_errno() || UNW_EINTR == tkl_net_get_errno() ||
-                UNW_EAGAIN == tkl_net_get_errno()) {
-                tal_system_sleep(10);
-                continue;
-            }
-            break;
-        }
-        rd_size += ret;
-    }
-    if (rd_size < nd_size) {
-        ret = -2;
-    } else {
-        ret = rd_size;
-    }
-
-    return ret;
-}
-
-/**
- * @brief Receive data from specified server
- *
- * @param[in] fd: file descriptor
- * @param[in] buf: receive data buffer
- * @param[in] nbytes: buffer lenth
- * @param[in] addr: address information of server
- * @param[in] port: port information of server
- *
- * @note This API is used for receiving data from specified server
- *
- * @return 0 on success. Others on error, please refer to the error no of the
- * target system
- */
-TUYA_ERRNO tkl_net_recvfrom(const int fd, void *buf, const uint32_t nbytes, TUYA_IP_ADDR_T *addr, uint16_t *port)
-{
-    int ret = -1;
-
-    if ((fd < 0) || (buf == NULL) || (nbytes == 0)) {
-        return -3000 + fd;
-    }
-
-    struct sockaddr_in sock_addr;
-    socklen_t addr_len = sizeof(sock_addr);
-    ret = recvfrom(fd, buf, nbytes, 0, (struct sockaddr *)&sock_addr, &addr_len);
-    if (ret <= 0) {
-        return ret;
-    }
-    if (addr) {
-        *addr = ntohl(sock_addr.sin_addr.s_addr);
-    }
-    if (port) {
-        *port = ntohs(sock_addr.sin_port);
     }
 
     return ret;
@@ -865,7 +689,193 @@ char *tkl_net_addr2str(TUYA_IP_ADDR_T ipaddr)
     return inet_ntoa(hostaddr);
 }
 
+/* ===== 局域网/对端服务接口（云通道不需要，按能力开关隔离）=====
+ * 挂载条件由 port 的 CMake 从 CONFIG_* 映射注入（core 的宏不传播到 port 目标）：
+ *   - listen/accept/send_to/recvfrom：局域网协议、p2p（sock_tal）、AI monitor 共用；
+ *   - recv_nd_size：仅局域网协议（tuya_lan.c 收帧）使用。
+ * 对应能力全关时不编译、卡成员为 NULL，core 侧 TAL_NET_EXEC_OP 有兜底
+ * （运行时报 "not available"），port 移植时无需适配。
+ * ===== */
+#if defined(ENABLE_LOCAL_LINK) || defined(ENABLE_TUYA_P2P) || defined(ENABLE_AI_COMPONENTS)
+/**
+ * @brief Listen to network
+ *
+ * @param[in] fd: file descriptor
+ * @param[in] backlog: max count of backlog connection
+ *
+ * @note This API is used for listening to network.
+ *
+ * @return 0 on success. Others on error, please refer to the error no of the
+ * target system
+ */
+TUYA_ERRNO tkl_net_listen(const int fd, const int backlog)
+{
+    int ret = -1;
 
+    if (fd < 0) {
+        return -3000 + fd;
+    }
+
+    ret = listen(fd, backlog);
+
+    return ret;
+}
+
+/**
+ * @brief Listen to network
+ *
+ * @param[in] fd: file descriptor
+ * @param[out] addr: the accept ip addr
+ * @param[out] port: the accept port number
+ *
+ * @note This API is used for listening to network.
+ *
+ * @return 0 on success. Others on error, please refer to the error no of the
+ * target system
+ */
+int tkl_net_accept(const int fd, TUYA_IP_ADDR_T *addr, uint16_t *port)
+{
+    int ret = -1;
+
+    if (fd < 0) {
+        return -3000 + fd;
+    }
+
+    struct sockaddr_in sock_addr;
+    socklen_t len = sizeof(struct sockaddr_in);
+    ret = accept(fd, (struct sockaddr *)&sock_addr, &len);
+    if (ret < 0) {
+        return -1;
+    }
+    if (addr) {
+        *addr = ntohl((sock_addr.sin_addr.s_addr));
+    }
+    if (port) {
+        *port = ntohs((sock_addr.sin_port));
+    }
+
+    return ret;
+}
+
+/**
+ * @brief Send data to specified server
+ *
+ * @param[in] fd: file descriptor
+ * @param[in] buf: send data buffer
+ * @param[in] nbytes: buffer lenth
+ * @param[in] addr: address information of server
+ * @param[in] port: port information of server
+ *
+ * @note This API is used for sending data to network
+ *
+ * @return 0 on success. Others on error, please refer to the error no of the
+ * target system
+ */
+TUYA_ERRNO tkl_net_send_to(const int fd, const void *buf, const uint32_t nbytes, const TUYA_IP_ADDR_T addr,
+                                 const uint16_t port)
+{
+    int ret = -1;
+
+    if ((fd < 0) || (buf == NULL) || (nbytes == 0)) {
+        return -3000 + fd;
+    }
+
+    uint16_t tmp_port = port;
+    TUYA_IP_ADDR_T tmp_addr = addr;
+
+    struct sockaddr_in sock_addr;
+    sock_addr.sin_family = AF_INET;
+    sock_addr.sin_port = htons(tmp_port);
+    sock_addr.sin_addr.s_addr = htonl(tmp_addr);
+
+    ret = sendto(fd, buf, nbytes, 0, (struct sockaddr *)&sock_addr, sizeof(sock_addr));
+
+    return ret;
+}
+
+/**
+ * @brief Receive data from specified server
+ *
+ * @param[in] fd: file descriptor
+ * @param[in] buf: receive data buffer
+ * @param[in] nbytes: buffer lenth
+ * @param[in] addr: address information of server
+ * @param[in] port: port information of server
+ *
+ * @note This API is used for receiving data from specified server
+ *
+ * @return 0 on success. Others on error, please refer to the error no of the
+ * target system
+ */
+TUYA_ERRNO tkl_net_recvfrom(const int fd, void *buf, const uint32_t nbytes, TUYA_IP_ADDR_T *addr, uint16_t *port)
+{
+    int ret = -1;
+
+    if ((fd < 0) || (buf == NULL) || (nbytes == 0)) {
+        return -3000 + fd;
+    }
+
+    struct sockaddr_in sock_addr;
+    socklen_t addr_len = sizeof(sock_addr);
+    ret = recvfrom(fd, buf, nbytes, 0, (struct sockaddr *)&sock_addr, &addr_len);
+    if (ret <= 0) {
+        return ret;
+    }
+    if (addr) {
+        *addr = ntohl(sock_addr.sin_addr.s_addr);
+    }
+    if (port) {
+        *port = ntohs(sock_addr.sin_port);
+    }
+
+    return ret;
+}
+#endif
+
+#if defined(ENABLE_LOCAL_LINK)
+/**
+ * @brief Receive data from network with need size
+ *
+ * @param[in] fd: file descriptor
+ * @param[in] buf: receive data buffer
+ * @param[in] nbytes: buffer lenth
+ * @param[in] nd_size: the need size
+ *
+ * @note This API is used for receiving data from network with need size
+ *
+ * @return >0 on success. Others on error
+ */
+int tkl_net_recv_nd_size(const int fd, void *buf, const uint32_t buf_size, const uint32_t nd_size)
+{
+    int ret = -1;
+
+    if ((fd < 0) || (NULL == buf) || (buf_size == 0) || (nd_size == 0) || (buf_size < nd_size)) {
+        return -3000 + fd;
+    }
+
+    uint32_t rd_size = 0;
+
+    while (rd_size < nd_size) {
+        ret = recv(fd, ((uint8_t *)buf + rd_size), nd_size - rd_size, 0);
+        if (ret <= 0) {
+            if (UNW_EWOULDBLOCK == tkl_net_get_errno() || UNW_EINTR == tkl_net_get_errno() ||
+                UNW_EAGAIN == tkl_net_get_errno()) {
+                tal_system_sleep(10);
+                continue;
+            }
+            break;
+        }
+        rd_size += ret;
+    }
+    if (rd_size < nd_size) {
+        ret = -2;
+    } else {
+        ret = rd_size;
+    }
+
+    return ret;
+}
+#endif
 
 /* ===== p2p 专用接口（ENABLE_TUYA_P2P，仅 p2p-core/pjproject 使用）=====
  * 由 port 的 CMake 从 CONFIG_ENABLE_TUYA_P2P 映射注入；不用 p2p 的平台无需
@@ -1023,8 +1033,9 @@ OPERATE_RET tkl_net_getpeername(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port)
  * 标准网络卡：由本平台 TKL 实现组装，core 的 tal_network.c 经
  * extern 引用并完成 tal_net_* 分发。移植新平台时在各自 port 的
  * tkl_network.c 中提供同名卡即可。
- * 卡成员与实现同开关：仅 p2p 使用的 ops 在 ENABLE_TUYA_P2P 下才挂载，
- * 关掉时对应成员为 NULL，core 侧 TAL_NET_EXEC_OP 会打印 "not available"。
+ * 卡成员与实现同开关：可选能力（局域网/对端服务、p2p）的 ops 仅在对应宏
+ * 定义时才挂载，关掉时成员为 NULL，core 侧 TAL_NET_EXEC_OP 会打印
+ * "not available"。
  * --------------------------------------------------------------------------- */
 TAL_NETWORK_CARD_T tal_network_card_platform = {
     .name = "tkl",
@@ -1043,13 +1054,8 @@ TAL_NETWORK_CARD_T tal_network_card_platform = {
             .socket_create = tkl_net_socket_create,
             .connect = tkl_net_connect,
             .bind = tkl_net_bind,
-            .listen = tkl_net_listen,
             .send = tkl_net_send,
-            .send_to = tkl_net_send_to,
-            .accept = tkl_net_accept,
             .recv = tkl_net_recv,
-            .recv_nd_size = tkl_net_recv_nd_size,
-            .recvfrom = tkl_net_recvfrom,
             .set_timeout = tkl_net_set_timeout,
             .set_reuse = tkl_net_set_reuse,
             .disable_nagle = tkl_net_disable_nagle,
@@ -1058,6 +1064,17 @@ TAL_NETWORK_CARD_T tal_network_card_platform = {
             .str2addr = tkl_net_str2addr,
             .addr2str = tkl_net_addr2str,
             .setsockopt = tkl_net_setsockopt,
+#if defined(ENABLE_LOCAL_LINK) || defined(ENABLE_TUYA_P2P) || defined(ENABLE_AI_COMPONENTS)
+            /* 局域网/对端服务成员（实现见本文件对应集中块） */
+            .listen = tkl_net_listen,
+            .accept = tkl_net_accept,
+            .send_to = tkl_net_send_to,
+            .recvfrom = tkl_net_recvfrom,
+#endif
+#if defined(ENABLE_LOCAL_LINK)
+            /* 局域网协议专用成员（tuya_lan.c 收帧） */
+            .recv_nd_size = tkl_net_recv_nd_size,
+#endif
 #if defined(ENABLE_TUYA_P2P)
             /* p2p 专用成员（实现见本文件 p2p 集中块） */
             .fd_clear = tkl_net_fd_clear,
