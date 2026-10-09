@@ -100,9 +100,9 @@ int demo_on_recv_audio_frame_callback(MEDIA_FRAME *media_frame);
 int demo_on_request_i_frame_callback(void);
 
 /**
- * @brief App 调整码率（样片源无编码器，仅打印接受）
+ * @brief App 调整码率（样片源无编码器，无法改码率）
  * @param[in] kbps 目标码率
- * @return 0
+ * @return -1（不支持；同上游占位映射：内部 __demo_camera_set_bitrate 返回 OPRT_NOT_SUPPORTED）
  */
 int demo_on_set_video_bitrate_callback(uint32_t kbps);
 

@@ -115,8 +115,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/sample.h264 ${CMAKE_BINARY_DIR
 file(GLOB _p2p_demo_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
 )
-# demo_vcam_selftest.c 自带 main()（独立自测目标），不能进 app 的源列表
+# 自测文件自带 main()（独立自测目标），不能进 app 的源列表
 list(FILTER _p2p_demo_srcs EXCLUDE REGEX "/demo_vcam_selftest\\.c$")
+list(FILTER _p2p_demo_srcs EXCLUDE REGEX "/media_chain_selftest\\.c$")
 
 add_executable(p2p_demo ${_p2p_demo_srcs})
 
@@ -135,8 +136,8 @@ if(TUYA_OPENSDK_AUTHKEY)
     target_compile_definitions(p2p_demo PRIVATE TUYA_OPENSDK_AUTHKEY="${TUYA_OPENSDK_AUTHKEY}")
 endif()
 
-# demo 参数与开关注入（app 私有；core 的 tuyaopen-headers 只管 ENABLE_* 开关宏）
-target_compile_definitions(p2p_demo PRIVATE
+# demo 参数与开关注入（app 与媒体链路自测共用；core 的 tuyaopen-headers 只管 ENABLE_* 开关宏）
+set(_p2p_demo_media_defs
     P2P_DEMO_WIDTH=${CONFIG_P2P_DEMO_WIDTH}
     P2P_DEMO_HEIGHT=${CONFIG_P2P_DEMO_HEIGHT}
     P2P_DEMO_FPS=${CONFIG_P2P_DEMO_FPS}
@@ -145,12 +146,24 @@ target_compile_definitions(p2p_demo PRIVATE
 )
 # .config 里的 "y"/"n" 在 CMake 里直接可判真假（y=真，n=假）
 if(CONFIG_P2P_DEMO_LOCAL_STORE)
-    target_compile_definitions(p2p_demo PRIVATE P2P_DEMO_LOCAL_STORE=1)
+    list(APPEND _p2p_demo_media_defs P2P_DEMO_LOCAL_STORE=1)
+endif()
+if(CONFIG_P2P_DEMO_LIVE_RECORD)
+    list(APPEND _p2p_demo_media_defs P2P_DEMO_LIVE_RECORD=1)
+endif()
+# 分段时长：Kconfig 只在 LIVE_RECORD 打开时写出，未定义/空值时兜底 120
+if(NOT DEFINED CONFIG_P2P_DEMO_RECORD_MAX_SEC OR CONFIG_P2P_DEMO_RECORD_MAX_SEC STREQUAL "")
+    set(CONFIG_P2P_DEMO_RECORD_MAX_SEC 120)
+endif()
+list(APPEND _p2p_demo_media_defs P2P_DEMO_RECORD_MAX_SEC=${CONFIG_P2P_DEMO_RECORD_MAX_SEC})
+if(CONFIG_P2P_DEMO_PB_SEED)
+    list(APPEND _p2p_demo_media_defs P2P_DEMO_PB_SEED=1)
 endif()
 # 样片路径覆盖：非空时改用指定文件（默认走构建目录的 sample.h264）
 if(CONFIG_P2P_DEMO_H264_FILE)
-    target_compile_definitions(p2p_demo PRIVATE P2P_DEMO_H264_FILE="${CONFIG_P2P_DEMO_H264_FILE}")
+    list(APPEND _p2p_demo_media_defs P2P_DEMO_H264_FILE="${CONFIG_P2P_DEMO_H264_FILE}")
 endif()
+target_compile_definitions(p2p_demo PRIVATE ${_p2p_demo_media_defs})
 
 # app 链接：一个组同时包 core 库与 port（解析 TAL/云服务与 TKL 的循环引用）；
 # 组外的 tuyaopen-port 提供头路径，tuyaopen-headers 提供开关宏注入与 port 头
@@ -173,7 +186,23 @@ target_include_directories(vcam_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 target_link_libraries(vcam_selftest PRIVATE ${_p2p_demo_link})
+
+# 媒体链路自测（独立可执行，链接与 p2p_demo 相同的库组）：
+# 无云无 App 地跑通 vcam → 帧校验/队列/ring buffer → 取帧回调。
+# 不带 tuya_main.c/reset_netcfg.c（自测不连云），媒体实现面显式列出
+add_executable(media_chain_selftest
+    src/media_chain_selftest.c
+    src/tuya_ipc_demo.c
+    src/demo_vcam.c
+    src/demo_media_event.c
+)
+target_include_directories(media_chain_selftest PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_compile_definitions(media_chain_selftest PRIVATE ${_p2p_demo_media_defs})
+target_link_libraries(media_chain_selftest PRIVATE ${_p2p_demo_link})
 unset(_p2p_demo_link)
+unset(_p2p_demo_media_defs)
 
 # qrcode 无循环依赖，组外链接；开关关闭时目标不注册，跳过
 if(TARGET qrcode)
@@ -186,4 +215,7 @@ if(ENABLE_ASAN)
     # 自测也带上：vcam 的缓冲/索引分配是本次新增的内存面，ASAN 下跑一遍更有价值
     target_compile_options(vcam_selftest PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
     target_link_options(vcam_selftest PRIVATE -fsanitize=address)
+    # 媒体链路自测同样带上（帧池/ring buffer 拷贝是本次新增的内存面）
+    target_compile_options(media_chain_selftest PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
+    target_link_options(media_chain_selftest PRIVATE -fsanitize=address)
 endif()
