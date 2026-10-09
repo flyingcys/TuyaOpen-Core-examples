@@ -33,7 +33,12 @@
 /* 收帧目标：20fps 下约 3 秒；上限 10s */
 #define SELFTEST_FRAMES         60
 #define SELFTEST_WAIT_MS        10000
-/* 请求 I 帧后的等待上限：GOP=20 @20fps 自然间隔 1s，请求后应更快出现 */
+/* 5a 相位锁定（等一个 I 帧）的等待上限：需覆盖"自然等到下一个 IDR"的最坏情况。
+ * 视频源为 GOP=60@15fps（约 4 秒一个 IDR），取 6 秒留余量——不要依赖第 4 步
+ * 收帧数(60)与 GOP(60)的巧合关系。 */
+#define SELFTEST_IFRAME_LOCK_MS 6000
+/* 5b 请求 I 帧后的等待上限：请求被响应时只隔 1~2 帧（~130ms），2 秒足够；
+ * 若请求被静默忽略，帧数断言（>8 帧）先于本超时判失败。 */
 #define SELFTEST_IFRAME_WAIT_MS 2000
 /* 请求后到下一个 I 帧之间允许的最大帧数：正常（vcam 跳到下个 IDR AU）≤ 几帧；
  * 请求被静默忽略时按 GOP=20 要等 ~19 个 P 帧——用帧数而非时长做断言，避免
@@ -153,8 +158,8 @@ int main(void)
         uint32_t frames_after_req = 0;
         BOOL_T   got_i = FALSE;
 
-        /* 5a) 等一个 I 帧，锁定相位（最多 2s） */
-        while (iframe_waited < SELFTEST_IFRAME_WAIT_MS) {
+        /* 5a) 等一个 I 帧，锁定相位（预算见 SELFTEST_IFRAME_LOCK_MS） */
+        while (iframe_waited < SELFTEST_IFRAME_LOCK_MS) {
             rt = demo_on_get_video_frame_callback(&frame);
             if (rt != 0) {
                 iframe_waited += 10;
@@ -164,8 +169,8 @@ int main(void)
                 break;
             }
         }
-        if (iframe_waited >= SELFTEST_IFRAME_WAIT_MS) {
-            printf("MEDIA CHAIN SELFTEST FAILED: no i-frame to lock phase\n");
+        if (iframe_waited >= SELFTEST_IFRAME_LOCK_MS) {
+            printf("MEDIA CHAIN SELFTEST FAILED: no i-frame to lock phase (waited %ums)\n", iframe_waited);
             fail++;
         } else if (demo_on_request_i_frame_callback() != 0) {
             printf("MEDIA CHAIN SELFTEST FAILED: request i-frame rejected\n");
