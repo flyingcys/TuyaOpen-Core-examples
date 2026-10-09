@@ -1,0 +1,109 @@
+/**
+ * @file tuya_ipc_demo.h
+ * @brief p2p_demo 媒体回调契约（Task 3 启动链 / Task 4 视频链路共用）。
+ *
+ * 从上游 ipc_p2p_demo 的 include/tuya_ipc_demo.h 裁剪而来：
+ *   - 去掉音频开关（CAMERA_DEMO_AUDIO/DEMO_ENABLE_AUDIO，本 demo 不做音频采集，
+ *     与上游 DEMO_HAS_AUDIO=0 分支一致）与 demo_mic_uplink_pause（仅音频路径用）；
+ *   - 音频回调声明保留，Task 4 给空实现（P2P SDK 的回调集要求非空指针）。
+ *
+ * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
+ */
+
+#ifndef __TUYA_IPC_DEMO_H__
+#define __TUYA_IPC_DEMO_H__
+
+/* 本 demo 必须有 P2P：缺开关时给出明确构建错误而不是静默编出一个空壳。
+ * 这组判断必须放在下面的 include 之前——P2P 关闭时 p2p-core 整棵树不编译，
+ * tuya_ipc_p2p.h 连包含路径都不存在，先包含会报"找不到头文件"而掩盖真正的
+ * 原因（构建错误应指向开关，而不是头文件缺失）。 */
+#if !defined(ENABLE_TUYA_P2P) || (ENABLE_TUYA_P2P != 1)
+#error "p2p_demo requires CONFIG_ENABLE_TUYA_P2P=ON (or delete linux/.config / pass -DCONFIG_ENABLE_TUYA_P2P=ON)"
+#endif
+
+#include "tuya_cloud_types.h"
+#include "tuya_ipc_p2p.h"
+
+/* local_store 回放：需要 demo 开关与 core 库开关同时打开（Kconfig select 保证一致） */
+#if defined(P2P_DEMO_LOCAL_STORE) && (P2P_DEMO_LOCAL_STORE == 1) && \
+    defined(ENABLE_LOCAL_STORE) && (ENABLE_LOCAL_STORE == 1)
+#define DEMO_HAS_LOCAL_STORE 1
+#else
+#define DEMO_HAS_LOCAL_STORE 0
+#endif
+
+/**
+ * @brief 初始化 demo 媒体链路（ring buffer / vcam / local_store）
+ */
+void tuya_ipc_demo_start(void);
+
+/**
+ * @brief 释放 demo 媒体链路资源
+ */
+void tuya_ipc_demo_end(void);
+
+/**
+ * @brief P2P 断链回调
+ * @return 0
+ */
+int demo_on_signal_disconnect_callback(void);
+
+/**
+ * @brief App 开始看直播
+ * @return 0
+ */
+int demo_on_live_video_start_callback(void);
+
+/**
+ * @brief App 停止看直播
+ * @return 0
+ */
+int demo_on_live_video_stop_callback(void);
+
+/**
+ * @brief P2P 取视频帧（AU）
+ * @param[in,out] media_frame 输出帧
+ * @return 0 有帧；-1 暂无
+ */
+int demo_on_get_video_frame_callback(MEDIA_FRAME *media_frame);
+
+/**
+ * @brief P2P 取音频上行帧（本 demo 无音频，空实现返回 -1）
+ * @param[in,out] media_frame 输出帧
+ * @return -1
+ */
+int demo_on_get_audio_frame_callback(MEDIA_FRAME *media_frame);
+
+/**
+ * @brief App 开始对讲（空实现）
+ * @return 0
+ */
+int demo_on_live_audio_start_callback(void);
+
+/**
+ * @brief App 结束对讲（空实现）
+ * @return 0
+ */
+int demo_on_live_audio_stop_callback(void);
+
+/**
+ * @brief 接收 App 下行音频（本 demo 无音频，空实现）
+ * @param[in] media_frame G.711U 负载
+ * @return 0
+ */
+int demo_on_recv_audio_frame_callback(MEDIA_FRAME *media_frame);
+
+/**
+ * @brief App 请求 I 帧 → demo_vcam_request_i_frame
+ * @return 0
+ */
+int demo_on_request_i_frame_callback(void);
+
+/**
+ * @brief App 调整码率（样片源无编码器，仅打印接受）
+ * @param[in] kbps 目标码率
+ * @return 0
+ */
+int demo_on_set_video_bitrate_callback(uint32_t kbps);
+
+#endif /* __TUYA_IPC_DEMO_H__ */

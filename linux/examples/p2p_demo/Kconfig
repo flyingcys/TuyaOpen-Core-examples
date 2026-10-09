@@ -1,0 +1,98 @@
+menu "configure app (p2p_demo)"
+
+    config P2P_DEMO
+        bool
+        default y
+        select ENABLE_TUYA_P2P
+        select ENABLE_IPC_RING_BUFFER
+        help
+            构建 linux/examples/p2p_demo（虚拟摄像头样片 + P2P 直播）。
+            默认 y：p2p_demo 是独立 CMake 工程，本开关只负责把 P2P 链路
+            依赖的 core 开关（ENABLE_TUYA_P2P / ENABLE_IPC_RING_BUFFER）
+            在共享的 .config 里带起来；不需要 p2p_demo 的树可关掉它。
+
+    config P2P_DEMO_LOCAL_STORE
+        bool "Recording and calendar playback (local_store)"
+        depends on P2P_DEMO
+        default n
+        select ENABLE_LOCAL_STORE
+        help
+            打开本地录像与日历回放（local_store）。默认 n：live 直播链路
+            不依赖它；开启后 demo 会把编码帧写入 ./media 并响应 App 的
+            日历查询/回放请求（Linux 上直接写宿主目录，无 SD 卡挂载）。
+
+    config P2P_DEMO_WIDTH
+        int "Capture width"
+        depends on P2P_DEMO
+        default 640
+        help
+            样片/上报给 App 的视频宽度（像素）。改样片时必须同步改这里，
+            否则 AV 能力上报与实际码流不一致。
+
+    config P2P_DEMO_HEIGHT
+        int "Capture height"
+        depends on P2P_DEMO
+        default 480
+        help
+            样片/上报给 App 的视频高度（像素），需与样片一致。
+
+    config P2P_DEMO_FPS
+        int "Capture fps"
+        depends on P2P_DEMO
+        default 20
+        help
+            虚拟摄像头的喂帧帧率（同时也是上报给 App 的 fps）。
+            样片按 20fps 生成，改这里只改喂帧节拍，不改样片内容。
+
+    config P2P_DEMO_KBPS
+        int "Target bitrate (kbps)"
+        depends on P2P_DEMO
+        default 400
+        help
+            上报给 App 的目标码率（kbps）。样片是固定码率文件，源端不参与
+            实际码控，此值只影响 AV 能力上报与 App 的清晰度档位选择。
+
+    config P2P_DEMO_GOP
+        int "GOP length (frames)"
+        depends on P2P_DEMO
+        default 20
+        help
+            上报给 App 的 GOP 长度（帧）。样片为 keyint=20 固定 GOP，
+            默认与样片一致，供 App 估算 I 帧间隔。
+
+    config P2P_DEMO_H264_FILE
+        string "Live video source file (empty = bundled sample.h264)"
+        depends on P2P_DEMO
+        default ""
+        help
+            直播视频源文件路径。留空用内置样片（构建目录的 sample.h264，
+            由 assets/sample.h264 复制而来）；填写则用该 Annex-B H.264
+            文件（要求 AUD 开头、固定 GOP，AU 边界切分依赖 AUD）。
+
+    config P2P_DEMO_LIVE_RECORD
+        bool "Live H264 record to local_store"
+        depends on P2P_DEMO_LOCAL_STORE
+        default n
+        help
+            直播期间把编码帧持续写入 local_store（默认 n：只在 App 主动
+            回放时读已录内容）。开启后按 P2P_DEMO_RECORD_MAX_SEC 分段。
+
+    config P2P_DEMO_RECORD_MAX_SEC
+        int "Max seconds per recording segment"
+        depends on P2P_DEMO_LIVE_RECORD
+        default 120
+        range 30 3600
+        help
+            单个录像分段的时长上限（秒），到时切下一个分段文件。
+            默认 120 秒，范围 30-3600。
+
+    config P2P_DEMO_PB_SEED
+        bool "Boot-time playback seed from the live source file"
+        depends on P2P_DEMO_LOCAL_STORE
+        default n
+        help
+            启动时把直播源文件灌进当天的 local_store 索引，让 App 不录像
+            也能直接体验日历回放（对应上游的 CAMERA_DEMO_PB_SEED）。
+            默认 n：正常路径由录像产生可回放内容。
+
+endmenu
