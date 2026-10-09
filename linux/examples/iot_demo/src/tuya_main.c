@@ -95,7 +95,6 @@ void user_upgrade_notify_on(tuya_iot_client_t *client, cJSON *upgrade)
 void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
 {
     PR_DEBUG("Tuya Event ID:%d(%s)", event->id, EVENT_ID2STR(event->id));
-    PR_INFO("Device Free heap %d", tal_system_get_free_heap_size());
     switch (event->id) {
     case TUYA_EVENT_BIND_START:
         PR_INFO("Device Bind Start!");

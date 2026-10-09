@@ -7,7 +7,7 @@
  * 被分发/调用的接口（OTA 独立成 port/src/tkl_ota.c + 独立卡）：
  * - log output / semaphore / thread / queue 实现为 ops 卡私有（static），
  *   声明已从头文件移除，适配面收敛到一张卡；
- * - memory 的 calloc/get_free_heap_size 仅 tal 层经卡分发，转 static；
+ * - memory 的 calloc 仅 tal 层经卡分发，转 static；
  *   malloc/free 保持对外符号（tuya_transport 的 mbedtls_* 与 port 的
  *   utilities 直调，声明保留在 tkl_memory.h）；
  * - system 的 sleep/reset/get_millisecond/get_random 仅 tal 层经卡分发，转 static；
@@ -17,7 +17,8 @@
  *   经宏直调，声明保留在 tkl_mutex.h）；
  * - 无调用方的接口已删除（tkl_mutex_trylock、tkl_thread_get_id、
  *   tkl_system_memset/memcpy、tkl_system_psram_*、tkl_log_close/open、
- *   tkl_cpu_sleep_mode_set、tkl_system_realloc、tkl_system_get_tick_count 等）。
+ *   tkl_cpu_sleep_mode_set、tkl_system_realloc、tkl_system_get_tick_count、
+ *   tkl_system_get_free_heap_size 等）。
  * 移植新平台时在各自 port 中提供同名 ops 卡与实现即可。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
@@ -75,8 +76,8 @@ static void tkl_log_output(const char *str, ...)
 /* ---------------------------------------------------------------------------
  * memory 实现（原 port/src/tkl_memory.c）：malloc/free 保持对外符号
  * （tuya_transport 的 mbedtls_* 与 port 的 utilities 直调，声明在
- * tkl_memory.h）；calloc/get_free_heap_size 仅 tal 层经卡分发，转 static。
- * psram 家族、memset/memcpy、无调用方的 realloc 已删。
+ * tkl_memory.h）；calloc 仅 tal 层经卡分发，转 static。
+ * psram 家族、memset/memcpy、无调用方的 realloc/get_free_heap_size 已删。
  * --------------------------------------------------------------------------- */
 #define MAX_HEAP_SIZE (512 * 1024 * 1024)
 
@@ -150,20 +151,6 @@ void tkl_system_free(void *ptr)
 static void *tkl_system_calloc(size_t nitems, size_t size)
 {
     return tuya_mem_heap_calloc(s_heap_handle, nitems * size);
-}
-
-/**
-* @brief Get free heap size
-*
-* @param void
-*
-* @note This API is used for getting free heap size.
-*
-* @return size of free heap
-*/
-static int tkl_system_get_free_heap_size(void)
-{
-    return tuya_mem_heap_available(s_heap_handle);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1147,7 +1134,6 @@ TAL_API_OPS_T tal_api_ops_platform = {
     .malloc = tkl_system_malloc,
     .free = tkl_system_free,
     .calloc = tkl_system_calloc,
-    .get_free_heap_size = tkl_system_get_free_heap_size,
     //! system
     .sleep = tkl_system_sleep,
     .reset = tkl_system_reset,
