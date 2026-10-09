@@ -64,19 +64,19 @@ endif()
 
 # demo 参数默认（与 Kconfig 默认一致；样片与 AV info 用）
 if(NOT DEFINED CONFIG_P2P_DEMO_WIDTH)
-    set(CONFIG_P2P_DEMO_WIDTH 640)
+    set(CONFIG_P2P_DEMO_WIDTH 2304)
 endif()
 if(NOT DEFINED CONFIG_P2P_DEMO_HEIGHT)
-    set(CONFIG_P2P_DEMO_HEIGHT 480)
+    set(CONFIG_P2P_DEMO_HEIGHT 1296)
 endif()
 if(NOT DEFINED CONFIG_P2P_DEMO_FPS)
-    set(CONFIG_P2P_DEMO_FPS 20)
+    set(CONFIG_P2P_DEMO_FPS 15)
 endif()
 if(NOT DEFINED CONFIG_P2P_DEMO_KBPS)
-    set(CONFIG_P2P_DEMO_KBPS 400)
+    set(CONFIG_P2P_DEMO_KBPS 960)
 endif()
 if(NOT DEFINED CONFIG_P2P_DEMO_GOP)
-    set(CONFIG_P2P_DEMO_GOP 20)
+    set(CONFIG_P2P_DEMO_GOP 60)
 endif()
 
 # 凭据可选：不设置时使用 src/tuya_config.h 的默认值，
@@ -104,12 +104,12 @@ include(${TUYAOPEN_CORE_DIR}/tuyaopen-core.cmake)
 add_subdirectory(${TUYAOPEN_PORT_DIR} ${CMAKE_BINARY_DIR}/tuyaopen-port)
 
 # 3) 应用自带组件：qrcode 复用 iot_demo 的副本（不复制文件，随 CONFIG_ENABLE_QRCODE 门控）
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode")
-    message(FATAL_ERROR "p2p_demo 需与 iot_demo 同树（复用其 qrcode 组件）：找不到 ${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode")
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode/CMakeLists.txt")
+    message(FATAL_ERROR "p2p_demo 需与 iot_demo 同树（复用其 qrcode 组件）：找不到 ${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode/CMakeLists.txt")
 endif()
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode ${CMAKE_BINARY_DIR}/qrcode)
 
-# 4) 样片：configure 期复制到构建目录，供 demo_vcam 默认路径 "demo_video.264" 使用
+# 4) 视频源：configure 期复制到构建目录，供 demo_vcam 默认路径 "demo_video.264" 使用
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/demo_video.264 ${CMAKE_BINARY_DIR}/demo_video.264 COPYONLY)
 
 file(GLOB _p2p_demo_srcs CONFIGURE_DEPENDS

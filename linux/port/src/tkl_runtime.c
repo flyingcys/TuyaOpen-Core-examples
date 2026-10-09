@@ -80,7 +80,9 @@ static void tkl_log_output(const char *str, ...)
  * （tuya_transport 的 mbedtls_* 与 port 的 utilities 直调，声明在
  * tkl_memory.h）。calloc 不再走卡：core 的 tal_calloc 用 tal_malloc+memset
  * 实现（含乘法溢出检查）。
- * psram 家族、memset/memcpy、无调用方的 realloc/get_free_heap_size 已删。
+ * memset/memcpy、无调用方的 realloc/get_free_heap_size 已删；
+ * psram 家族在 ENABLE_TUYA_P2P 下保留（p2p-core 的 tuya_ipc_skill.c 引用，
+ * 见文件尾部实现）。
  * --------------------------------------------------------------------------- */
 #define MAX_HEAP_SIZE (512 * 1024 * 1024)
 

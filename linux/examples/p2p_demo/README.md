@@ -17,6 +17,9 @@ cmake --build build -j$(nproc)
 cd build && ./p2p_demo
 ```
 
+> 构建必须在本仓库树内进行：p2p_demo 复用 `../iot_demo/qrcode` 组件（不复制副本），
+> 单独拷贝本目录会因找不到 qrcode 而 configure 失败（CMake 会给出明确提示）。
+
 凭据可选：默认取 `src/tuya_config.h` 的 PID/UUID/AuthKey，可用
 `-DTUYA_PRODUCT_ID=.. -DTUYA_OPENSDK_UUID=.. -DTUYA_OPENSDK_AUTHKEY=..` 覆盖，或在
 `src/tuya_config_secrets.h`（参考 `.example` 模板）里配置，也支持同名环境变量。视频源在构建时
@@ -143,6 +146,9 @@ cmake --build build-ls -j$(nproc)
   与 iot_demo 并行跑会互相踢下线。
 - **激活数据存在运行目录的 `tuyadb/`**：首次运行需用涂鸦 App 扫码激活；换目录运行等于换设备身份，
   需要重新扫码（或把已激活的 `tuyadb/` 一起复制过去）。
+- **连续复位 3 次会清配网**：`reset_netcfg` 计数在 5 秒内未被清零时累加，达到 3 次即触发
+  `tuya_iot_reset`（factory reset，随后 `tal_system_reset` 重启）。调试时反复快速启动 3 次
+  就会丢激活数据、需要重新扫码绑定。
 - **未激活设备停在绑定等待态**：MQTT 已连、二维码已打印，等待 App 扫码；激活前 P2P 服务不会启动。
 - **未激活设备上调用 `TUYA_APP_Start` 会阻塞**：上游 `p2p_init` 取不到 p2p auth 时以 1 秒间隔
   永久重试（`while(1)`，持续打印 `get p2p auth failed`）。正常流程由激活后的 `MQTT_CONNECTED`

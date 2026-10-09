@@ -30,7 +30,7 @@
 #include "tal_api_ops.h"
 #include "tuya_ipc_demo.h"
 
-/* 收帧目标：20fps 下约 3 秒；上限 10s */
+/* 收帧目标：15fps 下约 4 秒；上限 10s */
 #define SELFTEST_FRAMES         60
 #define SELFTEST_WAIT_MS        10000
 /* 5a 相位锁定（等一个 I 帧）的等待上限：需覆盖"自然等到下一个 IDR"的最坏情况。
@@ -41,7 +41,7 @@
  * 若请求被静默忽略，帧数断言（>8 帧）先于本超时判失败。 */
 #define SELFTEST_IFRAME_WAIT_MS 2000
 /* 请求后到下一个 I 帧之间允许的最大帧数：正常（vcam 跳到下个 IDR AU）≤ 几帧；
- * 请求被静默忽略时按 GOP=20 要等 ~19 个 P 帧——用帧数而非时长做断言，避免
+ * 请求被静默忽略时按 GOP=60 要等 ~59 个 P 帧——用帧数而非时长做断言，避免
  * "恰好在 GOP 末尾请求"导致的假通过 */
 #define SELFTEST_IFRAME_MAX_FRAMES 8
 /* 取帧缓冲：p2p_init 的 media_frame 缓冲为 300KB，自测缓冲对齐该上限 */
@@ -151,8 +151,8 @@ int main(void)
 
     /* 5) 请求 I 帧：先在"刚收到 I 帧"的已知相位等待，再发请求，随后统计到下一个
      *    I 帧之间又收到几帧。vcam 语义：请求后下一拍直接跳到下一个 IDR AU（中间
-     *    的 P 帧被跳过）——正常应 ≤ 几帧；若请求被静默忽略，按 GOP=20@20fps 还要
-     *    等 ~19 个 P 帧（≈1s）才自然出现下一个 I 帧。 */
+     *    的 P 帧被跳过）——正常应 ≤ 几帧；若请求被静默忽略，按 GOP=60@15fps 还要
+     *    等 ~59 个 P 帧（≈4s）才自然出现下一个 I 帧。 */
     if (fail == 0) {
         uint32_t iframe_waited = 0;
         uint32_t frames_after_req = 0;
