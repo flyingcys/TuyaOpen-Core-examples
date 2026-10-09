@@ -15,10 +15,12 @@
  *   宏 API 引用，声明保留在 tkl_system.h）；
  * - mutex 保持对外符号（port 的 utilities（tuya_queue/tuya_smartpointer）
  *   经宏直调，声明保留在 tkl_mutex.h）；
- * - 无调用方的接口已删除（tkl_mutex_trylock、tkl_thread_get_id、
- *   tkl_system_memset/memcpy、tkl_system_psram_*、tkl_log_close/open、
+ * - 无调用方的接口已删除（tkl_mutex_trylock、
+ *   tkl_system_memset/memcpy、tkl_log_close/open、
  *   tkl_cpu_sleep_mode_set、tkl_system_realloc、tkl_system_get_tick_count、
  *   tkl_system_get_free_heap_size、tkl_system_calloc 等）。
+ * - p2p-core 实际引用的 tkl_thread_get_id 与 tkl_system_psram_* 保留在
+ *   ENABLE_TUYA_P2P 门控下（不用 p2p 的平台仍无需适配，见 tkl_fs.c 同款门控）。
  * 移植新平台时在各自 port 中提供同名 ops 卡与实现即可。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
@@ -140,6 +142,21 @@ void tkl_system_free(void *ptr)
         tuya_mem_heap_free(s_heap_handle, ptr);
     }
 }
+
+#if defined(ENABLE_TUYA_P2P)
+/* p2p-core 的 tuya_ipc_skill.c 以局部 extern 引用 psram 家族（skill JSON 缓冲，
+ * 在带 PSRAM 的平台上刻意放外部 RAM）。Linux 无 PSRAM，别名到系统堆即可；
+ * 门控与 tkl_fs.c / tkl_network.c 的 p2p 块一致，P2P=OFF 时不编译。 */
+void *tkl_system_psram_malloc(const size_t size)
+{
+    return tkl_system_malloc(size);
+}
+
+void tkl_system_psram_free(void *ptr)
+{
+    tkl_system_free(ptr);
+}
+#endif /* ENABLE_TUYA_P2P */
 
 /* ---------------------------------------------------------------------------
  * system 实现（原 port/src/tkl_system.c）：enter/exit_critical 保持对外符号
@@ -674,6 +691,30 @@ static OPERATE_RET tkl_thread_is_self(const TKL_THREAD_HANDLE thread, BOOL_T *is
     *is_self = pthread_equal(thread_data->id, pthread_self());
     return OPRT_OK;
 }
+
+#if defined(ENABLE_TUYA_P2P)
+/**
+* @brief Get the handle of the calling thread
+*
+* @param[out] thread: thread handle
+*
+* @note p2p-core 的 pjproject（os_core_tuyaos.c）用它做 TLS 行匹配，只要求
+*       "同一线程恒得同一值"的不透明身份，不要求与 tkl_thread_create 的
+*       handle（本 port 内为 THREAD_DATA*，仅 is_self 消费）同类。
+*       Linux 下直接返回 pthread_self()。
+*
+* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
+*/
+OPERATE_RET tkl_thread_get_id(TKL_THREAD_HANDLE *thread)
+{
+    if (NULL == thread) {
+        return OPRT_INVALID_PARM;
+    }
+
+    *thread = (TKL_THREAD_HANDLE)pthread_self();
+    return OPRT_OK;
+}
+#endif /* ENABLE_TUYA_P2P */
 
 /* ---------------------------------------------------------------------------
  * queue 实现（原 port/src/tkl_queue.c，ops 卡私有）
