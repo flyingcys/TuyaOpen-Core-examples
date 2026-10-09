@@ -4,7 +4,7 @@
  *
  * 构建产物为独立可执行文件 media_chain_selftest（与 p2p_demo 链接同一组库），
  * 用法：从构建目录执行 ./media_chain_selftest（样片路径由 demo 侧解析：
- * cwd 或可执行文件所在目录的 sample.h264）。
+ * cwd 或可执行文件所在目录的 demo_video.264）。
  *
  * 流程（全部用 demo 的公开契约函数，不新造接口）：
  *   1. tal 运行时初始化（time service + log）；

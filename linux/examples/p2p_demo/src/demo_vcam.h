@@ -3,7 +3,7 @@
  * @brief 虚拟摄像头（virtual camera）：把内置 H.264 样片按帧率循环喂给回调。
  *
  * Linux 上没有摄像头也没有 T5 的硬编码器，本模块用 ffmpeg 生成的 Annex-B
- * 样片（assets/sample.h264，CMake 复制到构建目录）顶替上游 tdl_camera：
+ * 样片（assets/demo_video.264，CMake 复制到构建目录）顶替上游 tdl_camera：
  * open 时整文件读入并按 AU（access unit）边界建索引，起一个线程按 fps
  * 节拍逐 AU 回调，到文件末尾循环回第 0 帧。
  *

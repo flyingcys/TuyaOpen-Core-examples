@@ -6,7 +6,7 @@ menu "configure app (p2p_demo)"
         select ENABLE_TUYA_P2P
         select ENABLE_IPC_RING_BUFFER
         help
-            构建 linux/examples/p2p_demo（虚拟摄像头样片 + P2P 直播）。
+            构建 linux/examples/p2p_demo（虚拟摄像头视频源 + P2P 直播）。
             默认 y：p2p_demo 是独立 CMake 工程，本开关只负责把 P2P 链路
             依赖的 core 开关（ENABLE_TUYA_P2P / ENABLE_IPC_RING_BUFFER）
             在共享的 .config 里带起来。本符号无 prompt（menuconfig 里不可
@@ -25,50 +25,53 @@ menu "configure app (p2p_demo)"
     config P2P_DEMO_WIDTH
         int "Capture width"
         depends on P2P_DEMO
-        default 640
+        default 2304
         help
-            样片/上报给 App 的视频宽度（像素）。改样片时必须同步改这里，
-            否则 AV 能力上报与实际码流不一致。
+            上报给 App 的视频宽度（像素），需与视频源文件一致
+            （内置 demo_video.264 为 2304x1296），否则 AV 能力上报与实际
+            码流不一致。
 
     config P2P_DEMO_HEIGHT
         int "Capture height"
         depends on P2P_DEMO
-        default 480
+        default 1296
         help
-            样片/上报给 App 的视频高度（像素），需与样片一致。
+            上报给 App 的视频高度（像素），需与视频源文件一致。
 
     config P2P_DEMO_FPS
         int "Capture fps"
         depends on P2P_DEMO
-        default 20
+        default 15
         help
-            虚拟摄像头的喂帧帧率（同时也是上报给 App 的 fps）。
-            样片按 20fps 生成，改这里只改喂帧节拍，不改样片内容。
+            虚拟摄像头的喂帧帧率（同时也是上报给 App 的 fps）。内置
+            demo_video.264 为 15fps，换视频源时要同步改这里。
 
     config P2P_DEMO_KBPS
         int "Target bitrate (kbps)"
         depends on P2P_DEMO
-        default 400
+        default 960
         help
-            上报给 App 的目标码率（kbps）。样片是固定码率文件，源端不参与
-            实际码控，此值只影响 AV 能力上报与 App 的清晰度档位选择。
+            上报给 App 的目标码率（kbps）。视频源是固定码率文件，源端不
+            参与实际码控，此值只影响 AV 能力上报与 App 的清晰度档位选择
+            （内置视频约 960kbps）。
 
     config P2P_DEMO_GOP
         int "GOP length (frames)"
         depends on P2P_DEMO
-        default 20
+        default 60
         help
-            上报给 App 的 GOP 长度（帧）。样片为 keyint=20 固定 GOP，
-            默认与样片一致，供 App 估算 I 帧间隔。
+            上报给 App 的 GOP 长度（帧）。内置视频为 60 帧固定 GOP
+            （每 4 秒一个 IDR），供 App 估算 I 帧间隔。
 
     config P2P_DEMO_H264_FILE
-        string "Live video source file (empty = bundled sample.h264)"
+        string "Live video source file (empty = bundled demo_video.264)"
         depends on P2P_DEMO
         default ""
         help
-            直播视频源文件路径。留空用内置样片（构建目录的 sample.h264，
-            由 assets/sample.h264 复制而来）；填写则用该 Annex-B H.264
-            文件（要求 AUD 开头、固定 GOP，AU 边界切分依赖 AUD）。
+            直播视频源文件路径。留空用内置视频（构建目录的
+            demo_video.264，由 assets/demo_video.264 复制而来，源自上游
+            camera_demo 的 demo_video.264）；填写则用该 Annex-B H.264
+            文件（AU 边界按 AUD 或 VCL 切分，无 AUD 亦可）。
 
     config P2P_DEMO_LIVE_RECORD
         bool "Live H264 record to local_store"

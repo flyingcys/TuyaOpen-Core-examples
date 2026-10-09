@@ -109,8 +109,8 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode")
 endif()
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode ${CMAKE_BINARY_DIR}/qrcode)
 
-# 4) 样片：configure 期复制到构建目录，供 demo_vcam 默认路径 "sample.h264" 使用
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/sample.h264 ${CMAKE_BINARY_DIR}/sample.h264 COPYONLY)
+# 4) 样片：configure 期复制到构建目录，供 demo_vcam 默认路径 "demo_video.264" 使用
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/demo_video.264 ${CMAKE_BINARY_DIR}/demo_video.264 COPYONLY)
 
 file(GLOB _p2p_demo_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
@@ -159,7 +159,7 @@ list(APPEND _p2p_demo_media_defs P2P_DEMO_RECORD_MAX_SEC=${CONFIG_P2P_DEMO_RECOR
 if(CONFIG_P2P_DEMO_PB_SEED)
     list(APPEND _p2p_demo_media_defs P2P_DEMO_PB_SEED=1)
 endif()
-# 样片路径覆盖：非空时改用指定文件（默认走构建目录的 sample.h264）
+# 样片路径覆盖：非空时改用指定文件（默认走构建目录的 demo_video.264）
 if(CONFIG_P2P_DEMO_H264_FILE)
     list(APPEND _p2p_demo_media_defs P2P_DEMO_H264_FILE="${CONFIG_P2P_DEMO_H264_FILE}")
 endif()

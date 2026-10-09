@@ -4,8 +4,9 @@
 
 上游 TuyaOpen `apps/tuya_cloud/ipc_p2p_demo`（T5AI IPC 摄像头 demo）的 Linux 移植：通过
 P2P 通道把设备视频推给涂鸦 App（App 侧看直播画面），可选支持本地录像与日历回放。Linux 上
-没有摄像头，视频源是内置 H.264 样片（`assets/sample.h264`，640x480@20fps、5 秒循环），由
-虚拟摄像头 `demo_vcam` 按帧率循环喂给媒体链路；音频不做（上游默认关，Linux 无音频）。
+没有摄像头，视频源是**上游 demo 自带的视频** `assets/demo_video.264`（2304x1296@15fps、
+36 秒循环，源自上游 `apps/tuya_cloud/camera_demo/demo_video.264`），由虚拟摄像头
+`demo_vcam` 按帧率循环喂给媒体链路；音频不做（上游默认关，Linux 无音频）。
 
 ## 构建与运行
 
@@ -18,8 +19,8 @@ cd build && ./p2p_demo
 
 凭据可选：默认取 `src/tuya_config.h` 的 PID/UUID/AuthKey，可用
 `-DTUYA_PRODUCT_ID=.. -DTUYA_OPENSDK_UUID=.. -DTUYA_OPENSDK_AUTHKEY=..` 覆盖，或在
-`src/tuya_config_secrets.h`（参考 `.example` 模板）里配置，也支持同名环境变量。样片在构建时
-复制到 `build/sample.h264`，从 `build/` 目录运行即可（在别处运行按可执行文件所在目录解析）。
+`src/tuya_config_secrets.h`（参考 `.example` 模板）里配置，也支持同名环境变量。视频源在构建时
+复制到 `build/demo_video.264`，从 `build/` 目录运行即可（在别处运行按可执行文件所在目录解析）。
 
 运行后行为：
 
@@ -35,12 +36,12 @@ cd build && ./p2p_demo
 |---|---|---|
 | `P2P_DEMO` | 构建本 example；select `ENABLE_TUYA_P2P`、`ENABLE_IPC_RING_BUFFER` | y（无 prompt） |
 | `P2P_DEMO_LOCAL_STORE` | 本地录像与日历回放；select `ENABLE_LOCAL_STORE` | n |
-| `P2P_DEMO_WIDTH` | 样片/上报给 App 的视频宽度（像素） | 640 |
-| `P2P_DEMO_HEIGHT` | 样片/上报给 App 的视频高度（像素） | 480 |
-| `P2P_DEMO_FPS` | 虚拟摄像头喂帧帧率，同时上报给 App | 20 |
-| `P2P_DEMO_KBPS` | 上报给 App 的目标码率（样片不参与实际码控） | 400 |
-| `P2P_DEMO_GOP` | 上报给 App 的 GOP 长度（样片固定 keyint=20） | 20 |
-| `P2P_DEMO_H264_FILE` | 直播视频源路径；留空用内置样片 | "" |
+| `P2P_DEMO_WIDTH` | 上报给 App 的视频宽度（像素），需与视频源一致 | 2304 |
+| `P2P_DEMO_HEIGHT` | 上报给 App 的视频高度（像素），需与视频源一致 | 1296 |
+| `P2P_DEMO_FPS` | 虚拟摄像头喂帧帧率，同时上报给 App | 15 |
+| `P2P_DEMO_KBPS` | 上报给 App 的目标码率（视频源不参与实际码控） | 960 |
+| `P2P_DEMO_GOP` | 上报给 App 的 GOP 长度（内置视频为 60 帧 GOP） | 60 |
+| `P2P_DEMO_H264_FILE` | 直播视频源路径；留空用内置视频 | "" |
 | `P2P_DEMO_LIVE_RECORD` | 直播期间持续写 local_store（按段切分） | n |
 | `P2P_DEMO_RECORD_MAX_SEC` | 单个录像分段时长上限（秒，30-3600） | 120 |
 | `P2P_DEMO_PB_SEED` | 启动时把直播源文件灌进当天索引，免录像体验回放 | n |
@@ -72,20 +73,23 @@ cmake -B build -DCONFIG_P2P_DEMO_H264_FILE=/path/to/your.h264
 ./build/media_chain_selftest
 ```
 
-- `vcam_selftest`：打开样片，验证 AU 索引与喂帧节拍，期望输出 `VCAM SELFTEST PASSED`
-  （40 帧、时间戳 0→1950 以 50ms 步进、含 2 个 I 帧）。
+- `vcam_selftest`：打开视频源，验证 AU 索引与喂帧节拍，期望输出 `VCAM SELFTEST PASSED`
+  （80 帧、时间戳以 66ms 步进、含 2 个 I 帧）。
 - `media_chain_selftest`：跑通完整媒体链路（vcam → 帧校验/队列/ring buffer → P2P 取帧回调）
-  并验证"请求 I 帧"，期望 `MEDIA CHAIN SELFTEST PASSED`（约 60 帧/3 秒、时间戳单调递增、
-  请求后到下一个 I 帧之间 ≤ 8 帧——正常 1~2 帧，请求被忽略时要等 ~19 个 P 帧）；找不到样片时报错
-  `sample not found: run from build/ ...`。
+  并验证"请求 I 帧"，期望 `MEDIA CHAIN SELFTEST PASSED`（60 帧/4 秒、时间戳单调递增、
+  请求后到下一个 I 帧之间 ≤ 8 帧——正常 1~2 帧，请求被忽略时要等 ~59 个 P 帧）；找不到视频源
+  时报错 `sample not found: run from build/ ...`。
 
 ## 视频源
 
-内置样片 `assets/sample.h264`（构建时复制为 `build/sample.h264`）：
+内置视频 `assets/demo_video.264`（构建时复制为 `build/demo_video.264`）：
 
-- Annex-B H.264，640x480@20fps、5 秒 100 帧循环，GOP=20（帧 0/20/40/60/80 为 IDR），baseline profile、每帧单 slice、无 B 帧，约 201 KB；
-- `demo_vcam` 按 AU 边界建索引后按帧率循环喂帧（遇 AUD 开新 AU，无 AUD 时按"已有 VCL
-  再遇 VCL"切分），到文件末尾回到第 0 帧。
+- **出处**：上游 TuyaOpen 的 `apps/tuya_cloud/camera_demo/demo_video.264`（`camera_demo` 是
+  `ipc_p2p_demo` 的前身，自带视频用于"文件模式"P2P 演示；`fce79c22` 用 ipc_p2p_demo 重写时
+  该文件被删除，本移植从上游 git 历史取回）。
+- **参数**：Annex-B H.264、High profile、2304x1296@15fps、540 帧（36 秒循环）、9 个 IDR
+  （GOP=60）、无 AUD（AU 边界按"已有 VCL 再遇 VCL"切分）、最大帧约 56KB、整文件 4.3MB。
+- `demo_vcam` 打开时解析为 AU 索引，按帧率循环喂帧；`request_i_frame` 跳到下一个 IDR。
 
 换成自己的 H.264：
 
@@ -93,12 +97,9 @@ cmake -B build -DCONFIG_P2P_DEMO_H264_FILE=/path/to/your.h264
 cmake -B build -DCONFIG_P2P_DEMO_H264_FILE=/path/to/your.h264
 ```
 
-或在 menuconfig 里填 `P2P_DEMO_H264_FILE`（也可直接改 `.config`）。要求 Annex-B 格式、固定
-GOP、无 B 帧（每个 AU 前带 AUD 更稳妥，缺失时按 VCL 边界切分）；分辨率/帧率变化时必须同步
-改 `P2P_DEMO_WIDTH/HEIGHT/FPS`（建议 `GOP/KBPS` 一并改），否则上报给 App 的 AV 能力与实际码流不一致。
-
-`assets/gen_sample.sh` 用 ffmpeg（libx264）生成样片，脚本注释写明各参数含义；改分辨率/
-帧率/GOP/码率后重新执行即可再生成（锁定单线程，结果可复现），并同步修改上面的 Kconfig。
+或在 menuconfig 里填 `P2P_DEMO_H264_FILE`（也可直接改 `.config`）。要求 Annex-B 格式；分辨率/
+帧率/GOP 变化时必须同步改 `P2P_DEMO_WIDTH/HEIGHT/FPS/GOP`（建议 `KBPS` 一并改），否则上报给
+App 的 AV 能力与实际码流不一致。单个 AU 需小于 256KB（demo 帧队列槽上限，超出会告警丢帧）。
 
 ## 录像与回放（默认关）
 
@@ -148,7 +149,7 @@ cmake --build build-ls -j$(nproc)
 
 ```sh
 +- p2p_demo
-    +- assets                       # sample.h264（内置样片）+ gen_sample.sh（生成脚本）
+    +- assets                       # demo_video.264（上游 camera_demo 自带视频）
     +- src
     |   -- tuya_main.c              # 入口：初始化、连云、事件处理、媒体线程
     |   -- reset_netcfg.c/.h        # 连续复位 3 次清配网数据

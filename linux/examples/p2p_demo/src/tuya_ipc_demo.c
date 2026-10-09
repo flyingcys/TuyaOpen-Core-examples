@@ -74,14 +74,14 @@ extern uint64_t tuya_p2p_misc_get_current_time_ms(void);
 #endif
 #define DEMO_CAM_GOP P2P_DEMO_GOP
 
-/* 上报给云的 fps：照上游保留 25。样片源实际按 DEMO_CAM_FPS（=P2P_DEMO_FPS）喂帧，
- * 两者差异是上游既有行为（编码器按 25fps 上报能力），移植不改。 */
-#define DEMO_AV_FPS 25
+/* 上报给云的 fps：与喂帧帧率一致。上游此处硬编码 25、与实际 20fps 摄像头不一致，
+ * 文件源改为如实上报（P2P_DEMO_FPS），否则 App 的节奏估算与实际码流不符。 */
+#define DEMO_AV_FPS DEMO_CAM_FPS
 
-/* 样片路径：未注入时兜底 "sample.h264"（构建目录里由 CMake configure 期从
+/* 样片路径：未注入时兜底 "demo_video.264"（构建目录里由 CMake configure 期从
  * assets/ 复制而来）；实际解析顺序见 __demo_h264_path() */
 #ifndef P2P_DEMO_H264_FILE
-#define P2P_DEMO_H264_FILE "sample.h264"
+#define P2P_DEMO_H264_FILE "demo_video.264"
 #endif
 
 /* 必须与 p2p_init() 的 media_frame 缓冲一致；不要读 media_frame->size */
@@ -292,8 +292,8 @@ static void __demo_encoded_frame_cb(const DEMO_VCAM_FRAME_T *frame)
  * @brief 解析样片路径：先按 cwd，再按可执行文件所在目录拼一次
  *
  * P2P_DEMO_H264_FILE 由 CMake 注入（Kconfig 可覆盖），未注入时兜底
- * "sample.h264"——验收命令是在 example 目录里执行 ./build/p2p_demo，cwd 下
- * 没有样片，需要再按可执行文件（build/p2p_demo）所在目录找到 build/sample.h264。
+ * "demo_video.264"——验收命令是在 example 目录里执行 ./build/p2p_demo，cwd 下
+ * 没有样片，需要再按可执行文件（build/p2p_demo）所在目录找到 build/demo_video.264。
  *
  * @return 可读的样片路径（静态缓冲，无需释放）；两处都找不到返回 NULL
  */
