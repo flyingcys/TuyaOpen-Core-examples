@@ -55,7 +55,11 @@ OPERATE_RET demo_vcam_open(const char *path, uint32_t fps, DEMO_VCAM_FRAME_CB cb
  * 未打开时直接返回 OPRT_OK（可重入）。返回前保证喂帧线程已退出，
  * 回调不会再被触发。
  *
- * @return OPRT_OK
+ * 约束：**不得在帧回调内调用本函数**——回调运行在 vcam 线程上，而 close 需要
+ * 该线程先退出（自等会一直等到超时）；请从其他线程/主线程关闭。
+ *
+ * @return OPRT_OK 成功；线程在时限内未启动/未退出时返回 OPRT_TIMEOUT
+ *         （此时缓冲与线程都保留，宁可泄漏也不 use-after-free）
  */
 OPERATE_RET demo_vcam_close(void);
 

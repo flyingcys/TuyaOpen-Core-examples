@@ -24,14 +24,18 @@ if(EXISTS "${TUYAOPEN_DOTCONFIG}")
                 set(CONFIG_${CMAKE_MATCH_1} n)
             endif()
         elseif(_tuyaopen_line MATCHES "^CONFIG_([A-Z0-9_]+)=(.+)$")
-            # int/string 选项（demo 参数、样片路径等）：原样收下，
-            # 由下面的分支决定怎么注入编译宏
+            # int/string 选项（demo 参数、样片路径等）：kconfiglib 的 string 值带
+            # 引号（空串写作 CONFIG_X=""），这里剥掉外层引号再收下——否则空值会
+            # 变成两个引号字符、"非空"判断失真，注入出 -DXXX="""" 这种空串宏。
+            # 由下面的分支决定怎么注入编译宏。
             if(NOT DEFINED CONFIG_${CMAKE_MATCH_1})
-                set(CONFIG_${CMAKE_MATCH_1} ${CMAKE_MATCH_2})
+                string(REGEX REPLACE "^\"(.*)\"$" "\\1" _tuyaopen_val "${CMAKE_MATCH_2}")
+                set(CONFIG_${CMAKE_MATCH_1} "${_tuyaopen_val}")
             endif()
         endif()
     endforeach()
     unset(_tuyaopen_line)
+    unset(_tuyaopen_val)
     unset(_tuyaopen_kconfig_lines)
 endif()
 unset(TUYAOPEN_DOTCONFIG)
@@ -95,6 +99,9 @@ include(${TUYAOPEN_CORE_DIR}/tuyaopen-core.cmake)
 add_subdirectory(${TUYAOPEN_PORT_DIR} ${CMAKE_BINARY_DIR}/tuyaopen-port)
 
 # 3) 应用自带组件：qrcode 复用 iot_demo 的副本（不复制文件，随 CONFIG_ENABLE_QRCODE 门控）
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode")
+    message(FATAL_ERROR "p2p_demo 需与 iot_demo 同树（复用其 qrcode 组件）：找不到 ${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode")
+endif()
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode ${CMAKE_BINARY_DIR}/qrcode)
 
 # 4) 样片：configure 期复制到构建目录，供 demo_vcam 默认路径 "sample.h264" 使用

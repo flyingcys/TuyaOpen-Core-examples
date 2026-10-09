@@ -9,7 +9,8 @@ menu "configure app (p2p_demo)"
             构建 linux/examples/p2p_demo（虚拟摄像头样片 + P2P 直播）。
             默认 y：p2p_demo 是独立 CMake 工程，本开关只负责把 P2P 链路
             依赖的 core 开关（ENABLE_TUYA_P2P / ENABLE_IPC_RING_BUFFER）
-            在共享的 .config 里带起来；不需要 p2p_demo 的树可关掉它。
+            在共享的 .config 里带起来。本符号无 prompt（menuconfig 里不可
+            交互关闭），不构建该 example 即可，无需关闭此符号。
 
     config P2P_DEMO_LOCAL_STORE
         bool "Recording and calendar playback (local_store)"

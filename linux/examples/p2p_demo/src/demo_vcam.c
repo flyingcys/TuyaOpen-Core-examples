@@ -413,6 +413,11 @@ OPERATE_RET demo_vcam_close(void)
             tal_system_sleep(5);
             waited_ms += 5;
         }
+        if (!s_vcam.started) {
+            /* 线程没跑起来（超时）：不 delete、不释放缓冲，宁可泄漏也不 use-after-free */
+            PR_ERR("vcam close: thread not started in %ums, keep buffers", waited_ms);
+            return OPRT_TIMEOUT;
+        }
         tal_thread_delete(s_vcam.thread);
         s_vcam.thread = NULL;
         while (!s_vcam.exited && waited_ms < DEMO_VCAM_EXIT_WAIT_MS) {
@@ -420,7 +425,9 @@ OPERATE_RET demo_vcam_close(void)
             waited_ms += 5;
         }
         if (!s_vcam.exited) {
-            PR_WARN("vcam close: thread did not exit in %ums", waited_ms);
+            /* 线程仍没退出（回调阻塞等）：同样保留缓冲，宁可泄漏也不 use-after-free */
+            PR_ERR("vcam close: thread not exited in %ums, keep buffers", waited_ms);
+            return OPRT_TIMEOUT;
         }
     }
 
