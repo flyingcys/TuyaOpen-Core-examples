@@ -312,7 +312,7 @@ OPERATE_RET tkl_ble_gap_rssi_get(uint16_t conn_handle)
  * */ 
 OPERATE_RET tkl_ble_gatts_service_add(TKL_BLE_GATTS_PARAMS_T *p_service)
 {
-    // 有些 wifi+ble 应用先调用了这个再调用初始化，
+    // 有些应用先调用了这个再调用初始化，
     // 导致失败，这里直接也调用下协议栈初始化，同时该函数做了防重复初始化
     bluez_inc_init(__gap_evt_cb, __gatt_evt_cb);
 

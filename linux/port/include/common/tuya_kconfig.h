@@ -2,12 +2,9 @@
  *
  * 本文件不再由构建系统生成，三部分内容：
  *   1. 开关宏：默认全部不定义。两种开启方式（二选一，-D 优先）：
- *      a) 编译命令/IDE 全局宏：-DENABLE_WIFI=1（只传要开启的）
+ *      a) 编译命令/IDE 全局宏：-DENABLE_WIRED=1（只传要开启的）
  *      b) 取消注释下方对应 #define
  *      注意：开关值必须与实际参与编译的源文件一致，否则链接失败。
- *      （ENABLE_WIFI 当前无消费者：tal_wifi 已随 core 清理移除（b606a2a），
- *      Linux port 亦无 WiFi 实现（tal_wifi/tkl_wifi 均已删除），p2p 里原先
- *      消费它的 WiFi 分支也已删。开启该开关不报错、但无任何效果。）
  *   2. 板级宏：LINUX 平台的默认值
  *   3. 参数默认值：全部 #ifndef 保护，可被 -D 覆盖
  */
@@ -17,9 +14,6 @@
 /* ==================== 1. 开关（默认全关，按需开启） ==================== */
 /* #ifndef ENABLE_WIRED
 #define ENABLE_WIRED 1
-#endif */
-/* #ifndef ENABLE_WIFI
-#define ENABLE_WIFI 1
 #endif */
 /* #ifndef ENABLE_BLUETOOTH
 #define ENABLE_BLUETOOTH 1
@@ -40,18 +34,6 @@
 /* ==================== 2. 板级宏（LINUX） ==================== */
 #ifndef OPERATING_SYSTEM
 #define OPERATING_SYSTEM 100 /* SYSTEM_LINUX */
-#endif
-
-#ifndef WLAN_DEV
-#define WLAN_DEV "wlan0"
-#endif
-
-#ifndef WLAN_AP
-#define WLAN_AP "wlan1"
-#endif
-
-#ifndef WIFI_DB_PATH
-#define WIFI_DB_PATH "./tuya_db_files"
 #endif
 
 #ifndef AUDIO_DRIVER_NAME
