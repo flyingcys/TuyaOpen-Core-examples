@@ -402,16 +402,17 @@ __pb_exit:
         local_store_reader_close(rd);
     }
     s_pb_running = FALSE;
-    s_pb_alive = FALSE;
     PR_NOTICE("pb send thread exit frames=%u", frame_cnt);
     /* 本仓库 tal_thread 语义：用户函数返回后包装层会一直等外部 delete（否则线程
      * 不退出、变僵尸）。所以退出路径必须自删（is_self 分支由包装层完成最终释放）
-     * ——EOF/换段等"无人调用 demo_media_pb_stop"的场景同样不留残余线程。 */
+     * ——EOF/换段等"无人调用 demo_media_pb_stop"的场景同样不留残余线程。
+     * 先清句柄再清 alive：否则 __pb_start 可能在两行之间写入新句柄，被本线程误删。 */
     if (s_pb_thread != NULL) {
         THREAD_HANDLE h = s_pb_thread;
         s_pb_thread = NULL;
         tal_thread_delete(h);
     }
+    s_pb_alive = FALSE;
 }
 
 static void __pb_stop(void)
