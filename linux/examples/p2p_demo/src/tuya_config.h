@@ -29,8 +29,11 @@
  *
  */
 // clang-format off
+/* PID 默认用上游 ipc_p2p_demo 的 IPC 类目产品（P2P 直播需要 IPC 产品，
+ * 通用产品会被云侧 tuya.device.ipc.p2p.config.get 拒绝）。换自己的产品时
+ * 改这里，或用 -DTUYA_PRODUCT_ID=.. / secrets 覆盖。 */
 #ifndef TUYA_PRODUCT_ID
-#define TUYA_PRODUCT_ID      "qhivvyqawogv04e4"                        // Please change your product id
+#define TUYA_PRODUCT_ID      "sjzw8nclwoitx0rv"                        // Please change your product id
 #endif
 
 #ifndef TUYA_OPENSDK_UUID

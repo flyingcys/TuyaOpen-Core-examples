@@ -135,10 +135,14 @@ cmake --build build-ls -j$(nproc)
 
 ## 已知限制
 
-- **需要 IPC 类目产品**：默认凭据是通用产品（`qhivvyqawogv04e4`），设备能连云、能被 App 绑定、
-  激活后 skill 上报也成功，但云侧 `tuya.device.ipc.p2p.config.get` 会返回 `IP Camera Not exist`
-  ——非 IPC 类目产品没有 P2P 配置，`TUYA_APP_Start` 取不到 p2p auth，P2P 服务起不来。请在涂鸦
-  IoT 平台创建 IPC 类目产品，用其 PID/UUID/AuthKey 构建（可用 `-D` 或 secrets 覆盖）。
+- **需要 IPC 类目产品**：默认 PID 用上游 ipc_p2p_demo 的 IPC 产品（`sjzw8nclwoitx0rv`）。若换成
+  通用产品，设备能连云、能被 App 绑定、skill 上报也成功，但云侧 `tuya.device.ipc.p2p.config.get`
+  会返回 `IP Camera Not exist`——非 IPC 类目产品没有 P2P 配置，`TUYA_APP_Start` 取不到 p2p auth，
+  P2P 服务起不来。生产使用请换成自己的 IPC 产品 + license（`-D` 或 `src/tuya_config_secrets.h`）。
+- **默认 UUID/AuthKey 是仓库内的测试 license**（与 iot_demo 相同）：同一 license 不能两处同时在线，
+  与 iot_demo 并行跑会互相踢下线。
+- **激活数据存在运行目录的 `tuyadb/`**：首次运行需用涂鸦 App 扫码激活；换目录运行等于换设备身份，
+  需要重新扫码（或把已激活的 `tuyadb/` 一起复制过去）。
 - **未激活设备停在绑定等待态**：MQTT 已连、二维码已打印，等待 App 扫码；激活前 P2P 服务不会启动。
 - **未激活设备上调用 `TUYA_APP_Start` 会阻塞**：上游 `p2p_init` 取不到 p2p auth 时以 1 秒间隔
   永久重试（`while(1)`，持续打印 `get p2p auth failed`）。正常流程由激活后的 `MQTT_CONNECTED`
