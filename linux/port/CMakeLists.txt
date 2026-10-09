@@ -90,10 +90,10 @@ if(_port_srcs)
         target_compile_definitions(tuyaopen-port PRIVATE ENABLE_TUYA_P2P=1)
     endif()
 
-    # 局域网/对端服务 ops（tkl_network 的 accept/listen/send_to/recvfrom/recv_nd_size）
-    # 的挂载条件：局域网协议（ENABLE_LOCAL_LINK，默认开）/ p2p / AI monitor 任一开启
-    # 即需要；三者全关时 port 无需适配这 5 个。同 P2P，逐个注入（core 的宏不传播到
-    # port 目标）。
+    # 局域网/对端服务 ops（tkl_network 的 listen/accept/send_to/recvfrom/recv_nd_size）
+    # 的挂载条件：listen/accept 局域网协议、p2p、AI monitor 任一开启即需要；
+    # send_to/recvfrom 局域网协议或 p2p；recv_nd_size 仅局域网协议。三者全关时
+    # port 无需适配这 5 个。同 P2P，逐个注入（core 的宏不传播到 port 目标）。
     if(CONFIG_ENABLE_LOCAL_LINK)
         target_compile_definitions(tuyaopen-port PRIVATE ENABLE_LOCAL_LINK=1)
     endif()

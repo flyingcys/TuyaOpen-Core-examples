@@ -691,7 +691,8 @@ char *tkl_net_addr2str(TUYA_IP_ADDR_T ipaddr)
 
 /* ===== 局域网/对端服务接口（云通道不需要，按能力开关隔离）=====
  * 挂载条件由 port 的 CMake 从 CONFIG_* 映射注入（core 的宏不传播到 port 目标）：
- *   - listen/accept/send_to/recvfrom：局域网协议、p2p（sock_tal）、AI monitor 共用；
+ *   - listen/accept：局域网协议、p2p（sock_tal）、AI monitor（本地服务端）共用；
+ *   - send_to/recvfrom：局域网协议、p2p 共用（AI monitor 不用）；
  *   - recv_nd_size：仅局域网协议（tuya_lan.c 收帧）使用。
  * 对应能力全关时不编译、卡成员为 NULL，core 侧 TAL_NET_EXEC_OP 有兜底
  * （运行时报 "not available"），port 移植时无需适配。
@@ -757,6 +758,9 @@ int tkl_net_accept(const int fd, TUYA_IP_ADDR_T *addr, uint16_t *port)
     return ret;
 }
 
+#endif
+
+#if defined(ENABLE_LOCAL_LINK) || defined(ENABLE_TUYA_P2P)
 /**
  * @brief Send data to specified server
  *
@@ -1068,6 +1072,8 @@ TAL_NETWORK_CARD_T tal_network_card_platform = {
             /* 局域网/对端服务成员（实现见本文件对应集中块） */
             .listen = tkl_net_listen,
             .accept = tkl_net_accept,
+#endif
+#if defined(ENABLE_LOCAL_LINK) || defined(ENABLE_TUYA_P2P)
             .send_to = tkl_net_send_to,
             .recvfrom = tkl_net_recvfrom,
 #endif
