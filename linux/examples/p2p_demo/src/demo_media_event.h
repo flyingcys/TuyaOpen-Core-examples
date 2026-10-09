@@ -1,6 +1,6 @@
 /**
  * @file demo_media_event.h
- * @brief p2p_demo 回放（MEDIA_STREAM 事件）契约：Task 5 实现 local_store 回放。
+ * @brief p2p_demo 回放（MEDIA_STREAM 事件）契约：local_store 段查询与回放控制。
  *
  * 从上游 ipc_p2p_demo 的 include/demo_media_event.h 裁剪而来，只保留两个
  * 对外接口（查询月/日、起播/暂停/倍速/拖动等都在 .c 内部实现）。

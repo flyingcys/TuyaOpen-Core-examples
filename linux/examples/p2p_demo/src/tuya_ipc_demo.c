@@ -332,6 +332,16 @@ static const char *__demo_h264_path(void)
 }
 
 /**
+ * @brief 对外暴露的样片路径解析（demo_media_event 的 PB_SEED 与直播同源）
+ *
+ * @return 可读的样片路径（静态缓冲）；找不到返回 NULL
+ */
+const char *demo_h264_source_path(void)
+{
+    return __demo_h264_path();
+}
+
+/**
  * @brief 视频源是否就绪：样片文件可读即视为 present（替代上游摄像头探测）
  */
 static BOOL_T __demo_camera_present(void)

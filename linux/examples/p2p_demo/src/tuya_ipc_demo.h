@@ -1,11 +1,11 @@
 /**
  * @file tuya_ipc_demo.h
- * @brief p2p_demo 媒体回调契约（Task 3 启动链 / Task 4 视频链路共用）。
+ * @brief p2p_demo 媒体回调契约（启动链与视频链路共用）。
  *
  * 从上游 ipc_p2p_demo 的 include/tuya_ipc_demo.h 裁剪而来：
  *   - 去掉音频开关（CAMERA_DEMO_AUDIO/DEMO_ENABLE_AUDIO，本 demo 不做音频采集，
  *     与上游 DEMO_HAS_AUDIO=0 分支一致）与 demo_mic_uplink_pause（仅音频路径用）；
- *   - 音频回调声明保留，Task 4 给空实现（P2P SDK 的回调集要求非空指针）。
+ *   - 音频回调声明保留、由 .c 给空实现（P2P SDK 的回调集要求非空指针）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
@@ -105,5 +105,14 @@ int demo_on_request_i_frame_callback(void);
  * @return -1（不支持；同上游占位映射：内部 __demo_camera_set_bitrate 返回 OPRT_NOT_SUPPORTED）
  */
 int demo_on_set_video_bitrate_callback(uint32_t kbps);
+
+/**
+ * @brief 解析本 demo 的视频源样片路径（先 cwd 再可执行文件目录；P2P_DEMO_H264_FILE 可覆盖）
+ *
+ * 直播（vcam）与回放种子（demo_media_event 的 PB_SEED）共用同一个源文件。
+ *
+ * @return 可读路径（静态缓冲，勿释放）；两处都找不到返回 NULL
+ */
+const char *demo_h264_source_path(void);
 
 #endif /* __TUYA_IPC_DEMO_H__ */

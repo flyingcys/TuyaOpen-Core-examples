@@ -10,7 +10,7 @@
  *     tuya_iot_init(..., .skill_param = gw_active_get_ext_param()) →
  *     TUYA_EVENT_RTC_REQ → gw_p2p_mqtt_data_cb()（云信令入口）→
  *     MQTT 连上后起线程填 TUYA_IPC_SDK_VAR_S 十回调 → TUYA_APP_Start()
- *     → tuya_ipc_demo_start()（媒体链路，Task 4 起为真实实现）。
+ *     → tuya_ipc_demo_start()（媒体链路：ring buffer / vcam / local_store）。
  *
  * 与上游 tuya_main.c 的差异（移植决定，对应总计划的差异表）：
  *   - netmgr_init / netmgr_conn_set / netmgr 版 user_network_check
