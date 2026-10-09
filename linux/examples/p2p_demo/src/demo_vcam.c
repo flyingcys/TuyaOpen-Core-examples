@@ -64,6 +64,7 @@ static struct {
     volatile BOOL_T  started;      /* 线程函数已进入（此时线程状态必为 RUNNING） */
     volatile BOOL_T  exited;       /* 线程函数已返回：此后不再触碰 buf，close 可安全释放 */
     volatile BOOL_T  want_i_frame; /* request_i_frame 置位，线程下一拍跳 IDR */
+    volatile BOOL_T  poisoned;     /* close 超时（线程未能停住）：状态不可恢复，拒绝再 open */
 } s_vcam;
 
 /**
@@ -304,6 +305,12 @@ OPERATE_RET demo_vcam_open(const char *path, uint32_t fps, DEMO_VCAM_FRAME_CB cb
         PR_ERR("vcam open: already open");
         return OPRT_COM_ERROR;
     }
+    if (s_vcam.poisoned) {
+        /* 上一次 close 超时：旧线程可能还活着且仍读全局 buf/aus，再 open 会覆盖全局
+         * 状态（双线程喂帧）。此状态不可恢复，提示进程重启 */
+        PR_ERR("vcam open: unusable after a timed-out close, restart the process");
+        return OPRT_COM_ERROR;
+    }
 
     /* 1) 整文件读入（样片约 200KB，允许全量驻留） */
     fp = fopen(path, "rb");
@@ -415,6 +422,7 @@ OPERATE_RET demo_vcam_close(void)
         }
         if (!s_vcam.started) {
             /* 线程没跑起来（超时）：不 delete、不释放缓冲，宁可泄漏也不 use-after-free */
+            s_vcam.poisoned = TRUE;
             PR_ERR("vcam close: thread not started in %ums, keep buffers", waited_ms);
             return OPRT_TIMEOUT;
         }
@@ -426,6 +434,7 @@ OPERATE_RET demo_vcam_close(void)
         }
         if (!s_vcam.exited) {
             /* 线程仍没退出（回调阻塞等）：同样保留缓冲，宁可泄漏也不 use-after-free */
+            s_vcam.poisoned = TRUE;
             PR_ERR("vcam close: thread not exited in %ums, keep buffers", waited_ms);
             return OPRT_TIMEOUT;
         }

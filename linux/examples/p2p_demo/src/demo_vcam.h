@@ -45,7 +45,7 @@ typedef void (*DEMO_VCAM_FRAME_CB)(const DEMO_VCAM_FRAME_T *frame);
  * @param[in] cb   帧回调（NULL 返回 OPRT_INVALID_PARM）
  * @return OPRT_OK 成功；文件不存在返回 OPRT_NOT_EXIST；
  *         文件无 AU / 参数非法返回 OPRT_INVALID_PARM；
- *         重复 open 返回 OPRT_COM_ERROR（先 close 再 open）
+ *         重复 open、或上一次 close 超时（线程未能停住，状态不可恢复）返回 OPRT_COM_ERROR
  */
 OPERATE_RET demo_vcam_open(const char *path, uint32_t fps, DEMO_VCAM_FRAME_CB cb);
 

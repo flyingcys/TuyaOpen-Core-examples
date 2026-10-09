@@ -27,14 +27,19 @@ if(EXISTS "${TUYAOPEN_DOTCONFIG}")
             # int/string 选项（demo 参数、样片路径等）：kconfiglib 的 string 值带
             # 引号（空串写作 CONFIG_X=""），这里剥掉外层引号再收下——否则空值会
             # 变成两个引号字符、"非空"判断失真，注入出 -DXXX="""" 这种空串宏。
-            # 由下面的分支决定怎么注入编译宏。
+            # 注意：string(REGEX REPLACE) 会覆盖 CMAKE_MATCH_*，所以变量名与值都必须
+            # 先落到局部变量里再动 REGEX，否则 set 会写到被覆盖后的组名上
+            # （曾把 "live.h264" 写成 set(CONFIG_live.h264 ...)）。
             if(NOT DEFINED CONFIG_${CMAKE_MATCH_1})
-                string(REGEX REPLACE "^\"(.*)\"$" "\\1" _tuyaopen_val "${CMAKE_MATCH_2}")
-                set(CONFIG_${CMAKE_MATCH_1} "${_tuyaopen_val}")
+                set(_tuyaopen_name "${CMAKE_MATCH_1}")
+                set(_tuyaopen_val "${CMAKE_MATCH_2}")
+                string(REGEX REPLACE "^\"(.*)\"$" "\\1" _tuyaopen_val "${_tuyaopen_val}")
+                set(CONFIG_${_tuyaopen_name} "${_tuyaopen_val}")
             endif()
         endif()
     endforeach()
     unset(_tuyaopen_line)
+    unset(_tuyaopen_name)
     unset(_tuyaopen_val)
     unset(_tuyaopen_kconfig_lines)
 endif()
