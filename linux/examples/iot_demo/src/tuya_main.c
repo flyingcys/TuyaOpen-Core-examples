@@ -111,7 +111,9 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
     } break;
     /* 已激活设备连上云端 MQTT 后启动局域网服务（原由 netmgr 定时器在激活后带起） */
     case TUYA_EVENT_MQTT_CONNECTED:
+#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
         tuya_lan_enable();
+#endif
         break;
     /* RECV upgrade request */
     case TUYA_EVENT_UPGRADE_NOTIFY:
