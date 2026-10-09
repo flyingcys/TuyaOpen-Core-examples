@@ -5,8 +5,10 @@
  * 从上游 ipc_p2p_demo 的 src/reset_netcfg.c 逐行移植，差异仅两处：
  *   1. `tal_kv_free(read_buf)` → `tal_free(read_buf)`（本仓库 tal_kv 只有
  *      init/set/get/del 四接口，get 的返回值约定用 tal_free 释放，见 tal_kv.h）；
- *   2. `reset_netconfig_check()` 的返回值局部变量补初值（上游 `int rt;` 未赋值
- *      就 `return rt;`，属未定义行为；本仓库按 0 返回，语义不变）。
+ *   2. `reset_netconfig_check()` 的返回值局部变量补初值（上游 `int rt;` 仅在
+ *      `reset_count_read` 成功时经 TUYA_CALL_ERR_LOG 赋值后 `return rt;`，
+ *      失败路径提前返回——是"脆弱但良定义"，不是 UB；补初值属防御性初始化，
+ *      语义不变）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
