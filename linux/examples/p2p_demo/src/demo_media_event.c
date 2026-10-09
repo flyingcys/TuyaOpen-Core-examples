@@ -402,9 +402,16 @@ __pb_exit:
         local_store_reader_close(rd);
     }
     s_pb_running = FALSE;
-    s_pb_thread = NULL;
     s_pb_alive = FALSE;
     PR_NOTICE("pb send thread exit frames=%u", frame_cnt);
+    /* 本仓库 tal_thread 语义：用户函数返回后包装层会一直等外部 delete（否则线程
+     * 不退出、变僵尸）。所以退出路径必须自删（is_self 分支由包装层完成最终释放）
+     * ——EOF/换段等"无人调用 demo_media_pb_stop"的场景同样不留残余线程。 */
+    if (s_pb_thread != NULL) {
+        THREAD_HANDLE h = s_pb_thread;
+        s_pb_thread = NULL;
+        tal_thread_delete(h);
+    }
 }
 
 static void __pb_stop(void)
@@ -419,12 +426,11 @@ static void __pb_stop(void)
         tal_system_sleep(20);
         waited += 20;
     }
-    if (s_pb_thread != NULL) {
-        THREAD_HANDLE h = s_pb_thread;
-        s_pb_thread = NULL;
-        tal_thread_delete(h);
+    if (s_pb_alive) {
+        /* 线程 2s 内未退出：不再代为 delete（退出路径自删，双 delete 会重复摘链），
+         * 保留句柄让 __pb_start 拒绝重入，等其自行退出。 */
+        PR_ERR("pb send thread still alive after %ums, keep handle", waited);
     }
-    s_pb_alive = FALSE;
     s_pb_seg_start = 0;
     s_pb_seg_end = 0;
     tuya_ipc_media_p2p_drop_unsent();

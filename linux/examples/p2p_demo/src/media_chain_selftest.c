@@ -35,6 +35,10 @@
 #define SELFTEST_WAIT_MS        10000
 /* 请求 I 帧后的等待上限：GOP=20 @20fps 自然间隔 1s，请求后应更快出现 */
 #define SELFTEST_IFRAME_WAIT_MS 2000
+/* 请求后到下一个 I 帧之间允许的最大帧数：正常（vcam 跳到下个 IDR AU）≤ 几帧；
+ * 请求被静默忽略时按 GOP=20 要等 ~19 个 P 帧——用帧数而非时长做断言，避免
+ * "恰好在 GOP 末尾请求"导致的假通过 */
+#define SELFTEST_IFRAME_MAX_FRAMES 8
 /* 取帧缓冲：p2p_init 的 media_frame 缓冲为 300KB，自测缓冲对齐该上限 */
 #define SELFTEST_FRAME_CAP      (300 * 1024)
 
@@ -140,15 +144,35 @@ int main(void)
         }
     }
 
-    /* 5) 请求 I 帧：2s 内应读到 I 帧 */
+    /* 5) 请求 I 帧：先在"刚收到 I 帧"的已知相位等待，再发请求，随后统计到下一个
+     *    I 帧之间又收到几帧。vcam 语义：请求后下一拍直接跳到下一个 IDR AU（中间
+     *    的 P 帧被跳过）——正常应 ≤ 几帧；若请求被静默忽略，按 GOP=20@20fps 还要
+     *    等 ~19 个 P 帧（≈1s）才自然出现下一个 I 帧。 */
     if (fail == 0) {
         uint32_t iframe_waited = 0;
-        BOOL_T   got_i         = FALSE;
+        uint32_t frames_after_req = 0;
+        BOOL_T   got_i = FALSE;
 
-        if (demo_on_request_i_frame_callback() != 0) {
+        /* 5a) 等一个 I 帧，锁定相位（最多 2s） */
+        while (iframe_waited < SELFTEST_IFRAME_WAIT_MS) {
+            rt = demo_on_get_video_frame_callback(&frame);
+            if (rt != 0) {
+                iframe_waited += 10;
+                continue;
+            }
+            if (frame.type == eVideoIFrame) {
+                break;
+            }
+        }
+        if (iframe_waited >= SELFTEST_IFRAME_WAIT_MS) {
+            printf("MEDIA CHAIN SELFTEST FAILED: no i-frame to lock phase\n");
+            fail++;
+        } else if (demo_on_request_i_frame_callback() != 0) {
             printf("MEDIA CHAIN SELFTEST FAILED: request i-frame rejected\n");
             fail++;
         } else {
+            /* 5b) 统计请求后到下一个 I 帧之间收到的帧数 */
+            iframe_waited = 0;
             while (iframe_waited < SELFTEST_IFRAME_WAIT_MS) {
                 rt = demo_on_get_video_frame_callback(&frame);
                 if (rt != 0) {
@@ -159,11 +183,17 @@ int main(void)
                     got_i = TRUE;
                     break;
                 }
+                frames_after_req++;
             }
-            printf("[check] i-frame after request: %s (in %ums)\n", got_i ? "yes" : "no", iframe_waited);
+            printf("[check] i-frame after request: %s (%u frame(s) in between, %ums)\n", got_i ? "yes" : "no",
+                   frames_after_req, iframe_waited);
             if (!got_i) {
                 printf("MEDIA CHAIN SELFTEST FAILED: no i-frame within %ums after request\n",
                        (uint32_t)SELFTEST_IFRAME_WAIT_MS);
+                fail++;
+            } else if (frames_after_req > SELFTEST_IFRAME_MAX_FRAMES) {
+                printf("MEDIA CHAIN SELFTEST FAILED: %u frames before i-frame (> %u) — request likely ignored\n",
+                       frames_after_req, (uint32_t)SELFTEST_IFRAME_MAX_FRAMES);
                 fail++;
             }
         }
