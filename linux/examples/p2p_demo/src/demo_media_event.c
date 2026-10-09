@@ -31,7 +31,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#if DEMO_HAS_LOCAL_STORE
+#ifdef P2P_DEMO_LOCAL_STORE
 #include "local_store.h"
 #endif
 
@@ -59,7 +59,7 @@
 /* event_cb return: App re-START same seg without mid playTime */
 #define DEMO_PB_START_IGNORED 1
 
-#if DEMO_HAS_LOCAL_STORE
+#ifdef P2P_DEMO_LOCAL_STORE
 static THREAD_HANDLE s_pb_thread = NULL;
 static BOOL_T s_pb_running = FALSE;
 static BOOL_T s_pb_alive = FALSE;
@@ -491,9 +491,9 @@ static int __pb_query_day(uint32_t year, uint32_t month, uint32_t day, LOCAL_STO
     return OPRT_OK;
 }
 
-#endif /* DEMO_HAS_LOCAL_STORE */
+#endif /* P2P_DEMO_LOCAL_STORE */
 
-#if !DEMO_HAS_LOCAL_STORE
+#ifndef P2P_DEMO_LOCAL_STORE
 void demo_media_pb_stop(void)
 {
 }
@@ -507,7 +507,7 @@ static int __demo_media_stream_event_cb(const int device, const int channel,
 
     switch (event) {
     case MEDIA_STREAM_LIVE_VIDEO_START:
-#if DEMO_HAS_LOCAL_STORE
+#ifdef P2P_DEMO_LOCAL_STORE
         PR_NOTICE("pb stop: live start");
         __pb_stop();
 #endif
@@ -517,7 +517,7 @@ static int __demo_media_stream_event_cb(const int device, const int channel,
     case MEDIA_STREAM_SPEAKER_STOP:
         break;
 
-#if DEMO_HAS_LOCAL_STORE
+#ifdef P2P_DEMO_LOCAL_STORE
     case MEDIA_STREAM_PLAYBACK_QUERY_MONTH_SIMPLIFY: {
         C2C_TRANS_QUERY_PB_MONTH_RESP *month = (C2C_TRANS_QUERY_PB_MONTH_RESP *)args;
         uint32_t bitmap = 0;
@@ -715,7 +715,7 @@ void demo_media_event_register(void)
     }
     PR_NOTICE("demo media stream event_cb registered");
 
-#if DEMO_HAS_LOCAL_STORE && defined(P2P_DEMO_PB_SEED) && (P2P_DEMO_PB_SEED == 1)
+#if defined(P2P_DEMO_LOCAL_STORE) && defined(P2P_DEMO_PB_SEED) && (P2P_DEMO_PB_SEED == 1)
     /* bring-up：把内置样片灌进今天的索引，App 无需真实录制也能看回放 */
     {
         const char *src = demo_h264_source_path();

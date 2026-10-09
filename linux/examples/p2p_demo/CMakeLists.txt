@@ -145,15 +145,17 @@ set(_p2p_demo_media_defs
     P2P_DEMO_GOP=${CONFIG_P2P_DEMO_GOP}
 )
 # .config 里的 "y"/"n" 在 CMake 里直接可判真假（y=真，n=假）
+# local_store 回放：demo 开关与 core 开关同时打开才注入 P2P_DEMO_LOCAL_STORE=1
+# （代码里唯一开关，见 tuya_ipc_demo.h 的契约注释）。只开 demo 开关时告警且不注入
+# ——回放不编译，live 链路照常（menuconfig 路径由 Kconfig select 保证一致）。
 if(CONFIG_P2P_DEMO_LOCAL_STORE)
-    # 手工 -D 时容易只给 demo 开关、忘了 core 开关：Kconfig 的 select 只覆盖
-    # .config 路径，这里显式提醒，避免静默编出"无 local_store 的回放空实现"
-    if(NOT CONFIG_ENABLE_LOCAL_STORE)
+    if(CONFIG_ENABLE_LOCAL_STORE)
+        list(APPEND _p2p_demo_media_defs P2P_DEMO_LOCAL_STORE=1)
+    else()
         message(WARNING "CONFIG_P2P_DEMO_LOCAL_STORE 打开但 CONFIG_ENABLE_LOCAL_STORE 未开："
-                        "回放会静默降级为空实现（menuconfig 路径由 Kconfig select 保证一致；"
+                        "回放不会编译（menuconfig 路径由 Kconfig select 保证一致；"
                         "用 -D 时两个都要给）")
     endif()
-    list(APPEND _p2p_demo_media_defs P2P_DEMO_LOCAL_STORE=1)
 endif()
 if(CONFIG_P2P_DEMO_LIVE_RECORD)
     list(APPEND _p2p_demo_media_defs P2P_DEMO_LIVE_RECORD=1)

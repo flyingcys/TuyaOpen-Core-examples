@@ -24,13 +24,10 @@
 #include "tuya_cloud_types.h"
 #include "tuya_ipc_p2p.h"
 
-/* local_store 回放：需要 demo 开关与 core 库开关同时打开（Kconfig select 保证一致） */
-#if defined(P2P_DEMO_LOCAL_STORE) && (P2P_DEMO_LOCAL_STORE == 1) && \
-    defined(ENABLE_LOCAL_STORE) && (ENABLE_LOCAL_STORE == 1)
-#define DEMO_HAS_LOCAL_STORE 1
-#else
-#define DEMO_HAS_LOCAL_STORE 0
-#endif
+/* local_store 回放开关：单一宏 P2P_DEMO_LOCAL_STORE（由 CMake 在
+ * CONFIG_P2P_DEMO_LOCAL_STORE 与 CONFIG_ENABLE_LOCAL_STORE 同时打开时注入
+ * =1；只开 demo 开关时 CMake 告警且不注入）。代码用 #ifdef 判断即可——
+ * "宏在 = 回放可用"由构建期保证，不再派生第二个宏。 */
 
 /**
  * @brief 初始化 demo 媒体链路（ring buffer / vcam / local_store）

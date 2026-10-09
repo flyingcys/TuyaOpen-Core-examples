@@ -44,14 +44,14 @@ extern uint64_t tuya_p2p_misc_get_current_time_ms(void);
 #define DEMO_HAS_RING_BUFFER 0
 #endif
 
-#if DEMO_HAS_LOCAL_STORE
+#ifdef P2P_DEMO_LOCAL_STORE
 #include "local_store.h"
 #endif
 
 #define DEMO_VIDEO_CODEC TY_AV_CODEC_VIDEO_H264
 
 /* 直播录制：demo 开关（P2P_DEMO_LOCAL_STORE）与录制开关同时打开才启用 */
-#if DEMO_HAS_LOCAL_STORE && defined(P2P_DEMO_LIVE_RECORD) && (P2P_DEMO_LIVE_RECORD == 1)
+#if defined(P2P_DEMO_LOCAL_STORE) && defined(P2P_DEMO_LIVE_RECORD) && (P2P_DEMO_LIVE_RECORD == 1)
 #define DEMO_LIVE_RECORD 1
 #ifndef P2P_DEMO_RECORD_MAX_SEC
 #define P2P_DEMO_RECORD_MAX_SEC 120
@@ -553,7 +553,7 @@ void tuya_ipc_demo_start(void)
     }
 #endif
 
-#if DEMO_HAS_LOCAL_STORE
+#ifdef P2P_DEMO_LOCAL_STORE
     /* Linux 无挂载语义：local_store 直接落在进程 cwd 的 ./media，不做 tkl_fs_mount */
     if (local_store_init() != OPRT_OK) {
         PR_ERR("local_store init failed");
