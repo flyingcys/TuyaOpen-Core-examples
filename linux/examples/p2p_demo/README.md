@@ -1,0 +1,164 @@
+# p2p_demo
+
+## 简介
+
+上游 TuyaOpen `apps/tuya_cloud/ipc_p2p_demo`（T5AI IPC 摄像头 demo）的 Linux 移植：通过
+P2P 通道把设备视频推给涂鸦 App（App 侧看直播画面），可选支持本地录像与日历回放。Linux 上
+没有摄像头，视频源是内置 H.264 样片（`assets/sample.h264`，640x480@20fps、5 秒循环），由
+虚拟摄像头 `demo_vcam` 按帧率循环喂给媒体链路；音频不做（上游默认关，Linux 无音频）。
+
+## 构建与运行
+
+```bash
+cd examples/p2p_demo
+cmake -B build
+cmake --build build -j$(nproc)
+cd build && ./p2p_demo
+```
+
+凭据可选：默认取 `src/tuya_config.h` 的 PID/UUID/AuthKey，可用
+`-DTUYA_PRODUCT_ID=.. -DTUYA_OPENSDK_UUID=.. -DTUYA_OPENSDK_AUTHKEY=..` 覆盖，或在
+`src/tuya_config_secrets.h`（参考 `.example` 模板）里配置，也支持同名环境变量。样片在构建时
+复制到 `build/sample.h264`，从 `build/` 目录运行即可（在别处运行按可执行文件所在目录解析）。
+
+运行后行为：
+
+1. 初始化日志/KV/时间服务/工作队列，使用宿主网络连云；
+2. 设备未激活时进入绑定模式：直连 MQTT 成功后打印绑定二维码；
+3. 用涂鸦 App 扫描二维码，绑定并激活设备；
+4. 激活后 `MQTT_CONNECTED` 事件拉起媒体线程（`TUYA_APP_Start` → P2P listen），App 端即可打开
+   直播画面（需 IPC 类目产品，见"已知限制"）。
+
+## Kconfig 开关
+
+| 符号 | 含义 | 默认 |
+|---|---|---|
+| `P2P_DEMO` | 构建本 example；select `ENABLE_TUYA_P2P`、`ENABLE_IPC_RING_BUFFER` | y（无 prompt） |
+| `P2P_DEMO_LOCAL_STORE` | 本地录像与日历回放；select `ENABLE_LOCAL_STORE` | n |
+| `P2P_DEMO_WIDTH` | 样片/上报给 App 的视频宽度（像素） | 640 |
+| `P2P_DEMO_HEIGHT` | 样片/上报给 App 的视频高度（像素） | 480 |
+| `P2P_DEMO_FPS` | 虚拟摄像头喂帧帧率，同时上报给 App | 20 |
+| `P2P_DEMO_KBPS` | 上报给 App 的目标码率（样片不参与实际码控） | 400 |
+| `P2P_DEMO_GOP` | 上报给 App 的 GOP 长度（样片固定 keyint=20） | 20 |
+| `P2P_DEMO_H264_FILE` | 直播视频源路径；留空用内置样片 | "" |
+| `P2P_DEMO_LIVE_RECORD` | 直播期间持续写 local_store（按段切分） | n |
+| `P2P_DEMO_RECORD_MAX_SEC` | 单个录像分段时长上限（秒，30-3600） | 120 |
+| `P2P_DEMO_PB_SEED` | 启动时把直播源文件灌进当天索引，免录像体验回放 | n |
+
+menuconfig 用法（`P2P_DEMO` 无 prompt，不构建该 example 即可，无需关闭）：
+
+```bash
+pip3 install --user kconfiglib          # 一次性
+cd linux
+KCONFIG_CONFIG=./.config menuconfig     # 交互配置
+KCONFIG_CONFIG=./.config olddefconfig   # 按默认值生成
+```
+
+优先级：**`-D` 命令行 > `.config` > 工程内置默认**。也可直接用 `-D` 覆盖：
+
+```bash
+cmake -B build -DCONFIG_P2P_DEMO_FPS=15
+cmake -B build -DCONFIG_P2P_DEMO_H264_FILE=/path/to/your.h264
+```
+
+注意 `.config` 是 `linux/` 下所有 example 共享的，一旦存在即以它为准；删除可回到内置默认。
+
+## 自测
+
+两个独立可执行文件，无需连云、无需 App（在 example 目录执行）：
+
+```bash
+./build/vcam_selftest
+./build/media_chain_selftest
+```
+
+- `vcam_selftest`：打开样片，验证 AU 索引与喂帧节拍，期望输出 `VCAM SELFTEST PASSED`
+  （40 帧、时间戳 0→1950 以 50ms 步进、含 2 个 I 帧）。
+- `media_chain_selftest`：跑通完整媒体链路（vcam → 帧校验/队列/ring buffer → P2P 取帧回调）
+  并验证"请求 I 帧"，期望 `MEDIA CHAIN SELFTEST PASSED`（约 60 帧/3 秒、时间戳单调递增、
+  请求后到下一个 I 帧之间 ≤ 8 帧——正常 1~2 帧，请求被忽略时要等 ~19 个 P 帧）；找不到样片时报错
+  `sample not found: run from build/ ...`。
+
+## 视频源
+
+内置样片 `assets/sample.h264`（构建时复制为 `build/sample.h264`）：
+
+- Annex-B H.264，640x480@20fps、5 秒 100 帧循环，GOP=20（帧 0/20/40/60/80 为 IDR），baseline profile、每帧单 slice、无 B 帧，约 201 KB；
+- `demo_vcam` 按 AU 边界建索引后按帧率循环喂帧（遇 AUD 开新 AU，无 AUD 时按"已有 VCL
+  再遇 VCL"切分），到文件末尾回到第 0 帧。
+
+换成自己的 H.264：
+
+```bash
+cmake -B build -DCONFIG_P2P_DEMO_H264_FILE=/path/to/your.h264
+```
+
+或在 menuconfig 里填 `P2P_DEMO_H264_FILE`（也可直接改 `.config`）。要求 Annex-B 格式、固定
+GOP、无 B 帧（每个 AU 前带 AUD 更稳妥，缺失时按 VCL 边界切分）；分辨率/帧率变化时必须同步
+改 `P2P_DEMO_WIDTH/HEIGHT/FPS`（建议 `GOP/KBPS` 一并改），否则上报给 App 的 AV 能力与实际码流不一致。
+
+`assets/gen_sample.sh` 用 ffmpeg（libx264）生成样片，脚本注释写明各参数含义；改分辨率/
+帧率/GOP/码率后重新执行即可再生成（锁定单线程，结果可复现），并同步修改上面的 Kconfig。
+
+## 录像与回放（默认关）
+
+默认只做 P2P 直播。打开本地录像与日历回放：
+
+```bash
+cmake -B build-ls -DCONFIG_P2P_DEMO_LOCAL_STORE=ON -DCONFIG_ENABLE_LOCAL_STORE=ON
+cmake --build build-ls -j$(nproc)
+```
+
+- `P2P_DEMO_LOCAL_STORE` 会 select core 的 `ENABLE_LOCAL_STORE`；menuconfig 里勾前者即可，用 `-D` 时两个都要给。
+- 录像落在 `./media`（相对**运行目录**，从 `build/` 运行即 `build/media`），分段文件在
+  `media/rec/<YYYY-MM-DD>/` 下（`live_N.media` + 索引）；日期取设备本地时间，云时间同步前
+  （刚启动、未激活）为 `1970-01-01`。
+- 直播期间持续录像需再开 `P2P_DEMO_LIVE_RECORD`（默认 n），分段时长由 `P2P_DEMO_RECORD_MAX_SEC` 控制（默认 120 秒）。
+- `P2P_DEMO_PB_SEED`（默认 n）启动时把直播源文件灌进当天索引，不录像也能让 App 体验
+  日历回放（对应上游的 `CAMERA_DEMO_PB_SEED`）。
+
+## 与上游 ipc_p2p_demo 的差异
+
+| 项 | 上游（T5AI 板） | 本 demo（Linux） |
+|---|---|---|
+| 视频源 | TDL 摄像头 + T5 硬件编码器（`tdl_camera_*`） | 内置样片虚拟摄像头 `demo_vcam` |
+| 音频 | `CAMERA_DEMO_AUDIO`（默认关）+ TDL 音频 | 整体不移植，音频回调保留空实现 |
+| 联网 | `netmgr_*` / lwip | `tal_netif`（同 iot_demo） |
+| 激活与凭据 | `tuya_authorize_init/read`（license 授权） | 编译期凭据 `tuya_config.h`（同 iot_demo） |
+| 录像存储 | 挂载 SD 卡（`tkl_fs_mount("/sdcard")`） | 直接写宿主目录 `./media`，无挂载语义 |
+| 板级初始化 | `board_register_hardware()`、PSRAM、堆打印、CLI | 删除（Linux 无对应实现） |
+| 录像与回放 | `CAMERA_DEMO_LOCAL_STORE`，默认关 | `P2P_DEMO_LOCAL_STORE`，默认关（保留） |
+| 回放灌样片 | 读板子上的 `/sdcard/pb_seed.h264`（用户自备） | 用本 demo 的直播源文件（内置样片） |
+
+保留：P2P 启动链（`TUYA_APP_Start`/`p2p_listen`）、媒体回调契约、ring buffer、连续复位清配网（`reset_netcfg`）、`skill_param` 上报。
+
+## 已知限制
+
+- **需要 IPC 类目产品**：默认凭据是通用产品（`qhivvyqawogv04e4`），设备能连云、能被 App 绑定、
+  激活后 skill 上报也成功，但云侧 `tuya.device.ipc.p2p.config.get` 会返回 `IP Camera Not exist`
+  ——非 IPC 类目产品没有 P2P 配置，`TUYA_APP_Start` 取不到 p2p auth，P2P 服务起不来。请在涂鸦
+  IoT 平台创建 IPC 类目产品，用其 PID/UUID/AuthKey 构建（可用 `-D` 或 secrets 覆盖）。
+- **未激活设备停在绑定等待态**：MQTT 已连、二维码已打印，等待 App 扫码；激活前 P2P 服务不会启动。
+- **未激活设备上调用 `TUYA_APP_Start` 会阻塞**：上游 `p2p_init` 取不到 p2p auth 时以 1 秒间隔
+  永久重试（`while(1)`，持续打印 `get p2p auth failed`）。正常流程由激活后的 `MQTT_CONNECTED`
+  事件拉起，不会遇到；仅在未激活时误调用才会触发。
+- App 调整码率不生效（样片源无编码器，回调返回不支持），真实会话下可能每秒打印一条码率调整日志（与上游实现一致）。
+
+## 目录结构
+
+```sh
++- p2p_demo
+    +- assets                       # sample.h264（内置样片）+ gen_sample.sh（生成脚本）
+    +- src
+    |   -- tuya_main.c              # 入口：初始化、连云、事件处理、媒体线程
+    |   -- reset_netcfg.c/.h        # 连续复位 3 次清配网数据
+    |   -- tuya_ipc_demo.c/.h       # 媒体链路（取帧/队列/ring buffer/录制）与回调契约
+    |   -- demo_vcam.c/.h           # 虚拟摄像头：样片 AU 索引 + 按帧率循环喂帧
+    |   -- demo_media_event.c/.h    # local_store 回放（日历查询/回放送帧）
+    |   -- demo_vcam_selftest.c     # vcam 自测（目标 vcam_selftest）
+    |   -- media_chain_selftest.c   # 媒体链路自测（目标 media_chain_selftest）
+    |   -- tuya_config.h            # PID/UUID/AuthKey（可被 secrets 或 -D 覆盖）
+    |   -- tuya_config_secrets.h.example  # 凭据覆盖模板
+    -- CMakeLists.txt
+    -- Kconfig                      # P2P_DEMO* 开关
+```
