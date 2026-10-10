@@ -68,10 +68,11 @@ cmake -B build -DCONFIG_AGENT_DEMO_AUDIO_FILE=/path/to/your_16k.pcm
 
 ## 自测
 
-一个独立可执行文件，无需连云、无需 App、无需凭据（在 example 目录执行）：
+一个独立可执行文件，无需连云、无需 App、无需凭据（在 build 目录执行——素材
+`voice_16k.pcm` 由 CMake 复制到该目录，从别处执行会提示 `run from build/`）：
 
 ```bash
-./build/agent_chain_selftest
+cd build && ./agent_chain_selftest
 ```
 
 验证上行音频源契约与内置素材的帧切分口径：素材总字节 82944、按 80ms 帧（2560B）切分

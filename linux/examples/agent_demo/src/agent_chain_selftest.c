@@ -38,6 +38,16 @@ int main(void)
     uint32_t last   = 0;
     INT_T    n;
 
+    /* 0) 素材预检：由 CMake 复制到构建目录，从 build/ 运行；
+     *    从别处运行给出明确指引（学 p2p_demo 的 "run from build/" 惯例），
+     *    避免后续断言成片失败、看不出根因。 */
+    if (tkl_ai_demo_open("voice_16k.pcm") != OPRT_OK) {
+        printf("FAIL: audio sample 'voice_16k.pcm' not found: run from build/ "
+               "(or set CONFIG_AGENT_DEMO_AUDIO_FILE to an absolute path)\n");
+        return 1;
+    }
+    tkl_ai_demo_close();
+
     /* 1) 打开内置素材 */
     CHECK(tkl_ai_demo_open("voice_16k.pcm") == OPRT_OK, "open bundled pcm");
 
