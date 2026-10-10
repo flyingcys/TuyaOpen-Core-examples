@@ -41,17 +41,6 @@ OPERATE_RET tkl_mutex_create_init(TKL_MUTEX_HANDLE *pMutexHandle);
 OPERATE_RET tkl_mutex_lock(const TKL_MUTEX_HANDLE mutexHandle);
 
 /**
-* @brief Try Lock mutex
-*
-* @param[in] mutexHandle: mutex handle
-*
-* @note This API is used to try lock mutex.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_mutex_trylock(const TKL_MUTEX_HANDLE mutexHandle);
-
-/**
 * @brief Unlock mutex
 *
 * @param[in] mutexHandle: mutex handle

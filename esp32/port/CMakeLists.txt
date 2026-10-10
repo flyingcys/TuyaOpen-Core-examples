@@ -1,7 +1,8 @@
 # tuyaopen-port（ESP32 TKL）构建。
-# 前置：先处理 tuyaopen-core 组件（开关与 tuyaopen-headers 就绪）。
-# 布局对齐 linux port：include/（域头 + utilities 实现）+ src/（TKL 实现）。
-# 系统库与 esp-idf 组件依赖由组件包装（examples 的 components/tuyaopen-port）声明。
+# 布局对齐 linux port：include/（域头）+ src/（TKL 实现）。
+# 与 linux port 的差异：系统库/平台头（FreeRTOS/esp_wifi/lwip/nvs 等）由宿主
+# 组件 components/tuyaopen-port 声明 REQUIRES 并 target_link_libraries 注入
+# （idf::xxx），本文件只处理 core 的头与开关宏。
 if(TARGET tuyaopen-port)
     return()
 endif()
@@ -15,16 +16,7 @@ file(GLOB_RECURSE _port_srcs CONFIGURE_DEPENDS
 )
 if(_port_srcs)
     list(FILTER _port_srcs EXCLUDE REGEX "/CMakeFiles/")
-    # init/src 属 TuyaOpen auto-init 机制，本仓库无调用方，不编
-    list(FILTER _port_srcs EXCLUDE REGEX "/include/init/src/")
     list(REMOVE_DUPLICATES _port_srcs)
-endif()
-
-if(NOT CONFIG_ENABLE_WIFI AND _port_srcs)
-    list(FILTER _port_srcs EXCLUDE REGEX "/tkl_wifi/")
-endif()
-if(NOT CONFIG_ENABLE_BLUETOOTH AND _port_srcs)
-    list(FILTER _port_srcs EXCLUDE REGEX "/tkl_bt/")
 endif()
 
 set(_port_incs)
@@ -49,6 +41,31 @@ if(_port_srcs)
     add_library(tuyaopen-port STATIC)
     target_sources(tuyaopen-port PRIVATE ${_port_srcs})
     target_include_directories(tuyaopen-port PUBLIC ${_port_incs})
+
+    # tkl_runtime/tkl_network/tkl_kv/tkl_ota/tkl_netif：include core 的
+    # tal_api_ops.h / tal_network.h / tal_kv_ops.h / tal_ota_ops.h /
+    # tal_netif_ops.h / tal_log.h（tal_system 公共头），符号在最终链接组解析
+    if(TARGET tal_system)
+        target_link_libraries(tuyaopen-port PRIVATE tal_system)
+    endif()
+
+    # 模块级隔离（对齐 linux port）：仅 p2p 使用的适配由 ENABLE_TUYA_P2P 门控。
+    # core 的开关宏（TuyaOpenOptions → tuyaopen-headers）只作用于 core 模块，
+    # port 目标须注入同一宏名，否则开了 P2P 也挂不上卡成员。
+    if(CONFIG_ENABLE_TUYA_P2P)
+        target_compile_definitions(tuyaopen-port PRIVATE ENABLE_TUYA_P2P=1)
+    endif()
+
+    # 局域网/对端服务 ops（tkl_network 的 listen/accept/send_to/recvfrom/
+    # recv_nd_size）的挂载条件：listen/accept 局域网协议、p2p、AI monitor 任一
+    # 开启即需要；send_to/recvfrom 局域网协议或 p2p；recv_nd_size 仅局域网协议。
+    # 三者全关时 port 无需适配这 5 个。同 P2P，逐个注入（core 的宏不传播到 port 目标）。
+    if(CONFIG_ENABLE_LOCAL_LINK)
+        target_compile_definitions(tuyaopen-port PRIVATE ENABLE_LOCAL_LINK=1)
+    endif()
+    if(CONFIG_ENABLE_AI_COMPONENTS)
+        target_compile_definitions(tuyaopen-port PRIVATE ENABLE_AI_COMPONENTS=1)
+    endif()
 else()
     add_library(tuyaopen-port INTERFACE)
     if(_port_incs)

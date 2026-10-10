@@ -1,24 +1,36 @@
 # esp32 port（TKL 适配层）
 
-本目录是 ESP32 目标的 TKL（Tuya Kernel Layer）适配，基于 **esp-idf / FreeRTOS** API 实现。
+本目录是 ESP32 目标的 TKL（Tuya Kernel Layer）适配，基于 **esp-idf / FreeRTOS**，
+与 `linux/port` 同构（**ops 卡模式**：core 的 `tal_*.c` 经 extern 引用
+`tal_*_ops_platform` 卡完成分发，port 组装这些卡）。
 
 ## 当前状态
 
-- `include/`：TKL API 头文件（与各目标共享的接口定义，从 linux port 同步）
-- `tuya_kconfig.h.in`：板级宏模板（`OPERATING_SYSTEM 98` = SYSTEM_FREERTOS）
-- **TKL 实现尚未补齐**：需要在 `src/`（自建）下按 `include/` 中的头文件实现各 `tkl_*` 接口
+| 文件 | 内容 | 对应 core 契约 |
+|---|---|---|
+| `src/tkl_runtime.c` | 主卡：log/memory/system/semaphore/mutex/thread/queue（FreeRTOS/esp-idf 原语） | `tal_api_ops.h` |
+| `src/tkl_ota.c` | OTA 卡（esp_ota，双槽分区轮换） | `tal_ota_ops.h` |
+| `src/tkl_kv.c` | KV 卡（NVS；超长 key 折叠为 FNV-1a 56bit hex） | `tal_kv_ops.h` |
+| `src/tkl_netif.c` | netif 卡（esp_netif 事件驱动，链路 up = 已获 IP） | `tal_netif_ops.h` |
+| `src/tkl_network.c` | network 卡（lwIP socket；局域网/对端服务成员随开关编译） | `tal_network.h` 的 `TAL_NETWORK_CARD_T` |
 
-## 优先级建议（对照 tuyaopen 的 ESP32 平台）
+`include/` 为 TKL 域头（common/system/network/security），从 linux port 同步
+（接口定义与各目标共享；security 三件套由 core 的 mbedtls_* 实现，port 只提供头）。
 
-最小可跑通云端的最小集：
+暂未适配（需要时补，与 linux port 的门控一致）：
 
-1. `tkl_system.c` / `tkl_memory.c` / `tkl_thread.c` / `tkl_mutex.c` / `tkl_semaphore.c` / `tkl_queue.c`（系统原语，FreeRTOS API 直映射）
-2. `tkl_output.c`（printf → ESP_LOG）
-3. `tkl_fs.c`（esp-idf FATFS/LittleFS/NVS，供 tal_kv）
-4. `tkl_network.c`（lwIP socket 封装）
-5. WiFi 场景：`tkl_wifi.c`（esp_wifi）+ netcfg 所需接口
-6. `tkl_sleep.c` / `tkl_timer` 相关
+- `tkl_fs`（p2p local_store 用；linux 为 POSIX 直包装）；
+- `tkl_bt`（BLE；esp32 需换 NimBLE/Bluedroid 实现）；
+- `media/tkl_ai_demo.h`（agent_demo 的音频输入契约）。
 
-实现放本目录任意子路径即可（构建按 `*.c` 递归收集，参考 `linux/port` 的布局）；不需要的接口对应模块用 CMake 开关关掉（如 `CONFIG_ENABLE_BLUETOOTH=OFF` 时无需 `tkl_bt`）。
+## 构建接入
 
-参考实现：tuyaopen 仓库 `platform/<芯片>/tuyaos_adapter/`。
+esp-idf 工程经 `examples/*/components/tuyaopen-port` 包装组件引入本目录：
+
+- 包装组件 `REQUIRES tuyaopen-core esp_wifi esp_event esp_netif nvs_flash lwip esp_timer app_update`
+  （保证 core 先处理、idf 组件可用）；
+- `add_subdirectory(esp32/port)` 建 plain CMake 静态库（普通目标不自动获得 idf
+  组件头，由包装组件 `target_link_libraries(... idf::xxx)` 注入）；
+- 本目录 `CMakeLists.txt` 收集源码/头、链接 `tal_system`（core 头）、按
+  `CONFIG_ENABLE_*` 注入开关宏（core 的宏不传播到 port 目标）、把 port 头注入
+  `tuyaopen-headers`（core 编译单元经 `tuya_kconfig.h` 取板级宏）。

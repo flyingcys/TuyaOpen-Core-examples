@@ -1,0 +1,52 @@
+# tuyaopen-core 统一 Kconfig 入口
+#
+# 作为子模块使用：宿主工程在自己的 Kconfig 里 rsource 本文件即可，例如
+#     rsource "third_party/tuyaopen-core/Kconfig"
+# （rsource 的路径相对本文件所在目录，宿主放在任何位置都可。）
+#
+# 生成的 .config 形如 CONFIG_ENABLE_BLUETOOTH=y，可直接传给本仓库的 CMake：
+#     cmake -DCONFIG_ENABLE_BLUETOOTH=y ...
+# TuyaOpenOptions.cmake 会把 y/1/on 归一化为 ON。
+# 布尔开关的默认值与 cmake/TuyaOpenOptions.cmake 中的 option() 保持一致。
+
+menu "tuyaopen-core"
+
+    rsource "third_party/Kconfig"
+    rsource "iot-core/Kconfig"
+    rsource "agent-core/Kconfig"
+    rsource "p2p-core/Kconfig"
+
+    # 连接层开关（原 core-communication/Kconfig 并入；tal_bluetooth/
+    # tal_cellular 等模块已删除，tal_wired 已改 tal_netif 归
+    # iot-core/tal_system）
+    config ENABLE_WIRED
+        bool "ENABLE_WIRED: wired (Ethernet) support"
+        default n
+        help
+            Build the wired (Ethernet) support: the application-level
+            tal_netif and the wired TKL implementation in port. Maps to
+            CONFIG_ENABLE_WIRED.
+
+    config ENABLE_BLUETOOTH
+        bool "ENABLE_BLUETOOTH: BLE support"
+        default n
+        help
+            Build the BlueZ based TKL BLE implementation in port (needs
+            glib/bluez/dbus at build time). Maps to CONFIG_ENABLE_BLUETOOTH.
+
+    config ENABLE_NIMBLE
+        bool "ENABLE_NIMBLE: bundle the NimBLE host stack"
+        depends on ENABLE_BLUETOOTH
+        default n
+        help
+            NimBLE host stack bundle switch, kept for parity with the
+            CONFIG_ENABLE_NIMBLE option in TuyaOpenOptions.cmake.
+
+    config LITTLE_END
+        bool "LITTLE_END: target is little-endian"
+        default y
+        help
+            Target byte order, consumed by the pjproject port (mapped to
+            PJ_IS_LITTLE_ENDIAN). Leave on for the LINUX port.
+
+endmenu

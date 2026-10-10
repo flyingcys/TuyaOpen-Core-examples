@@ -17,71 +17,12 @@
 
 #include "tuya_cloud_types.h"
 
-/**
-* @brief get ota ability
-*
-* @param[out] image_size:  max image size
-* @param[out] type:   TUYA_OTA_TYPE_E, full package or compress package use TUYA_OTA_FULL, difference ota use TUYA_OTA_DIFF
-* @note This API is used for get chip ota ability
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_ota_get_ability(uint32_t *image_size, TUYA_OTA_TYPE_E *type);
-
-/**
-* @brief ota start notify
-*
-* @param[in] image_size:  image size
-* @param[in] type:        ota type
-* @param[in] path:        ota path
-*
-* @note This API is used for ota start notify
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path);
-
-
-/**
-* @brief ota data process
-*
-* @param[in] pack:       point to ota pack
-* @param[in] remain_len: ota pack remain len
-*
-* @note This API is used for ota data process
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t* remain_len);
-
-
-/**
-* @brief ota end notify
-*
-* @param[in] reset:  ota reset
-*
-* @note This API is used for ota end notify
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_ota_end_notify(BOOL_T reset);
-
-/**
-* @brief get old firmware info
-*
-* @param[out] image_size:  max image size
-* @param[out] type:        ota type
-*
-* @note This API is used for old firmware info, and only used in resumes transmission at break-points
-* @note Only use for ble sub device
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_ota_get_old_firmware_info(TUYA_OTA_FIRMWARE_INFO_T **info);
+/* ota 接口实现独立收编于 port/src/tkl_ota.c（平台可选单元，ops 卡私有，
+ * 经 TAL_OTA_OPS_T 分发），本文件仅保留类型依赖的 include。
+ * 原无实现亦无调用方的 tkl_ota_get_old_firmware_info 悬空声明已删。 */
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif
-

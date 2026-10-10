@@ -1,18 +1,35 @@
 /* tuya_kconfig.h —— ESP32（esp-idf / FreeRTOS）配置头（静态，手工可改）。
- * 说明见 linux/port/include/common/tuya_kconfig.h 头部注释；
- * esp-idf 用户也可在 sdkconfig / 组件编译选项中传入开关宏。 */
+ *
+ * 三部分内容（与 linux/port/include/common/tuya_kconfig.h 同构）：
+ *   1. 开关宏：默认全部不定义。三种开启方式（按优先级）：
+ *      a) 构建系统注入：esp-idf 下由 sdkconfig（Kconfig.projbuild → CONFIG_*）
+ *         经 tuyaopen-core.cmake 的宏注入表转为 ENABLE_*=1，注入
+ *         tuyaopen-headers（core 模块）与 tuyaopen-port（port 模块）；
+ *      b) 编译命令/IDE 全局宏：-DENABLE_WIRED=1（只传要开启的）；
+ *      c) 取消注释下方对应 #define。
+ *      注意：开关值必须与实际参与编译的源文件一致，否则链接失败。
+ *   2. 板级宏：ESP32（FreeRTOS）平台的默认值
+ *   3. 参数默认值：全部 #ifndef 保护，可被 -D 覆盖
+ */
 #ifndef TUYA_KCONFIG_H
 #define TUYA_KCONFIG_H
 
 /* ==================== 1. 开关（默认全关，按需开启） ==================== */
-/* #ifndef ENABLE_WIRED
-#define ENABLE_WIRED 1
-#endif */
-/* #ifndef ENABLE_WIFI
-#define ENABLE_WIFI 1
-#endif */
+/* 优先用 sdkconfig（menuconfig 的 tuyaopen-core 菜单），一般无需改这里。
+ * #ifndef ENABLE_WIRED
+ * #define ENABLE_WIRED 1
+ * #endif */
 /* #ifndef ENABLE_BLUETOOTH
 #define ENABLE_BLUETOOTH 1
+#endif */
+/* #ifndef ENABLE_QRCODE
+#define ENABLE_QRCODE 1
+#endif */
+/* #ifndef ENABLE_TUYA_P2P
+#define ENABLE_TUYA_P2P 1
+#endif */
+/* #ifndef ENABLE_LOCAL_LINK
+#define ENABLE_LOCAL_LINK 1
 #endif */
 /* #ifndef LITTLE_END
 #define LITTLE_END 1
@@ -21,6 +38,10 @@
 /* ==================== 2. 板级宏（ESP32 / FreeRTOS） ==================== */
 #ifndef OPERATING_SYSTEM
 #define OPERATING_SYSTEM 98 /* SYSTEM_FREERTOS */
+#endif
+
+#ifndef AUDIO_DRIVER_NAME
+#define AUDIO_DRIVER_NAME "audio_driver"
 #endif
 
 /* ==================== 3. 参数默认值 ==================== */

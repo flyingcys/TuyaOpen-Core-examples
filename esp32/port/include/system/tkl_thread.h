@@ -19,138 +19,25 @@ extern "C" {
 typedef void* TKL_THREAD_HANDLE;
 typedef void (*THREAD_FUNC_T)(void*);
 
-/**
-* @brief Create thread
-*
-* @param[out] thread: thread handle
-* @param[in] name: thread name
-* @param[in] stack_size: stack size of thread
-* @param[in] priority: priority of thread,please ref to tkl thread priority define in tuya_cloud_types.h
-* @param[in] func: the main thread process function
-* @param[in] arg: the args of the func, can be null
-*
-* @note This API is used for creating thread.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_thread_create(TKL_THREAD_HANDLE* thread,
-                              const char* name,
-                              uint32_t stack_size,
-                              uint32_t priority,
-                              const THREAD_FUNC_T func,
-                              void* const arg);
+/* thread 接口实现收编于 port/src/tkl_runtime.c（ops 卡私有，经
+ * TAL_API_OPS_T 分发），本文件仅保留类型定义与 p2p 门控的 get_id。
+ * 原无实现亦无调用方的 tkl_thread_get_priority/tkl_thread_set_priority、
+ * ENABLE_EXT_RAM 未定义的 tkl_thread_create_in_psram 已一并删除。 */
 
+#if defined(ENABLE_TUYA_P2P)
 /**
-* @brief Terminal thread and release thread resources
-*
-* @param[in] thread: thread handle
-*
-* @note This API is used to terminal thread and release thread resources.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_thread_release(const TKL_THREAD_HANDLE thread);
-
-/**
-* @brief Get the thread stack's watermark
-*
-* @param[in] thread: thread handle
-* @param[out] watermark: watermark in Bytes
-*
-* @note This API is used to get the thread stack's watermark.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_thread_get_watermark(const TKL_THREAD_HANDLE thread, uint32_t* watermark);
-
-/**
-* @brief Get the thread thread handle
+* @brief Get the handle of the calling thread
 *
 * @param[out] thread: thread handle
 *
-* @note This API is used to get the thread handle.
+* @note p2p-core 的 pjproject 专用（TLS 行匹配的不透明线程身份）；
+*       实现返回 pthread_self()，与 tkl_thread_create 的 handle 不同类。
+*       不用 p2p 的平台无需适配（门控与 tkl_fs.c 一致）。
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
 OPERATE_RET tkl_thread_get_id(TKL_THREAD_HANDLE *thread);
-
-/**
-* @brief Set name of self thread
-*
-* @param[in] name: thread name
-*
-* @note This API is used to set name of self thread.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_thread_set_self_name(const char* name);
-
-
-/**
-* @brief Check thread is self thread
-*
-* @param[in] thread: thread handle
-* @param[out] is_self: is self thread or not
-*
-* @note This API is used to check thread is self thread.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_thread_is_self(TKL_THREAD_HANDLE thread, BOOL_T* is_self);
-
-/**
-* @brief Get thread priority
-*
-* @param[in] thread: thread handle, If NULL indicates the current thread
-* @param[in] priority: thread priority
-*
-* @note This API is used to get thread priority.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_thread_get_priority(TKL_THREAD_HANDLE thread, int *priority);
-
-/**
-* @brief Set thread priority
-*
-* @param[in] thread: thread handle, If NULL indicates the current thread
-* @param[in] priority: thread priority
-*
-* @note This API is used to Set thread priority.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_thread_set_priority(TKL_THREAD_HANDLE thread, int priority);
-
-/**
-* @brief Diagnose the thread(dump task stack, etc.)
-*
-* @param[in] thread: thread handle
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_thread_diagnose(TKL_THREAD_HANDLE thread);
-
-/**
-* @brief Create thread in psram
-*
-* @param[out] thread: thread handle
-* @param[in] name: thread name
-* @param[in] stack_size: stack size of thread
-* @param[in] priority: priority of thread,please ref to tkl thread priority define in tuya_cloud_types.h
-* @param[in] func: the main thread process function
-* @param[in] arg: the args of the func, can be null
-*
-* @note This API is used for creating thread.
-*
-* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
-*/
-OPERATE_RET tkl_thread_create_in_psram(TKL_THREAD_HANDLE* thread,
-                              const char* name,
-                              uint32_t stack_size,
-                              uint32_t priority,
-                              const THREAD_FUNC_T func,
-                              void* const arg);
+#endif /* ENABLE_TUYA_P2P */
 
 #ifdef __cplusplus
 }

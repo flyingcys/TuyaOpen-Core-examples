@@ -1,0 +1,26 @@
+menu "iot_demo"
+
+    config ENABLE_QRCODE
+        bool "ENABLE_QRCODE: QR code output for Tuya APP binding"
+        default y
+        help
+            编译 qrcode 模块（qrcodegen + qrencode_print，与 linux iot_demo
+            的 qrcode/ 子目录同源）并启用 demo 里的二维码打印（扫码激活）。
+            qrcode 不在 core 内（随应用走），故由本菜单定义；映射到 CMake
+            开关 CONFIG_ENABLE_QRCODE，core 侧宏注入为 ENABLE_QRCODE。
+
+    config DEMO_WIFI_SSID
+        string "WiFi SSID (station)"
+        default ""
+        help
+            demo 要连接的 WiFi 名称（station 模式）。
+            core 已无 wifi 抽象，"把 WiFi 连上"由 demo 层完成：连上后网络栈
+            就绪，后续流程与 linux 一致（port 的 tkl_netif 上报链路状态）。
+
+    config DEMO_WIFI_PASSWORD
+        string "WiFi password"
+        default ""
+        help
+            WiFi 密码（开放网络留空）。
+
+endmenu

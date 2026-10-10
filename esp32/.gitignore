@@ -1,0 +1,4 @@
+# esp-idf 构建产物
+sdkconfig
+sdkconfig.old
+build/

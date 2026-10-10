@@ -1,0 +1,14 @@
+menu "configure tuya AI"
+
+    config ENABLE_AI_MONITOR
+        bool "enable ai monitor (tcp debug service)"
+        default y
+        help
+            AI 协议调试监视服务：TCP 监听（默认端口 5055）输出 AI 协议流，
+            供排查链路问题。注意：本符号此前只出现在 .config、缺 Kconfig 定义
+            与 CMake 宏注入，属"孤儿配置"（开了不生效）；本次接通。
+
+    rsource "svc_ai_agent/Kconfig"
+    rsource "svc_ai_basic/Kconfig"
+    rsource "svc_ai_codec/Kconfig"
+endmenu
