@@ -101,6 +101,7 @@ file(GLOB _agent_demo_srcs CONFIGURE_DEPENDS
 )
 # 自测文件自带 main()（独立自测目标），不能进 app 的源列表
 list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_chain_selftest\\.c$")
+list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_nlg_selftest\\.c$")
 
 add_executable(agent_demo ${_agent_demo_srcs})
 
@@ -148,6 +149,17 @@ target_include_directories(agent_chain_selftest PRIVATE
 )
 target_compile_definitions(agent_chain_selftest PRIVATE ${_agent_demo_defs})
 target_link_libraries(agent_chain_selftest PRIVATE ${_agent_demo_link})
+
+# 下行消费自测（独立可执行）：构造 STOP 事件（含非空末段）验证 agent_downlink
+# 的消费策略（STOP 携带的末段必须打印）——防回归，不依赖云端分包行为
+add_executable(agent_nlg_selftest
+    src/agent_nlg_selftest.c
+    src/agent_downlink.c
+)
+target_include_directories(agent_nlg_selftest PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(agent_nlg_selftest PRIVATE ${_agent_demo_link})
 unset(_agent_demo_link)
 unset(_agent_demo_defs)
 

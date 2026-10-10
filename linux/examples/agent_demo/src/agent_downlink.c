@@ -45,9 +45,18 @@ static void __agent_downlink_event(AI_NOTIFY_EVENT_T *event)
         }
     } break;
 
-    case AI_USER_EVT_TEXT_STREAM_STOP:
+    case AI_USER_EVT_TEXT_STREAM_STOP: {
+        /* 多段流的末段（eof=1）经 STOP 携带该包 content（ai_skill.c:173-175，
+         * 注释原文 "append final content (may be empty)"）——非空时必须续打，
+         * 否则终端缺最后一段文字（单帧场景 STOP 为显式空包，不受影响）。
+         * 先续打内容、再打 stream end（内容接在上一行末尾）。 */
+        AI_NOTIFY_TEXT_T *text = (AI_NOTIFY_TEXT_T *)event->data;
+        if (text && text->data && text->datalen > 0) {
+            printf("%.*s", text->datalen, text->data);
+            fflush(stdout);
+        }
         PR_NOTICE("[AGENT][NLG] << (stream end)");
-        break;
+    } break;
 
     case AI_USER_EVT_CHAT_BREAK:
         PR_NOTICE("[AGENT] chat break (cloud interrupted)");

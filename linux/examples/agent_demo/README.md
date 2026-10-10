@@ -70,16 +70,21 @@ cmake -B build -DCONFIG_AGENT_DEMO_AUDIO_FILE=/path/to/your_16k.pcm
 
 ## 自测
 
-一个独立可执行文件，无需连云、无需 App、无需凭据（在 build 目录执行——素材
+两个独立可执行文件，无需连云、无需 App、无需凭据（在 build 目录执行——素材
 `voice_16k.pcm` 由 CMake 复制到该目录，从别处执行会提示 `run from build/`）：
 
 ```bash
 cd build && ./agent_chain_selftest
+cd build && ./agent_nlg_selftest
 ```
 
-验证上行音频源契约与内置素材的帧切分口径：素材总字节 82944、按 80ms 帧（2560B）切分
-为 33 帧（32 整帧 + 末帧 1024B）、EOF 语义、关闭重开、坏路径拒绝。期望输出
-`AGENT CHAIN SELFTEST PASSED`（exit 0）。
+- `agent_chain_selftest`：上行音频源契约与素材帧切分口径——总字节 82944、按 80ms
+  帧（2560B）切分 33 帧（32 整帧 + 末帧 1024B）、EOF 语义、关闭重开、坏路径拒绝、
+  **I/O 错误与 EOF 区分**（目录路径 fopen 可成功但 read 必须 <0 而非 0/EOF）。
+  期望输出 `AGENT CHAIN SELFTEST PASSED`（exit 0）。
+- `agent_nlg_selftest`：下行消费契约——多段 NLG 流的末段（eof=1）经
+  `AI_USER_EVT_TEXT_STREAM_STOP` 携带非空内容时必须打印；空包不误打。用公开 API
+  构造事件（不依赖云端分包）。期望输出 `AGENT NLG SELFTEST PASSED`（exit 0）。
 
 ## 语音素材
 
