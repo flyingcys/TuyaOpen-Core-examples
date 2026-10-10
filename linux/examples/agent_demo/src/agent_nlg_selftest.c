@@ -15,6 +15,7 @@
 #include "tal_api.h"
 #include "ai_user_event.h"
 #include "agent_downlink.h"
+#include "agent_audio.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -75,6 +76,20 @@ static void __emit_stop_empty(void *arg)
     ai_user_event_notify(AI_USER_EVT_TEXT_STREAM_STOP, &empty);
 }
 
+static void __emit_asr_ok(void *arg)
+{
+    AI_NOTIFY_TEXT_T t = {.data = "识别文本", .datalen = (uint16_t)strlen("识别文本"), .timeindex = 0};
+
+    (void)arg;
+    ai_user_event_notify(AI_USER_EVT_ASR_OK, &t);
+}
+
+static void __emit_asr_empty(void *arg)
+{
+    (void)arg;
+    ai_user_event_notify(AI_USER_EVT_ASR_EMPTY, NULL);
+}
+
 int main(void)
 {
     char out[512];
@@ -91,6 +106,21 @@ int main(void)
     /* 2) STOP 空包（单帧/末段为空场景）→ 不应打印任何内容 */
     capture_stdout(__emit_stop_empty, NULL, out, sizeof(out));
     CHECK(strstr(out, "末段文字") == NULL, "empty STOP prints no content");
+
+    /* 3) 上行校验信号量：ASR_OK / ASR_EMPTY 都应 post（空识别=链路通但无内容，
+     *    不是上传失败）；未收到 ASR 时 wait 必须超时（否则"upload done"会假绿）。
+     *    这条把 agent_downlink→agent_audio 的联动从连云里剥出来，离线可判。 */
+    CHECK(agent_audio_uplink_verify_init() == OPRT_OK, "uplink verify init");
+    capture_stdout(__emit_asr_ok, NULL, out, sizeof(out));
+    CHECK(agent_audio_uplink_verify_wait(2000) == OPRT_OK, "ASR_OK posts uplink verify");
+
+    CHECK(agent_audio_uplink_verify_init() == OPRT_OK, "uplink verify re-init");
+    capture_stdout(__emit_asr_empty, NULL, out, sizeof(out));
+    CHECK(agent_audio_uplink_verify_wait(2000) == OPRT_OK, "ASR_EMPTY posts uplink verify");
+
+    /* 反向：没有 ASR 事件 → 必须等不到（用短超时，别把 15s 拖进自测） */
+    CHECK(agent_audio_uplink_verify_init() == OPRT_OK, "uplink verify init (no-asr case)");
+    CHECK(agent_audio_uplink_verify_wait(300) != OPRT_OK, "no ASR event -> wait times out");
 
     if (s_fail) {
         printf("AGENT NLG SELFTEST FAILED: %d check(s)\n", s_fail);
