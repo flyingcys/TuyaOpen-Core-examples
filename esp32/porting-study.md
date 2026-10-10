@@ -195,13 +195,37 @@ mbedtls 内部所有锁操作 = 对 `mbedtls_threading_mutex_t` 实例调这 4 �
 tal_mutex 回调 → **全局生效的是 tal_mutex 版**（esp32 的 tal_mutex 底层就是
 `xSemaphoreCreateRecursiveMutex`，与 ROM 版同为 FreeRTOS 信号量，句柄二进制兼容）。
 
-**风险点（如实记录，未真机验证）**：两套的**递归性不同**——tal 版用递归信号量
-（`xSemaphoreTakeRecursive`），ROM 版用非递归（`xSemaphoreTake`）。全局回调被
-覆盖后，esp-idf 的 mbedtls 消费者（如 wpa_supplicant）的 mutex 会用**递归 API
-操作非递归信号量**（FreeRTOS 对这类混用行为未定义）；上游 esp32 工程同样如此
-配置且长期运行，推测 mbedtls 的锁用法不触发递归路径，但机制上不干净。
+**风险点（已做代码级核实，2026-10-10）**：两套的**递归性不同**——tal 版用递归
+信号量（`xSemaphoreTakeRecursive`），ROM 版用非递归（`xSemaphoreTake`）。全局
+回调被覆盖后，esp-idf 的 mbedtls 消费者（wifi/wpa_supplicant/esp-tls）的 mutex
+会用**递归 API 操作非递归信号量**。核实结论（两层）：
+
+1. **不触发**：mbedtls 3.6 的锁只在公开 API 入口、内部函数不加锁（如
+   `mbedtls_ctr_drbg_random` 持锁、`ctr_drbg_reseed_internal` 不加锁）；持锁
+   期间回调出去的 4 处（rsa 的 `f_rng`、drbg 的 `f_entropy`、entropy 的
+   `f_source`、ticket 的 `f_rng`）在 esp-idf + tuya 全栈里都是 mbedtls 自身
+   函数且作用于**不同对象**（drbg→entropy、rsa→drbg→entropy、ticket→drbg），
+   不存在同一 mutex 重入。
+2. **即使触发也不坏（FreeRTOS 兜底）**：esp-idf 的 `xQueueCreateMutex` 对递归/
+   非递归两种类型都初始化 `xMutexHolder`/`uxRecursiveCallCount` 字段（类型常量
+   只用于调试），`xQueueTakeMutexRecursive` 只依赖这两个字段 → 递归 API 作用于
+   非递归 mutex 在功能上等价（仅"跨任务 give"会失败，mbedtls 不会那样用）。
+   注意：这是 esp32 平台巧合（linux 上 tal_mutex 是 pthread mutex，但 linux
+   不用 esp-idf mbedtls，无混用场景）。
+
+**更值得记录的副作用**：`mbedtls_threading_set_alt` 二次调用会**重新初始化**三个
+全局锁（readdir/gmtime/PSA，见 mbedtls `library/threading.c`），tuya 的运行时
+注册因此泄漏 ROM 版初始化时的信号量，且若此刻另一线程正持有全局锁会丢失互斥；
+若某线程的 lock/unlock 跨越了这次指针切换（plain take + recursive give）还会
+导致 `uxRecursiveCallCount` 下溢、永不释放。**正常启动顺序不满足触发条件**
+（`tuya_tls_init` 早于联网）。
+
 **改善方向**（通用改动，可讨论）：core 增加"宿主已提供 THREADING_ALT 回调时
-不再覆盖"的开关（例如随 `CONFIG_ENABLE_PLATFORM_MBEDTLS` 联动）。
+不再覆盖"的开关（例如随 `CONFIG_ENABLE_PLATFORM_MBEDTLS` 联动）——同时消除
+上述两类隐患。
+
+**未覆盖**：应用层回调（`cert_select_cb` / 自定义 rng 等）、ROM/WiFi 闭源 blob、
+PSA 全路径（仅核了 RNG/init 两条）。
 
 ### 4.3 "threading_alt 兼容头"的来龙去脉
 
