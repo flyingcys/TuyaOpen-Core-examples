@@ -102,6 +102,7 @@ file(GLOB _agent_demo_srcs CONFIGURE_DEPENDS
 # 自测文件自带 main()（独立自测目标），不能进 app 的源列表
 list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_chain_selftest\\.c$")
 list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_nlg_selftest\\.c$")
+list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_http_selftest\\.c$")
 
 add_executable(agent_demo ${_agent_demo_srcs})
 
@@ -160,6 +161,16 @@ target_include_directories(agent_nlg_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 target_link_libraries(agent_nlg_selftest PRIVATE ${_agent_demo_link})
+
+# http_manager URL 解析边界自测（独立可执行，不依赖网络）：
+# 端口越界必须被 parser 拒绝（uint16 回绕会静默连错端口/落默认端口）
+add_executable(agent_http_selftest
+    src/agent_http_selftest.c
+)
+target_include_directories(agent_http_selftest PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(agent_http_selftest PRIVATE ${_agent_demo_link})
 unset(_agent_demo_link)
 unset(_agent_demo_defs)
 
