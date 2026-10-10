@@ -200,7 +200,10 @@ build 目录无 `mbedtls_rom_osi*` 目标文件 / sdkconfig 无该 config / 固�
 `xSemaphoreCreateRecursiveMutex`）。
 （原表述"构造函数先注册、tuya 后注册覆盖"只在支持 ROM crypto 的芯片上成立。
 教训：核实"某代码注册了什么"要先核"它编进固件了吗"——1c 此前的复核基于源码
-存在性、漏了这一跳。）
+存在性、漏了这一跳。
+**未来注意**（1c 补充）：若目标换成支持 ROM crypto 的芯片（如 esp32c2），
+本节"两套回调递归性混用"的风险会从"不存在"变为"存在"（ROM 版会真的注册），
+需重新评估。）
 
 **风险点（已做代码级核实，2026-10-10）**：两套的**递归性不同**——tal 版用递归
 信号量（`xSemaphoreTakeRecursive`），ROM 版用非递归（`xSemaphoreTake`）。全局
