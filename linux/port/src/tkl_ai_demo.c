@@ -42,6 +42,11 @@ INT_T tkl_ai_demo_read(UINT8_T *buf, UINT_T len)
     }
 
     n = fread(buf, 1, len, s_ai_src);
+    if ((0 == n) && ferror(s_ai_src)) {
+        /* I/O 错误（区别于 EOF）：契约要求 <0 与 0(EOF) 分开报。
+         * 吞掉 ferror 会让"读盘出错/素材是目录"被当"读完"，调用方 0 字节却报成功。 */
+        return -1;
+    }
 
     return (INT_T)n; /* 0 = 数据结束(EOF) */
 }

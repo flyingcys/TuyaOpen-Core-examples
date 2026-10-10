@@ -81,6 +81,13 @@ int main(void)
     CHECK(tkl_ai_demo_open("voice_16k.pcm") == OPRT_OK, "usable after bad path");
     CHECK(tkl_ai_demo_close() == OPRT_OK, "final close");
 
+    /* 6) I/O 错误与 EOF 必须区分（契约：>0 字节 / 0 EOF / <0 错误）：
+     *    目录路径 fopen 可成功但 fread 必失败（ferror）——若把 ferror 吞成 0(EOF)，
+     *    调用方会把"读盘错误"当"读完"，0 字节却报成功（静默假绿）。 */
+    CHECK(tkl_ai_demo_open(".") == OPRT_OK, "open dir path (fopen succeeds)");
+    CHECK(tkl_ai_demo_read(buf, FRAME_BYTES) < 0, "read on dir returns error, not EOF");
+    CHECK(tkl_ai_demo_close() == OPRT_OK, "close after dir probe");
+
     if (s_fail) {
         printf("AGENT CHAIN SELFTEST FAILED: %d check(s)\n", s_fail);
         return 1;

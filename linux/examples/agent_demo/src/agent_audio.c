@@ -60,6 +60,12 @@ OPERATE_RET agent_audio_upload_once(const char *src_path, agent_audio_stat_t *st
     tuya_ai_input_stop();
     tkl_ai_demo_close();
 
+    /* 防御：0 字节上传无意义（空文件/异常源），按失败处理，避免"upload done"假绿 */
+    if ((rt == OPRT_OK) && (0 == local_stat.bytes)) {
+        PR_ERR("[AGENT] audio source empty (0 bytes), treat as failure");
+        rt = OPRT_COM_ERROR;
+    }
+
     if (stat) {
         *stat = local_stat;
     }
