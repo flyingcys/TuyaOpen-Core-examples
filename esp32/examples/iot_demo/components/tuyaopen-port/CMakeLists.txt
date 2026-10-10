@@ -14,14 +14,10 @@ idf_component_register(
 #    add_subdirectory(mbedtls) 创建，同名上游目标）——它带 MBEDTLS_CONFIG_FILE
 #    定义，但缺 esp_config.h 所在目录（该目录挂在组件目标 idf::mbedtls 上）。
 #    给 core 的环境基底（tuyaopen-headers，core 模块统一 PRIVATE 依赖）补该
-#    include，覆盖 core 全部编译单元。
-# 2) threading_alt.h：core 的 tuya_tls.c 用 tal_mutex 实现 mbedtls 的
-#    THREADING_ALT 回调，需要 tal_mutex 版结构（port/include/common 下，
-#    随 port 头注入 core 环境基底）；esp-idf 的 mbedtls 库/组件自身用 ROM 版
-#    （由 main 组件注入 mbedtls 目标）——两套结构各归各的分配者，互不冲突。
-#    （core 的 config/threading_alt.h 在 esp32 侧同步排除，避免经 mbedtls
-#    库目标的 INTERFACE 注入覆盖 ROM 版。）
-# 3) -Wno-error=format：core 代码有 %u 配 uint32_t 的写法，esp32 上 uint32_t
+#    include，覆盖 core 全部编译单元。THREADING_ALT 头两套结构各归各的分配者：
+#    core 侧（tuya_tls.c）用 core config 的 tal_mutex 版，esp-idf 的 mbedtls
+#    库/组件用 ROM 版（main 组件注入 mbedtls 目标），互不冲突。
+# 2) -Wno-error=format：core 代码有 %u 配 uint32_t 的写法，esp32 上 uint32_t
 #    为 long unsigned（esp-idf 默认 -Werror=format 报错）；32 位平台同宽无
 #    实际危害，放行警告（建议 core 侧后续改用 PRIu32）。
 if(TARGET tuyaopen-headers AND TARGET idf::mbedtls)

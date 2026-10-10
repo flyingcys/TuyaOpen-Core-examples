@@ -34,14 +34,19 @@ unset(_tp_official)
 # 给官方库编译单元注入自研侧头路径（transport_interface.h、配置头）与
 # TAL 头依赖（tuya_cloud_types.h、tal_memory.h 等），third_party 保持
 # 纯官方定义，不反向引用自研目录。
-foreach(_tp_official corehttp coremqtt mbedtls)
+#
+# mbedtls 只在 core 自建时注入（CONFIG_ENABLE_PLATFORM_MBEDTLS=OFF）：平台
+# 提供 mbedtls 时（esp-idf 宿主）该目标名是宿主侧组件/桥接目标，注入 core
+# 的 config 目录会让宿主的 mbedtls 消费者（esp_common 等）拿到 core 的
+# threading_alt.h（内部 include tal_mutex.h）而编译失败；宿主自带的
+# mbedtls 配置体系（esp_config.h + ROM 版 threading_alt.h）由宿主注入。
+foreach(_tp_official corehttp coremqtt)
     if(TARGET ${_tp_official})
         target_include_directories(${_tp_official} PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/include
         )
-        # 配置头（MBEDTLS_CONFIG_FILE / core_http|mqtt_config.h 的展开点）随
-        # INTERFACE 传播：任何 link 官方库的模块都需要它（如 tuya_utilities
-        # 用 mbedtls/base64.h），并非本目标的私有依赖
+        # 配置头（core_http|mqtt_config.h 的展开点）随 INTERFACE 传播：
+        # 任何 link 官方库的模块都需要它，并非本目标的私有依赖
         target_include_directories(${_tp_official} INTERFACE
             ${CMAKE_CURRENT_SOURCE_DIR}/config
         )
@@ -49,6 +54,18 @@ foreach(_tp_official corehttp coremqtt mbedtls)
     endif()
 endforeach()
 unset(_tp_official)
+
+if(TARGET mbedtls AND NOT CONFIG_ENABLE_PLATFORM_MBEDTLS)
+    target_include_directories(mbedtls PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    # 配置头（MBEDTLS_CONFIG_FILE 展开点）随 INTERFACE 传播：任何 link
+    # mbedtls 的模块都需要它（如 tuya_utilities 用 mbedtls/base64.h）
+    target_include_directories(mbedtls INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/config
+    )
+    target_link_libraries(mbedtls PRIVATE tuyaopen-headers tal_system)
+endif()
 
 target_link_libraries(tuya_transport PRIVATE
     tuyaopen-headers
