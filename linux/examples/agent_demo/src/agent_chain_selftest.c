@@ -20,6 +20,16 @@
 #define EXPECTED_FRAMES 33         /* 32×2560 + 1024 */
 #define EXPECTED_LAST_FRAME 1024
 
+/* 素材路径：与 app 同源（tuya_main.c 的 AGENT_AUDIO_SRC_PATH 口径）。
+ * CMake 已给本目标注入 AGENT_DEMO_AUDIO_FILE（见 CMakeLists.txt），配置了绝对
+ * 路径就测配置的素材；为空则用构建目录的内置素材（从 build/ 运行）。
+ * 早先此处的失败提示让用户"去设 CONFIG_AGENT_DEMO_FILE"，但源码并不读该宏——
+ * 设了也无效（假承诺）；现已改为真正使用，提示与行为一致。 */
+#ifndef AGENT_DEMO_AUDIO_FILE
+#define AGENT_DEMO_AUDIO_FILE ""
+#endif
+#define SELFTEST_AUDIO_SRC ((AGENT_DEMO_AUDIO_FILE)[0] ? (AGENT_DEMO_AUDIO_FILE) : "voice_16k.pcm")
+
 static int s_fail = 0;
 
 #define CHECK(cond, msg)                                                                                               \
@@ -41,15 +51,14 @@ int main(void)
     /* 0) 素材预检：由 CMake 复制到构建目录，从 build/ 运行；
      *    从别处运行给出明确指引（学 p2p_demo 的 "run from build/" 惯例），
      *    避免后续断言成片失败、看不出根因。 */
-    if (tkl_ai_demo_open("voice_16k.pcm") != OPRT_OK) {
-        printf("FAIL: audio sample 'voice_16k.pcm' not found: run from build/ "
-               "(or set CONFIG_AGENT_DEMO_AUDIO_FILE to an absolute path)\n");
+    if (tkl_ai_demo_open(SELFTEST_AUDIO_SRC) != OPRT_OK) {
+        printf("FAIL: audio sample '%s' not found: run from build/ \n", SELFTEST_AUDIO_SRC);
         return 1;
     }
     tkl_ai_demo_close();
 
     /* 1) 打开内置素材 */
-    CHECK(tkl_ai_demo_open("voice_16k.pcm") == OPRT_OK, "open bundled pcm");
+    CHECK(tkl_ai_demo_open(SELFTEST_AUDIO_SRC) == OPRT_OK, "open bundled pcm");
 
     /* 2) 按 80ms 帧读取，统计帧数/总字节/末帧长度 */
     for (;;) {
@@ -73,12 +82,12 @@ int main(void)
 
     /* 4) 关闭后可重开 */
     CHECK(tkl_ai_demo_close() == OPRT_OK, "close");
-    CHECK(tkl_ai_demo_open("voice_16k.pcm") == OPRT_OK, "reopen");
+    CHECK(tkl_ai_demo_open(SELFTEST_AUDIO_SRC) == OPRT_OK, "reopen");
     CHECK(tkl_ai_demo_close() == OPRT_OK, "close again");
 
     /* 5) 坏路径被拒且不影响后续使用 */
     CHECK(tkl_ai_demo_open("/nonexistent/agent_demo_selftest.pcm") != OPRT_OK, "bad path rejected");
-    CHECK(tkl_ai_demo_open("voice_16k.pcm") == OPRT_OK, "usable after bad path");
+    CHECK(tkl_ai_demo_open(SELFTEST_AUDIO_SRC) == OPRT_OK, "usable after bad path");
     CHECK(tkl_ai_demo_close() == OPRT_OK, "final close");
 
     /* 6) I/O 错误与 EOF 必须区分（契约：>0 字节 / 0 EOF / <0 错误）：
