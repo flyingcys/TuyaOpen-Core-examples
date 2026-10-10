@@ -96,7 +96,14 @@ static OPERATE_RET tkl_ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_
 static OPERATE_RET tkl_ota_end_notify(BOOL_T reset)
 {
     FILE *p_upgrade_fd = (FILE *)s_upgrade_fd;
-    fclose(p_upgrade_fd);
+
+    /* core 的下载失败路径（DL_EVENT_FAULT / hmac 校验失败）也会调本接口
+     * （reset=FALSE 的失败清理语义）；极端时序下可能在 start_notify 之前
+     * 到达——防 NULL，并复位句柄（原实现不防，fclose(NULL) 会崩） */
+    if (p_upgrade_fd) {
+        fclose(p_upgrade_fd);
+        s_upgrade_fd = NULL;
+    }
 
     if (reset) {
         printf("SOC Upgrade File Download Success\r\n");
