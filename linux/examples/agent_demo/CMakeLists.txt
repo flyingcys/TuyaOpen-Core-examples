@@ -171,6 +171,13 @@ target_include_directories(agent_http_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 target_link_libraries(agent_http_selftest PRIVATE ${_agent_demo_link})
+
+# 自测目标的 _agent_demo_defs 注入口径：三个自测均**不引用** AGENT_DEMO_AUDIO_FILE
+# （agent_chain_selftest 只在失败提示文案里提到该配置名，非代码引用），故 nlg/http
+# 两个自测不注入。chain_selftest 保留注入是历史遗留（无害冗余）。
+# 与 p2p_demo 的差异是有意的：那边 vcam_selftest 真的读取用户可覆盖的视频源路径，
+# 不注入会"用户换源、自测静默测内置素材"；本 demo 的自测只测契约，无此风险。
+# 若将来某自测真要读素材路径，务必同步注入该宏，否则会踩上面那个静默不一致。
 unset(_agent_demo_link)
 unset(_agent_demo_defs)
 
@@ -184,4 +191,8 @@ if(ENABLE_ASAN)
     target_link_options(agent_demo PRIVATE -fsanitize=address)
     target_compile_options(agent_chain_selftest PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
     target_link_options(agent_chain_selftest PRIVATE -fsanitize=address)
+    target_compile_options(agent_nlg_selftest PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
+    target_link_options(agent_nlg_selftest PRIVATE -fsanitize=address)
+    target_compile_options(agent_http_selftest PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
+    target_link_options(agent_http_selftest PRIVATE -fsanitize=address)
 endif()
