@@ -123,7 +123,10 @@ cd build && ./agent_http_selftest
 
 **硬件相关**：全部不做——按键、唤醒词、VAD、摄像头、打印机、电池、低功耗，以及
 **真实麦克风**（音频源经 port 契约 `tkl_ai_demo_*` 从 PCM 文件回放；真实设备接入时
-替换 port 实现，契约头已注明适配点）。
+替换 port 实现，契约头已注明适配点）。**注意"只换 port 实现"补不了四件事**——半双工
+门控（播放中不上传）、AEC、本地 VAD 定界、push 采集语义，这些决策都在未搬运的
+`ai_main`/`ai_mode`/`ai_audio` 里；接入的正确顺序与逐条证据见
+`agent-demo-design.md` §9.5。
 
 **音视频未做到的能力**：
 - **上行 Opus 编码**：本 demo 为 PCM 直传（`codec_enable=FALSE`）；上游默认配置同样是
