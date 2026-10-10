@@ -66,25 +66,36 @@ KCONFIG_CONFIG=./.config olddefconfig   # 按默认值生成
 cmake -B build -DCONFIG_AGENT_DEMO_AUDIO_FILE=/path/to/your_16k.pcm
 ```
 
-注意 `.config` 是 `linux/` 下所有 example 共享的，一旦存在即以它为准；删除可回到内置默认。
+注意 `.config` 是 `linux/` 下所有 example 共享的，一旦存在即以它为准；删除可回到
+内置默认（AI 组件 / QRCODE / WIRED 开；与现有 .config 相比：少 `ENABLE_AI_MONITOR`
+与整个 P2P 子树）。
 
 ## 自测
 
-两个独立可执行文件，无需连云、无需 App、无需凭据（在 build 目录执行——素材
+三个独立可执行文件，无需连云、无需 App、无需凭据（在 build 目录执行——素材
 `voice_16k.pcm` 由 CMake 复制到该目录，从别处执行会提示 `run from build/`）：
 
 ```bash
 cd build && ./agent_chain_selftest
 cd build && ./agent_nlg_selftest
+cd build && ./agent_http_selftest
 ```
+
+> 验证纪律（1c 评审 R3）：以 `cmake --build build`（**全目标**）通过为准——单跑某个
+> selftest 不构成完整验证（如 `CONFIG_ENABLE_TUYA_CODEC=OFF` 时三个自测均能链接通过、
+> 但 agent_demo 主目标会因 `tuya_ai_get_encoder` 缺失而链接失败）。
 
 - `agent_chain_selftest`：上行音频源契约与素材帧切分口径——总字节 82944、按 80ms
   帧（2560B）切分 33 帧（32 整帧 + 末帧 1024B）、EOF 语义、关闭重开、坏路径拒绝、
   **I/O 错误与 EOF 区分**（目录路径 fopen 可成功但 read 必须 <0 而非 0/EOF）。
+  素材路径与 app 同源（`CONFIG_AGENT_DEMO_AUDIO_FILE` 非空则测该文件）。
   期望输出 `AGENT CHAIN SELFTEST PASSED`（exit 0）。
 - `agent_nlg_selftest`：下行消费契约——多段 NLG 流的末段（eof=1）经
   `AI_USER_EVT_TEXT_STREAM_STOP` 携带非空内容时必须打印；空包不误打。用公开 API
   构造事件（不依赖云端分包）。期望输出 `AGENT NLG SELFTEST PASSED`（exit 0）。
+- `agent_http_selftest`：http_manager URL 解析边界——端口越界（回绕样本）与显式
+  `:0` 必须被 parser 拒绝；边界内端口不被拒绝；空 host 回归（不依赖网络）。
+  期望输出 `AGENT HTTP SELFTEST PASSED`（exit 0）。
 
 ## 语音素材
 

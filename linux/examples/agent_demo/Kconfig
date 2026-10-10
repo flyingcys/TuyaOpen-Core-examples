@@ -16,6 +16,11 @@ menu "configure app (agent_demo)"
             prompt（menuconfig 里不可交互关闭），不构建该 example 即可，
             无需关闭此符号。
 
+            注意：本 demo 依赖 ENABLE_QRCODE 输出绑定二维码（未激活设备扫码
+            激活的唯一途径）——若在 menuconfig 或 -D 中关闭 ENABLE_QRCODE，
+            构建仍会成功，但运行后停在 "Wait Tuya APP scan..." 且无二维码可扫、
+            无法激活（1c 评审 R3 实测：二维码块数 0）。正常路径无需关闭。
+
     config AGENT_DEMO_AUDIO_FILE
         string "Audio source PCM file (empty = bundled voice_16k.pcm)"
         depends on AGENT_DEMO
