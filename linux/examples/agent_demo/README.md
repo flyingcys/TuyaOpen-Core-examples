@@ -129,8 +129,9 @@ cd build && ./agent_chain_selftest
   `ai_agent.c` 的音频属性分支。
 - **只上传一次**：触发为一次性（用户确认口径）；如需多轮，重新运行或扩展触发线程。
 - **下行语音被丢弃**：不解码不播放；云端仍会下发 TTS 音频流（占用流量但不处理）。
-- **AI monitor 端口**：core 的 `ai_monitor`（`ENABLE_AI_MONITOR=y`）会监听本机 5055 端口
-  做调试监视；端口被占用时 `ai_agent_init` 可能失败（日志可见）。
+- **AI monitor（TCP 5055）**：core 的 `ai_monitor` 会监听本机 5055 端口输出 AI 协议流供
+  调试（`ENABLE_AI_MONITOR`，默认开）。端口被占用时 monitor 自身降级重试（日志可见
+  `create server socket failed`），**不阻断 AI 链路**（实测：占用 5055 后 ASR/NLG 正常）。
 
 ## 目录结构
 

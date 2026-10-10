@@ -144,17 +144,21 @@ __exit:
 
 /**
  * @brief 启动 AI 链路（幂等）：初始化 agent + 注册下行打印 + 起触发线程
+ *
+ * guard（s_agent_started）只在**全部成功后**置位：ai_agent_init 失败时不置，
+ * 下次 MQTT_CONNECTED 自然重试（tuya_ai_agent_init 失败路径自清理，重试安全；
+ * monitor 已降级为非阻断，不会制造"半成功"状态）。线程创建失败时 AI 已初始化、
+ * 重复初始化不安全，故置位不再重试（打 ERR 供排查）。
  */
 static void __agent_start(void)
 {
     if (s_agent_started) {
         return;
     }
-    s_agent_started = true;
 
     OPERATE_RET rt = ai_agent_init();
     if (rt != OPRT_OK) {
-        PR_ERR("[AGENT] ai_agent_init failed: %d", rt);
+        PR_ERR("[AGENT] ai_agent_init failed: %d (will retry on next mqtt connect)", rt);
         return;
     }
     PR_NOTICE("[AGENT] ai agent initialized");
@@ -166,8 +170,10 @@ static void __agent_start(void)
     thrd.priority     = THREAD_PRIO_2;
     thrd.thrdname     = "agent_trigger";
     if (tal_thread_create_and_start(&s_agent_trigger_thread, NULL, NULL, __agent_trigger_task, NULL, &thrd) != OPRT_OK) {
-        PR_ERR("[AGENT] trigger thread create failed");
+        PR_ERR("[AGENT] trigger thread create failed (ai agent stays initialized, no retry)");
     }
+
+    s_agent_started = true;
 }
 
 /**
