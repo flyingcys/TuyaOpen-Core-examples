@@ -327,3 +327,83 @@ cd build && timeout 60 ./agent_demo
 - 上传起始处一条 `tuya_ai_event.c:36 event or session id was null`（会话刚建立时的
   事件关联时序），不影响后续（`use session ...` 正常、下行正常）；
 - 首启一条 `load tls_ca_cnt fail. no ca in local db`（CA 首次拉取前提示，iot_demo 同样存在）。
+
+## 9. 能力边界（本 demo 明确不做的项）
+
+> **定位声明**：agent_demo 是"跑通云端 AI agent 全链路的**验证载体**"，不是功能完整的产品。
+> 它的价值在于把链路走通、把判据做真（见 §5.2 与三个自测）；功能完整性不是目标。
+>
+> 本节把"**有意不做**"与"**做到一半/未实现**"分开记录，目的是防止后人把刻意边界当遗漏
+> "顺手补上"——前者补了是偏离定位，后者补了需要有明确的实现方案与验证。
+
+### 9.1 规模口径（先建立量感，避免误读）
+
+对比上游 `/home/share/samba/open-components/tuyaopen/apps/tuya.ai/your_chat_bot`：
+
+| 口径 | 上游 | 本 demo |
+|---|---|---|
+| 应用层 `.c/.h` 总行数 | 112,831 | 1,034 |
+| 其中 **UI 资源**（点阵字模/PNG/GIF 数组） | **105,777** | 0 |
+| **实际逻辑代码** | **7,054** | **1,034** |
+| core 侧组件 | ai_agent 460 / ai_skills 1509 / ai_audio 1342 / ai_mcp 2208 / ai_video 383 / **ai_mode 2228** / **ai_main 830** | 前三项与 ai_mcp/ai_video **逐行同源**；**无 ai_mode / ai_main** |
+
+**关键结论**：AI 协议、会话、技能、传输这些硬骨头两侧同源（行数差 0~14，差异仅
+Linux PCM 属性分支与注释）；本 demo 真正没移植的应用侧能力集中在
+**`ai_mode`（2228 行）+ `ai_main`（830 行）= 3058 行的"对话主控"**。
+所以"上游 11 万行"里绝大部分是界面资源，**别把它当逻辑差距**。
+
+### 9.2 有意不做（平台/定位决定，补了即偏离）
+
+| 能力 | 上游证据 | 不做原因 |
+|---|---|---|
+| **UI 全部**（屏幕/表情/LVGL/聊天界面/主题/亮度/波形） | `src/display2/ui_chatbot` + `ui_wechat` 两套 + core `ai_ui` 4 套（10360 行，实测） | Linux 无屏；文字已打 stdout，数据面本就通。上游 `ui_wechat` 才是有气泡的功能套，`ui_chatbot` 的 `ui_set_user_msg/assistant_msg/system_msg` 全是空 `return;` |
+| **按键 / 唤醒词 / VAD** | `ai_mode_hold.c:314` 长按、`ai_mode_wakeup.c:169` `tkl_kws_reg_wakeup_cb`、`ai_audio_input.c:146` `EVENT_AUDIO_VAD` | 依赖 `tdl_button_manage.h`/`tkl_kws.h`/`tkl_vad.h`，Linux 无对应硬件 |
+| **真实麦克风采集** | `ai_audio_input.c:360/367` `tdl_audio_find`+`tdl_audio_open`；平台是 **push 模式**（`tkl_audio.c:75-88` `voice_read_callback` 回调），`tkl_audio.c:655` 的 `tkl_ai_get_frame()` 直接返回 `OPRT_NOT_SUPPORTED` | port 契约 `tkl_ai_demo_*` 已留替换点（`port/include/media/tkl_ai_demo.h` 注明适配点），Linux 只做 PCM 文件回放、且是 **poll 模式**（`agent_audio.c:64` 主动 read） |
+| **摄像头 / 视频** | `board_com_api.c:283` camera 注册、`ai_agent.c:141` VIDEO `/* TBD */` | 无硬件；且上游该分支本身也是空实现 |
+| **打印机** | `app_printer.c`（206 行，JPEG→单色抖动位图） | 无硬件 |
+| **电池 / 低功耗** | `app_battery.c` 74 行、`app_lowpower.c` 260 行（`tuya_pm` 两级链） | 无硬件；上游 30 个板 config 也仅 2 个开启 |
+| **音量 / 亮度调节 + DP 上报** | `app_ui_helper.c:35-49` 去抖 + `ai_audio_player_set_vol`；`tuya_main.c:71` `DPID_VOLUME=3` | 无播放器可调音量 |
+| **多轮持续对话 / 语音打断 / 服务端 VAD 交互** | `ai_mode_free.c` 等四模式状态机（`ai_manage_mode.h:48-57`：INIT/IDLE/LISTEN/UPLOAD/THINK/SPEAK + INVALID 哨兵） | 定位为"一次触发"验证；多轮需先移植 ai_mode |
+
+### 9.3 未实现/做到一半（属半成品，补前需方案 + 验证）
+
+| 能力 | 现状 | 补它需要什么 |
+|---|---|---|
+| **上行 Opus 编码** | PCM 直传（`codec_enable=FALSE`，`ai_agent.c` 的 `#else` 分支硬编码 16k/mono/16bit） | 开 `ENABLE_COMP_AI_AUDIO_CODEC_OPUS`（引 libopus）+ 把属性改回从编码器协商。**注意：上游默认板同样是 PCM 裸发，这不是我们独有的简化**——`svc_ai_codec/Kconfig:5-7` 的 `ENABLE_TUYA_CODEC_OPUS` **default n** → `__ai_agent_reg_encoder`（`tuya_ai_agent.c:1195-1204`）一个编码器都不注册 → `tuya_ai_get_encoder()` 返回 NULL（`:1172`）→ 不 create、走原始数据；`your_chat_bot` 28 个板 config 仅 8 个显式开 Opus、`app_default.config` 无 codec 项。即默认口径上下游一致，Opus 是少数板的选择 |
+| **下行 TTS 播放** | AI 音频模块整体关闭，语音包在 core 内丢弃（`ai_agent.c:137-139` 被预处理掉） | 开 `ENABLE_COMP_AI_AUDIO`，但 Linux port 无 `tdl_audio_manage`/`svc_ai_player`/`media_src`（§3.2 断点 4），需先补 port 侧 |
+| **媒体 URL 流式下载** | 6ba0506 改安全失败（`PR_ERR("http media download not implemented")`）。上游 `tuya_ai_http.c` 有真实下载循环 | 用本 manager 的 transport 直读 body 实现；**必须先处理 README 已知限制里的三个前置**：IPv6 字面量/userinfo 不支持、>1023B URL 被 `fill_url_head` 静默截断 |
+| **图片 / 文件 / 视频下行** | `ai_agent.c:140-148` image 走 `ai_picture_output`（模块未搬），file(`:150`)/video(`:141`) 上游同为 `/* TBD */` | 图片需搬 `ai_picture`（892 行）+ 媒体下载；file/video 上游也未实现，**不属于我们的欠账** |
+| **表情/情绪驱动** | `agent_downlink.c` default 分支忽略（core `ai_skill.c:183-190` 会发 `AI_USER_EVT_EMOTION`） | 只需在消费端加 case；终端可直接打 emoji 字符，成本极低 |
+| **`ai_agent_send_text/send_file/send_image/cloud_alert/role_switch`** | core 函数都在（`ai_agent.c:260-372`），**应用层一次没调** | 纯调用，无依赖 |
+| **MQTT_DISCONNECT / TIMESTAMP_SYNC 事件处理** | `tuya_main.c` 只处理 6 个事件，无这两个 case | 纯 tal 层逻辑（上游 `tuya_main.c:222/233`） |
+| **重置配网（连按重置 3 次）** | 无。上游 `reset_netcfg.c` 111 行用 KV 计数 + 5s 定时器归零 | **已有可搬样板**：同仓 `linux/examples/p2p_demo/src/reset_netcfg.c`（129 行）只依赖 `tal_api.h`+`tuya_iot.h`，板级无关、已在 Linux 落地——低风险可搬迁项 |
+
+### 9.4 为什么"对话主控"3058 行不能直接搬（重要判断）
+
+`ai_mode` / `ai_main` **不是"打开宏就能用"**：
+
+- `ai_mode` 直接 include `tdl_button_manage.h`、`tdl_led_manage.h`、`tkl_kws.h`、`tkl_vad.h`、
+  `ai_audio_player.h`、`ai_picture_input.h`（实测 include 列表）；
+- `ai_main` 的 UI 调用有 `#if ENABLE_COMP_AI_DISPLAY` 门控（3 处），但**按键创建
+  （`ai_chat_main.c:293-306` 的 `tdl_button_create` 等 7 处）与唤醒词无门控、直接编译**。
+
+⇒ 移植前需先做按键/唤醒词/UI 的依赖剥离或宏隔离，**属中等工作量，不是零成本**。
+若将来要补，建议路径：先按 `ai_mode_free.c`（行为最接近本 demo）做单模式移植，
+按键/VAD/唤醒词改由**参数注入**（模式接口本就支持 `handle_key` / `vad_change`），
+再决定是否引其余三态。
+
+### 9.5 接真实麦克风时，"只换 port 实现"补不了的四件事（重要）
+
+常见误解是"把 `tkl_ai_demo.c` 换成麦克风采集就能接真机"。**不够**——上游的上行策略
+不在可替换的 port 层，而在**未搬运的 `ai_main`/`ai_mode`/`ai_audio` 三块里**：
+
+| 上游行为 | 证据 | 换 port 能补上吗 |
+|---|---|---|
+| **播放中不上传**（半双工，防把自己 TTS 录进去） | `ai_chat_main.c:215-219`：AEC 关时 `if(false == ai_audio_player_is_playing())` 才 `tuya_ai_audio_input` | **不能**——判断在 `ai_chat_main.c`，我们侧 `agent_audio.c` 零处该判断 |
+| **AEC 开则无脑上传**（支持语音打断） | `ai_chat_main.c:211-214`，板级 `zectrix_t5ai_note_4.c:173` `cfg.aec_enable=1` → `tkl_vad.c:62-64` `speex_aes_process` | **不能**（同左） |
+| **本地 VAD 定轮次边界**（按键抬起才 stop） | `ai_mode_hold.c:282-290`：`PRESS_UP` → `__ai_mode_enter_upload` 内 `tuya_ai_input_stop()`；`:165` init 时 `tuya_ai_agent_server_vad_ctrl(false)` | **不能**——我们 `agent_audio.c:89` 是"读完 EOF 即 stop"；且 core 默认 `enable_serv_vad=TRUE`（`tuya_ai_agent.c:1249`）而 app 从未调用 `tuya_ai_agent_server_vad_ctrl(false)` 去关它 ⇒ **当前是"服务端 VAD 定边界"**，与上游 HOLD 模式的本地 VAD 口径不同 |
+| **push 采集语义** | `tkl_audio.c:75-88` 平台读线程回调 `voice_read_callback`；`tkl_audio.c:655` `tkl_ai_get_frame()` 返回 `OPRT_NOT_SUPPORTED`（证明非拉模式） | 半能——契约可改成 push，但需自己解决"何时起止一轮" |
+
+**结论**：接真麦克风的正确顺序是**先搬 `ai_mode`/`ai_main`（含按键/VAD/AEC 决策），
+再替换 port 采集实现**；反过来会把半双工/AEC/边界决策的责任丢给应用层从零实现。
+这也是本 demo 只做"文件回放 + 一次触发"的原因：它验证的是**协议链路**，不是**音频策略**。
