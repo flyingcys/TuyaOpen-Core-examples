@@ -1,0 +1,5 @@
+# 真实凭据（由 tuya_config_secrets.h.example 复制而来）不入库
+tuya_config_secrets.h
+# 构建目录变体（build/ 已被仓库根 .gitignore 的 examples/*/build 覆盖，
+# 这里兜住 build-xxx 之类的变体）
+build*/
