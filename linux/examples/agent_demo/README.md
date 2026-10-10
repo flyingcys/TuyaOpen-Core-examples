@@ -137,6 +137,13 @@ cd build && ./agent_nlg_selftest
 - **NLG 末段补打的验证边界**：多段 NLG 流的末段（eof=1）经 STOP 携带时会补打，该消费
   契约由 `agent_nlg_selftest` 覆盖（变异验证有效）；但**云端真实分包形态未实测**——三次
   实跑的末包恰好均为空，未触发该分支。契约层通过 ≠ 端到端验证。
+- **URL parser 边界（媒体下载相关，1c 评审 R5）**：不支持 IPv6 字面量（`[::1]`）与含
+  userinfo 的 URL（`user:pass@host`）——两者均属"误报性质的安全失败"：host 段在第一个
+  `:` 截断后，端口段读到非数字、命中显式 `:0` 非法检查报 INVALID_PARM，**并非显式的
+  IPv6/userinfo 检测**（将来若要支持，需在 host 段显式处理括号/userinfo）；另 >1023 字符
+  的媒体 URL 会被 `fill_url_head` 静默截断（`DEF_URL_LEN=1024`，实测 1439B URL 的
+  `&token=` 段丢失；TTS URL 有 128 长度限制兜底、图片 URL 未见长度校验）。媒体下载整体
+  未实现（6ba0506 安全失败），故当前无实际影响；将来实现下载时必须处理上述三点。
 - **媒体 URL 下载未实现**：云端若下发图片/文件/音频的下载 URL（`tuya_ai_agent.c` 的
   image/file dld 路径），agent-core 侧当前**安全失败**（错误日志
   `http media download not implemented`），不会下载成功。原因：原实现调用 iot-core 的
