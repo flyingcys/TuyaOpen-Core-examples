@@ -129,6 +129,12 @@ cd build && ./agent_chain_selftest
   `ai_agent.c` 的音频属性分支。
 - **只上传一次**：触发为一次性（用户确认口径）；如需多轮，重新运行或扩展触发线程。
 - **下行语音被丢弃**：不解码不播放；云端仍会下发 TTS 音频流（占用流量但不处理）。
+- **媒体 URL 下载未实现**：云端若下发图片/文件/音频的下载 URL（`tuya_ai_agent.c` 的
+  image/file dld 路径），agent-core 侧当前**安全失败**（错误日志
+  `http media download not implemented`），不会下载成功。原因：原实现调用 iot-core 的
+  `http_read_content`，与 agent-core 的 session context 布局不兼容（类型混淆，实测段
+  错误），已替换为明确失败；完整流式下载待按需实现。当前文字链路（ASR/NLG/emoji）不
+  触发该路径。
 - **AI monitor（TCP 5055）**：core 的 `ai_monitor` 会监听本机 5055 端口输出 AI 协议流供
   调试（`ENABLE_AI_MONITOR`，默认开）。端口被占用时 monitor 自身降级重试（日志可见
   `create server socket failed`），**不阻断 AI 链路**（实测：占用 5055 后 ASR/NLG 正常）。
