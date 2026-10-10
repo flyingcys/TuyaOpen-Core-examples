@@ -422,10 +422,10 @@ menu "configure mbedtls"
 
             config ENABLE_MBEDTLS_SSL_SRV_C
                 bool
-                select MBEDTLS_TLS_ENABLED
+                select ENABLE_MBEDTLS_TLS_ENABLED
             config ENABLE_MBEDTLS_SSL_CLI_C
                 bool
-                select MBEDTLS_TLS_ENABLED
+                select ENABLE_MBEDTLS_TLS_ENABLED
             config ENABLE_MBEDTLS_TLS_ENABLED
                 bool        
 
