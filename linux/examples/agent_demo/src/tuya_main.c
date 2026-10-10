@@ -102,16 +102,24 @@ static bool          s_agent_started        = false;
 
 /**
  * @brief 触发线程：等 AI 客户端就绪 → 上传一段预置语音（一次性）
+ *
+ * 收尾必须自删：TAL 契约（tal_thread.c __WrapRunFunc）在用户回调返回后仍每
+ * 10ms 轮询 thrdRunSta，直到 tal_thread_delete 置 STOP 才退出并释放；不自删
+ * 则线程与句柄常驻。惯例同 iot_demo tuya_app_thread / p2p_demo 回放线程。
  */
 static void __agent_trigger_task(void *arg)
 {
     (void)arg;
-    uint32_t waited_ms = 0;
+    uint32_t           waited_ms = 0;
+    OPERATE_RET        rt        = OPRT_OK;
+    agent_audio_stat_t stat      = {0};
 
     while (!tuya_ai_agent_is_ready()) {
         if (waited_ms >= AGENT_TRIGGER_WAIT_READY_MS) {
+            /* 超时放弃（一次性触发口径）：30s 上限远大于实测就绪时间(~1s)，
+             * 超时说明链路异常；重试无意义，打日志供排查。 */
             PR_ERR("[AGENT] ai client not ready in %d ms, trigger aborted", AGENT_TRIGGER_WAIT_READY_MS);
-            return;
+            goto __exit;
         }
         tal_system_sleep(500);
         waited_ms += 500;
@@ -122,10 +130,16 @@ static void __agent_trigger_task(void *arg)
     tal_system_sleep(AGENT_TRIGGER_SESSION_SETTLE_MS);
 
     PR_NOTICE("[AGENT] trigger: upload one utterance from %s", AGENT_AUDIO_SRC_PATH);
-    agent_audio_stat_t stat = {0};
-    OPERATE_RET        rt   = agent_audio_upload_once(AGENT_AUDIO_SRC_PATH, &stat);
+    rt = agent_audio_upload_once(AGENT_AUDIO_SRC_PATH, &stat);
     PR_NOTICE("[AGENT] upload %s: frames=%u, bytes=%u, last_frame_bytes=%u", (rt == OPRT_OK) ? "done" : "FAILED",
               stat.frames, stat.bytes, stat.last_frame_bytes);
+
+__exit:
+    if (s_agent_trigger_thread) {
+        THREAD_HANDLE h        = s_agent_trigger_thread;
+        s_agent_trigger_thread = NULL;
+        tal_thread_delete(h);
+    }
 }
 
 /**
