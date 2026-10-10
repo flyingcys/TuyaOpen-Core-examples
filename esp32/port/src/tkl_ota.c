@@ -202,9 +202,15 @@ static OPERATE_RET tkl_ota_end_notify(BOOL_T reset)
     /* 注：core 的失败路径不调用本接口——全 core 唯一调用点是成功路径的
      * end_notify(TRUE)（tuya_ota.c:118），DL_EVENT_FAULT / hmac 校验失败
      * 分支无通知。esp32 的失败恢复由 start_notify 的入口自愈 +
-     * data_process 写失败自清理兜底（PK H1）。若 core 将来补失败通知
-     * （reset=FALSE），需在此按"失败清理"语义处理（参考 linux port 的
-     * end_notify(FALSE)——打印 "Download Fail"）。 */
+     * data_process 写失败自清理兜底（PK H1）。
+     *
+     * reset 参数当前未使用（到达本函数的调用恒为 TRUE），按"成功结束"无条件
+     * 重启是当前 core 契约下的正确行为（PK 复核 ad20a66 声明项）。若 core
+     * 将来补失败通知（reset=FALSE），**必须先恢复参数分流**：reset=FALSE 时
+     * 走 __ota_fail_cleanup()（不提交、不重启），参考 linux port 的
+     * end_notify(FALSE)（打印 "Download Fail"）。 */
+    (void)reset;
+
     if (TKL_OTA_SUCCESS != s_tkl_ota_handle.state) {
         ESP_LOGE(DBG_TAG, "%s: ota upgrade state is not success", __func__);
         goto err_exit;
