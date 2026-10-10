@@ -169,12 +169,15 @@ static OPERATE_RET tkl_ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_
 
     if (ESP_OK != esp_ota_write(s_tkl_ota_handle.handle, (const void *)pack->data, pack->len)) {
         ESP_LOGE(DBG_TAG, "%s: call esp_ota_write failed", __func__);
-        /* core 忽略本接口返回值（tuya_ota.c:81），此自清理让失败**即时**复位。
-         * 注意：H1 的必需路径是 start_notify 的入口自愈（PK 变异验证：去掉
-         * 本处，入口自愈仍可兜住全部失败场景）；本处是即时性优化——stale
-         * handle 更早释放、且失败后数据继续到达时 state=INIT 明确报 "not init"
-         * （避免 IN_PROGRESS 下继续写脏数据），并防御 core 未来改成检查返回值
-         * 并中断流程的契约。 */
+        /* core 忽略本接口返回值（tuya_ota.c:81），此自清理有两层价值：
+         * 1) 正确性：state 归 INIT 后，后续数据被本函数开头的 INIT 门挡下
+         *    报 "not init"；若无本处（state 停 IN_PROGRESS），core 继续送来
+         *    的数据会走 esp_ota_write 写一个**已 abort 的 handle**（PK 复核
+         *    补核，比"延迟到入口自愈"更糟）；
+         * 2) 即时性：stale handle 更早释放，不必等下次 start_notify 的入口
+         *    自愈——那是另一个独立必需路径（变异验证：去掉本处，入口自愈
+         *    仍可兜住全部失败场景）。
+         * 另防御 core 未来改成检查返回值并中断流程的契约。 */
         __ota_fail_cleanup();
         return OPRT_COM_ERROR;
     }
