@@ -134,6 +134,9 @@ cd build && ./agent_nlg_selftest
   `ai_agent.c` 的音频属性分支。
 - **只上传一次**：触发为一次性（用户确认口径）；如需多轮，重新运行或扩展触发线程。
 - **下行语音被丢弃**：不解码不播放；云端仍会下发 TTS 音频流（占用流量但不处理）。
+- **NLG 末段补打的验证边界**：多段 NLG 流的末段（eof=1）经 STOP 携带时会补打，该消费
+  契约由 `agent_nlg_selftest` 覆盖（变异验证有效）；但**云端真实分包形态未实测**——三次
+  实跑的末包恰好均为空，未触发该分支。契约层通过 ≠ 端到端验证。
 - **媒体 URL 下载未实现**：云端若下发图片/文件/音频的下载 URL（`tuya_ai_agent.c` 的
   image/file dld 路径），agent-core 侧当前**安全失败**（错误日志
   `http media download not implemented`），不会下载成功。原因：原实现调用 iot-core 的
