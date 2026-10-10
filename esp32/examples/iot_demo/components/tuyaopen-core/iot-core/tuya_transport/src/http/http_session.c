@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h> /* PRIu32：uint32_t 在不同平台是 unsigned int 或 long unsigned */
 
 #include "tal_api.h"
 #include "tuya_transporter.h"
@@ -741,7 +742,7 @@ OPERATE_RET http_send_request_stream(http_session_t session, const http_req_t *r
     }
 
     int offset = snprintf(header_buf, HEADER_BUFFER_LENGTH,
-        "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %u\r\n",
+        "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %" PRIu32 "\r\n",
         method_str, ctx->path, ctx->host, total_body_len);
 
     // Add custom headers

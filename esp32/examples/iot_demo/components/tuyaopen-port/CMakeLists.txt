@@ -9,21 +9,22 @@ idf_component_register(
 
 # ---- esp-idf 宿主下 core 的 mbedtls 接入（平台定制只进 port，core 零改动）----
 #
-# 1) esp_config.h：core 模块里 target_link_libraries(... mbedtls ...) 的裸名
-#    在 esp-idf 构建中解析到 esp-idf 的 mbedtls 库目标（mbedtls 组件内
-#    add_subdirectory(mbedtls) 创建，同名上游目标）——它带 MBEDTLS_CONFIG_FILE
-#    定义，但缺 esp_config.h 所在目录（该目录挂在组件目标 idf::mbedtls 上）。
-#    给 core 的环境基底（tuyaopen-headers，core 模块统一 PRIVATE 依赖）补该
-#    include，覆盖 core 全部编译单元。THREADING_ALT 头两套结构各归各的分配者：
-#    core 侧（tuya_tls.c）用 core config 的 tal_mutex 版，esp-idf 的 mbedtls
-#    库/组件用 ROM 版（main 组件注入 mbedtls 目标），互不冲突。
-# 2) -Wno-error=format：core 代码有 %u 配 uint32_t 的写法，esp32 上 uint32_t
-#    为 long unsigned（esp-idf 默认 -Werror=format 报错）；32 位平台同宽无
-#    实际危害，放行警告（建议 core 侧后续改用 PRIu32）。
+# esp_config.h：core 模块里 target_link_libraries(... mbedtls ...) 的裸名
+# 在 esp-idf 构建中解析到 esp-idf 的 mbedtls 库目标（mbedtls 组件内
+# add_subdirectory(mbedtls) 创建，同名上游目标）——它带 MBEDTLS_CONFIG_FILE
+# 定义，但缺 esp_config.h 所在目录（该目录挂在组件目标 idf::mbedtls 上）。
+# 给 core 的环境基底（tuyaopen-headers，core 模块统一 PRIVATE 依赖）补该
+# include，覆盖 core 全部编译单元。THREADING_ALT 头两套结构各归各的分配者：
+# core 侧（tuya_tls.c）用 core config 的 tal_mutex 版，esp-idf 的 mbedtls
+# 库/组件用 ROM 版（main 组件注入 mbedtls 目标），互不冲突。
+#
+# 注：曾在此处对 tuyaopen-headers 注入 -Wno-error=format 放行 core 的
+# "%u 配 uint32_t"（esp32 上 uint32_t 为 long unsigned）；后按 PK 评审
+# 收窄方向改在 core 侧根治（http_session.c 改 PRIu32，core 提交），本处
+# 已移除该 flag——注入挂 INTERFACE 上会连带放行 demo 自身源码的格式门禁。
 if(TARGET tuyaopen-headers AND TARGET idf::mbedtls)
     target_include_directories(tuyaopen-headers INTERFACE
         $ENV{IDF_PATH}/components/mbedtls/port/include)
-    target_compile_options(tuyaopen-headers INTERFACE -Wno-error=format)
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../../port
