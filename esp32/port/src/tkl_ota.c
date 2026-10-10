@@ -97,11 +97,12 @@ static OPERATE_RET tkl_ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E typ
         return OPRT_INVALID_PARM;
     }
 
-    /* 入口自愈（对齐 linux port 的入口语义——linux 版不看历史状态、残留
-     * 句柄在入口直接清掉重开）：上次 OTA 失败/中断会留下非 INIT 状态
-     * （写失败停 IN_PROGRESS、hmac 校验失败停 SUCCESS），若拒绝本次升级，
-     * 设备不重启则再无 OTA 能力（PK H1）。core 的 OTA 流程单线程串行
-     * （DL_EVENT_* 顺序处理），不存在并发会话，清残留不会打断进行中的升级。 */
+    /* 入口自愈——**H1 的必需修复**：两个失败入口（写失败停 IN_PROGRESS、
+     * hmac 失败停 SUCCESS）最终都靠这里恢复（PK 变异验证：去掉本处全部失败
+     * 场景复现）。对齐 linux port 的入口语义——linux 版不看历史状态、残留
+     * 句柄在入口直接清掉重开；esp32 版引入状态机时须保留该语义。
+     * core 的 OTA 流程单线程串行（DL_EVENT_* 顺序处理），不存在并发会话，
+     * 清残留不会打断进行中的升级。 */
     if (TKL_OTA_INIT != s_tkl_ota_handle.state) {
         ESP_LOGW(DBG_TAG, "%s: stale ota session (state=%d), cleanup and restart", __func__,
                  s_tkl_ota_handle.state);
@@ -168,8 +169,12 @@ static OPERATE_RET tkl_ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_
 
     if (ESP_OK != esp_ota_write(s_tkl_ota_handle.handle, (const void *)pack->data, pack->len)) {
         ESP_LOGE(DBG_TAG, "%s: call esp_ota_write failed", __func__);
-        /* core 忽略本接口返回值（tuya_ota.c:81），必须在此自清理，否则
-         * state 停在 IN_PROGRESS、start_notify 永久拒绝（PK H1） */
+        /* core 忽略本接口返回值（tuya_ota.c:81），此自清理让失败**即时**复位。
+         * 注意：H1 的必需路径是 start_notify 的入口自愈（PK 变异验证：去掉
+         * 本处，入口自愈仍可兜住全部失败场景）；本处是即时性优化——stale
+         * handle 更早释放、且失败后数据继续到达时 state=INIT 明确报 "not init"
+         * （避免 IN_PROGRESS 下继续写脏数据），并防御 core 未来改成检查返回值
+         * 并中断流程的契约。 */
         __ota_fail_cleanup();
         return OPRT_COM_ERROR;
     }
