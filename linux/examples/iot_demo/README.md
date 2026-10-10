@@ -29,3 +29,10 @@ A simple, cross-platform, cross-system, and multi-connection switch example. By 
 
 ## Supported Hardware  
 The current project can run on all currently supported chips and development boards.
+
+## Notes
+
+- **Three quick restarts clear the network config**: the `reset_netcfg` counter accumulates
+  when not cleared within 5 seconds; reaching 3 triggers `tuya_iot_reset` (factory reset,
+  followed by `tal_system_reset`). Debugging with 3 quick restarts will drop the activation
+  data and require re-scanning the QR code.

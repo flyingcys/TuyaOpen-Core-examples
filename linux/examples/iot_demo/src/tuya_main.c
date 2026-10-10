@@ -22,7 +22,7 @@
 #include "tuya_lan.h"
 #include <assert.h>
 
-// #include "reset_netcfg.h"
+#include "reset_netcfg.h"
 
 #if defined(ENABLE_QRCODE) && (ENABLE_QRCODE == 1)
 #include "qrencode_print.h"
@@ -263,7 +263,7 @@ void user_main(void)
     tal_sw_timer_init();
     tal_workq_init();
 
-    // reset_netconfig_start();
+    reset_netconfig_start();
 
     /* 直接使用编译期凭据（tuya_config.h 或 -D 注入） */
     license.uuid    = TUYA_OPENSDK_UUID;
@@ -293,7 +293,7 @@ void user_main(void)
     /* Start tuya iot task */
     tuya_iot_start(&client);
 
-    // reset_netconfig_check();
+    reset_netconfig_check();
 
     for (;;) {
         /* Loop to receive packets, and handles client keepalive */

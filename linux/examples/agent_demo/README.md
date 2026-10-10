@@ -164,6 +164,9 @@ cd build && ./agent_http_selftest
   AI 产品 + 授权码（`-D` 或 `src/tuya_config_secrets.h`）。
 - **默认 UUID/AuthKey 是仓库内的测试 license**（与 iot_demo/p2p_demo 相同）：同一 license
   不能多处同时在线，与其他 demo 并行跑会互相踢下线。
+- **连续复位 3 次会清配网**：`reset_netcfg` 计数在 5 秒内未被清零时累加，达到 3 次即触发
+  `tuya_iot_reset`（factory reset，随后 `tal_system_reset` 重启）。调试时反复快速启动 3 次
+  就会丢激活数据、需要重新扫码绑定。
 - **激活数据存在运行目录的 `tuyadb/`**：首次运行需用涂鸦 App 扫码激活；换目录运行等于换
   设备身份，需要重新扫码（或把已激活的 `tuyadb/` 一起复制过去）。
 - **上行音频为 PCM 直传**（`codec_enable=FALSE`）：不启用 Opus 编码。若云端对上行编码有

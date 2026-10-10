@@ -19,6 +19,7 @@
 #include "tuya_config.h"
 #include "tuya_iot.h"
 #include "tuya_iot_dp.h"
+#include "reset_netcfg.h"
 
 #include "ai_agent.h"
 #include "tuya_ai_agent.h"
@@ -305,6 +306,9 @@ void user_main(void)
     tal_sw_timer_init();
     tal_workq_init();
 
+    /* 连续复位 3 次清配网（同 iot_demo/p2p_demo 的 reset_netcfg） */
+    reset_netconfig_start();
+
     /* 直接使用编译期凭据（tuya_config.h 或 -D 注入） */
     license.uuid    = TUYA_OPENSDK_UUID;
     license.authkey = TUYA_OPENSDK_AUTHKEY;
@@ -328,6 +332,9 @@ void user_main(void)
     PR_DEBUG("tuya_iot_init success");
     /* Start tuya iot task */
     tuya_iot_start(&client);
+
+    /* 连续复位计数达阈值则清配网（见 reset_netcfg.h） */
+    reset_netconfig_check();
 
     for (;;) {
         /* Loop to receive packets, and handles client keepalive */
