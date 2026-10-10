@@ -113,12 +113,35 @@ cd build && ./agent_http_selftest
 换成自己的语音：按同样格式生成 16k/16bit/mono PCM，用 `-DCONFIG_AGENT_DEMO_AUDIO_FILE`
 指定，或替换 `assets/voice_16k.pcm`。素材长度决定上传时长（帧数 = 时长 × 12.5 帧/秒）。
 
+## 能力边界（本 demo 明确不做的项）
+
+> **定位**：agent_demo 是"跑通云端 AI agent 全链路的**验证载体**"，不是功能完整的产品。
+> 下列能力**有意不做**（非遗漏）：目的是把链路跑通、把判据做真；将来需要时按下述入口补。
+
+**UI**：全部不做——无屏幕 / 表情 / LVGL / 聊天界面（上游 `ai_ui` 与 app 的 `display2`
+均不移植）。
+
+**硬件相关**：全部不做——按键、唤醒词、VAD、摄像头、打印机、电池、低功耗，以及
+**真实麦克风**（音频源经 port 契约 `tkl_ai_demo_*` 从 PCM 文件回放；真实设备接入时
+替换 port 实现，契约头已注明适配点）。
+
+**音视频未做到的能力**：
+- **上行 Opus 编码**：本 demo 为 PCM 直传（`codec_enable=FALSE`）；上游默认配置同样是
+  PCM（仅部分板 config 显式开 Opus），需要时按 `ENABLE_COMP_AI_AUDIO_CODEC_OPUS` 路径补；
+- **下行 TTS 播放**：不做（AI 音频模块整体关闭，下行语音包丢弃）；
+- **媒体 URL 流式下载**：未实现（6ba0506 安全失败，三个前置限制见"已知限制"）；
+- **图片 / 文件 / 视频下行**：不做（无 UI / 无摄像头 / 无播放器）。
+
+**对话交互**：单次触发（启动后上传一段预置语音）；多轮对话、语音打断、服务端 VAD
+交互均未启用——上游的 `ai_mode` 四种对话模式未移植（其按键/唤醒词路径无宏门控，
+不能直接搬；取舍细节见 `agent-demo-design.md` 的"能力边界"一节）。
+
 ## 与上游 your_chat_bot 的差异
 
 | 项 | 上游（T5AI/ESP32 板） | 本 demo（Linux） |
 |---|---|---|
 | 交互 | 按键/唤醒词/VAD 触发，回合制对话 | 启动后自动上传一段预置语音（一次性） |
-| 上行音频 | TDL/TKL 麦克风采集（`ai_audio_input`）+ Opus 编码 | port 契约 `tkl_ai_demo_*` 文件回放 + **PCM 直传**（不开编码器） |
+| 上行音频 | TDL/TKL 麦克风采集（`ai_audio_input`）；编码默认 PCM（`ai_audio/Kconfig` choice 默认 PCM，28 个板 config 仅 8 个显式开 Opus） | port 契约 `tkl_ai_demo_*` 文件回放 + **PCM 直传**（不开编码器） |
 | 下行音频 | 解码播放（`ai_audio_player` + `svc_ai_player`，MP3/Opus） | **整体关闭**（`ENABLE_COMP_AI_AUDIO=n`），语音包丢弃 |
 | UI | LVGL 聊天界面 + 表情 + 通知音 | 无（仅日志/stdio 打印文字） |
 | 对话主控 | `ai_main`（`ai_chat_main`）+ `ai_mode`（四种对话模式） | 不移植；demo 自己组织主流程（直接复用 `ai_agent` 应用封装） |
