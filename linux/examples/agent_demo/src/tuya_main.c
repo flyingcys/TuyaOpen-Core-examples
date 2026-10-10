@@ -180,6 +180,8 @@ static void __agent_start(void)
     agent_downlink_init();
 
     THREAD_CFG_T thrd = {0};
+    /* 注：stackDepth 在 Linux port 被忽略（tkl_thread 未用 pthread_attr_setstacksize，
+     * 线程实得系统默认栈 8MB）；真机移植时此值才会生效，勿据此认为栈已按 4.6KB 调过。 */
     thrd.stackDepth   = 4608;
     thrd.priority     = THREAD_PRIO_2;
     thrd.thrdname     = "agent_trigger";
