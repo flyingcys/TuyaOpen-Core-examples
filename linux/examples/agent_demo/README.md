@@ -29,8 +29,10 @@ cd build && ./agent_demo
 同款 AI 产品 `alon7qgyjj8yus74`，授权码与 iot_demo 相同），可用
 `-DTUYA_PRODUCT_ID=.. -DTUYA_OPENSDK_UUID=.. -DTUYA_OPENSDK_AUTHKEY=..` 覆盖，或在
 `src/tuya_config_secrets.h`（参考 `.example` 模板）里配置，也支持同名环境变量。
-凭据优先级：**`-D` / 环境变量 > `tuya_config_secrets.h` > `tuya_config.h` 默认值**。
-语音素材在构建时复制到 `build/voice_16k.pcm`，从 `build/` 目录运行即可。
+凭据优先级：**`-D` / 环境变量 > `tuya_config_secrets.h` > `tuya_config.h` 默认值**
+（secrets 模板的 `#define` 带 `#ifndef` 守卫，不会覆盖命令行注入；若自行去掉守卫，
+secrets 会静默覆盖 `-D`）。语音素材在构建时复制到 `build/voice_16k.pcm`，从 `build/`
+目录运行即可。
 
 运行后行为：
 
