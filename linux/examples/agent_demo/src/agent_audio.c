@@ -12,6 +12,35 @@
 
 #include "agent_audio.h"
 
+/* 上行校验信号量：ASR 事件（下行回调）post，触发线程 wait。
+ * 按"单次触发"设计（一次性 demo 口径）；多轮扩展时每轮需重置语义。 */
+static SEM_HANDLE s_uplink_verify_sem = NULL;
+
+OPERATE_RET agent_audio_uplink_verify_init(void)
+{
+    if (s_uplink_verify_sem) {
+        return OPRT_OK; /* 已创建（幂等） */
+    }
+
+    return tal_semaphore_create_init(&s_uplink_verify_sem, 0, 1);
+}
+
+OPERATE_RET agent_audio_uplink_verify_wait(uint32_t timeout_ms)
+{
+    if (!s_uplink_verify_sem) {
+        return OPRT_INVALID_PARM;
+    }
+
+    return tal_semaphore_wait(s_uplink_verify_sem, timeout_ms);
+}
+
+void agent_audio_uplink_verify_notify(void)
+{
+    if (s_uplink_verify_sem) {
+        tal_semaphore_post(s_uplink_verify_sem);
+    }
+}
+
 OPERATE_RET agent_audio_upload_once(const char *src_path, agent_audio_stat_t *stat)
 {
     OPERATE_RET rt = OPRT_OK;

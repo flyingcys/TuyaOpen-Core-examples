@@ -23,6 +23,9 @@ extern "C" {
 #define AGENT_AUDIO_FRAME_MS 80
 #define AGENT_AUDIO_FRAME_BYTES (AGENT_AUDIO_SAMPLE_RATE * AGENT_AUDIO_SAMPLE_BYTES * AGENT_AUDIO_FRAME_MS / 1000)
 
+/* 上行校验超时：等云端 ASR 响应（实测 ASR 往返 ~1-3.5s，15s 余量充分） */
+#define AGENT_UPLINK_VERIFY_TIMEOUT_MS 15000
+
 /* 上传统计（日志与自测判据用） */
 typedef struct {
     uint32_t frames;           /* 已上传帧数 */
@@ -41,6 +44,30 @@ typedef struct {
  * @return OPRT_OK 全部上传成功；其他见 tuya_error_code.h
  */
 OPERATE_RET agent_audio_upload_once(const char *src_path, agent_audio_stat_t *stat);
+
+/**
+ * @brief 上行结果校验：以"云端是否回 ASR"为上传成功的硬判据
+ *
+ * 背景（1c 评审 finding）：断线时 ringbuf 写入仍成功、tuya_ai_audio_input 一路返回
+ * OK，upload_once 会打出 "upload done" —— 该行只表示"本地喂帧完成"，**不代表上行
+ * 成功**。连接状态查询（tuya_ai_agent_is_ready）在断线后要等 ping 超时累计（~18s
+ * 起步）才失效，抓不到 2.59s 的上传窗口，属假防护。故以"云端 ASR 响应"为终判据。
+ *
+ * 用法（触发线程内，一次性）：init → upload_once → wait(timeout)。
+ * 注意边界：信号量按"单次触发"设计（一次性 demo 口径）；若将来扩展多轮，需在
+ * 每轮前重置（init 幂等，wait 消费后需重新 init 清零语义——当前不跨轮复用）。
+ *
+ * @return init: OPRT_OK；wait: OPRT_OK=收到 ASR（ASR_OK/ASR_EMPTY 均算链路通），
+ *         其他（超时/未初始化）= 未收到
+ */
+OPERATE_RET agent_audio_uplink_verify_init(void);
+OPERATE_RET agent_audio_uplink_verify_wait(uint32_t timeout_ms);
+
+/**
+ * @brief ASR 事件到达时调用（由下行回调 post；ASR_OK 与 ASR_EMPTY 都应调用——
+ *        空识别是"链路通了但没内容"，不是上传失败）
+ */
+void agent_audio_uplink_verify_notify(void);
 
 #ifdef __cplusplus
 }

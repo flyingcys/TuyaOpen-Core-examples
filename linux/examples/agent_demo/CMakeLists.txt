@@ -153,9 +153,11 @@ target_link_libraries(agent_chain_selftest PRIVATE ${_agent_demo_link})
 
 # 下行消费自测（独立可执行）：构造 STOP 事件（含非空末段）验证 agent_downlink
 # 的消费策略（STOP 携带的末段必须打印）——防回归，不依赖云端分包行为
+# agent_audio.c：agent_downlink 的 ASR 分支调用上行校验 notify，链接需带实现
 add_executable(agent_nlg_selftest
     src/agent_nlg_selftest.c
     src/agent_downlink.c
+    src/agent_audio.c
 )
 target_include_directories(agent_nlg_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src

@@ -130,9 +130,23 @@ static void __agent_trigger_task(void *arg)
     tal_system_sleep(AGENT_TRIGGER_SESSION_SETTLE_MS);
 
     PR_NOTICE("[AGENT] trigger: upload one utterance from %s", AGENT_AUDIO_SRC_PATH);
+
+    /* 上行校验（1c 评审 finding）：断线时 ringbuf 写入仍成功、"upload done" 会假绿
+     * （该行只表示本地喂帧完成）；连接状态查询滞后 ≥18s 抓不到上传窗口。故以
+     * "云端 ASR 响应"为终判据——上传后等待，超时即如实报 FAILED。 */
+    agent_audio_uplink_verify_init();
     rt = agent_audio_upload_once(AGENT_AUDIO_SRC_PATH, &stat);
     PR_NOTICE("[AGENT] upload %s: frames=%u, bytes=%u, last_frame_bytes=%u", (rt == OPRT_OK) ? "done" : "FAILED",
               stat.frames, stat.bytes, stat.last_frame_bytes);
+
+    if (rt == OPRT_OK) {
+        if (agent_audio_uplink_verify_wait(AGENT_UPLINK_VERIFY_TIMEOUT_MS) == OPRT_OK) {
+            PR_NOTICE("[AGENT] uplink verified (ASR received)");
+        } else {
+            PR_ERR("[AGENT] upload FAILED: no ASR response in %d ms (uplink broken or cloud unreachable)",
+                   AGENT_UPLINK_VERIFY_TIMEOUT_MS);
+        }
+    }
 
 __exit:
     if (s_agent_trigger_thread) {

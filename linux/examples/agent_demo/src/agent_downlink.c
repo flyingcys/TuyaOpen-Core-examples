@@ -9,6 +9,7 @@
 
 #include "ai_user_event.h"
 
+#include "agent_audio.h"
 #include "agent_downlink.h"
 
 #include <stdio.h>
@@ -30,10 +31,14 @@ static void __agent_downlink_event(AI_NOTIFY_EVENT_T *event)
         if (text && text->data) {
             PR_NOTICE("[AGENT][ASR] %.*s", text->datalen, text->data);
         }
+        /* 上行校验：云端 ASR 已回（链路通的硬证据），唤醒触发线程 */
+        agent_audio_uplink_verify_notify();
     } break;
 
     case AI_USER_EVT_ASR_EMPTY:
         PR_WARN("[AGENT][ASR] <empty>");
+        /* 空识别 = 链路通了但没内容，不是上传失败——同样算 verified */
+        agent_audio_uplink_verify_notify();
         break;
 
     case AI_USER_EVT_TEXT_STREAM_START: {
