@@ -15,6 +15,11 @@
 
 static void __agent_downlink_event(AI_NOTIFY_EVENT_T *event)
 {
+    /* 载荷生命周期：ai_user_event_notify（utility/src/ai_user_event.c）是**同步直呼**
+     * 回调，payload 指向 producer（ai_skill.c __ai_nlg_process）栈上 AI_NOTIFY_TEXT_T
+     * ，其 .data 指向该帧 cJSON 字符串（root 在 tuya_ai_output_text 返回后才 Delete）。
+     * 故本回调内读取必然有效；**若将来改成异步/延迟消费，必须先拷贝**——探针实测：
+     * 回调返回后解引用得 datalen=65535/data=0x44（栈已销毁），cJSON_Delete 后内容被覆写。 */
     if (!event) {
         return;
     }
