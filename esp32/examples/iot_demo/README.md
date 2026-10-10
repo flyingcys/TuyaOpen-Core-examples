@@ -43,7 +43,11 @@ idf.py -p /dev/ttyUSB0 flash monitor
 ## 配置说明
 
 - **WiFi**：`menuconfig` 的 `iot_demo` 菜单（`CONFIG_DEMO_WIFI_SSID` /
-  `CONFIG_DEMO_WIFI_PASSWORD`），未配置时串口打印错误、不发起连接。
+  `CONFIG_DEMO_WIFI_PASSWORD`）。**未配置（空 SSID）时的行为**：
+  `wifi_sta_init` 早退并打印 `ssid empty, set it in menuconfig...`；事件循环
+  未建立 → 后续 `tkl_netif` 的链路监听注册失败（再打印一条
+  `netif event handler register failed ... (event loop created?)`）→ 链路恒
+  down、不发起云连接。行为安全，串口那两条提示即为原因说明（PK 评审 E1）。
 - **凭据**：`tuya_config.h` 已带与 linux iot_demo 相同的 PID/授权码；
   换产品改 `tuya_config.h`，或用 `tuya_config_secrets.h`（复制
   `tuya_config_secrets.h.example`，该文件已被 .gitignore 忽略）。
