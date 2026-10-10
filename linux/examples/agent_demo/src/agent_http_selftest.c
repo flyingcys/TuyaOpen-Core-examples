@@ -21,6 +21,13 @@
  * **无** mem_heap 双重释放调试狗告警；若复见 `MEM_DEBUG_DOG_TAG err` +
  * `might be freed yet`，即该修复被削弱，应视为失败路径回归。
  *
+ * **工具边界（重要，避免误信）**：上面那条 double-free 的判据是 **mem_heap 调试狗
+ * 告警计数**（修复前 2 条、修复后 0 条）+ `tuya_mem_heap_state` 三轮 free_size 不下降
+ * （证明"删 free"没变成泄漏）。**ASAN 抓不到这类问题**——该堆是 tuya_mem_heap 自管的
+ * （iot-core/utilities/tuya_mem_heap.c），不归 libc malloc，实测 ASAN 报告数为 0。
+ * 故：ENABLE_ASAN 对普通越界/UAF 有效，对自管堆的 double free **无效**，别拿
+ * "ASAN 过了" 当这条已修的证据。
+ *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
 
