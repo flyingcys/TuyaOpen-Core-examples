@@ -155,7 +155,7 @@ esp32 侧同构：`esp32/port/CMakeLists.txt` 做同样注入；包装组件
 
 ---
 
-## 4. 核心机制三：mbedtls 接入（THREADING_ALT 专题）
+## 4. 核心机制三：mbedtls 接入（THREADING_ALT 与硬件加速）
 
 ### 4.1 mbedtls 的三种"配置注入"层次
 
@@ -188,12 +188,19 @@ mbedtls 内部所有锁操作 = 对 `mbedtls_threading_mutex_t` 实例调这 4 �
 | 头文件 | `core/iot-core/tuya_transport/config/threading_alt.h` | `esp-idf/components/mbedtls/port/mbedtls_rom/threading_alt.h` |
 | mutex 成员 | `MUTEX_HANDLE`（tal_mutex 句柄，void*） | `SemaphoreHandle_t`（FreeRTOS） |
 | 回调实现 | `tuya_tls.c` 的 `__tuya_tls_mutex_*`（用 `tal_mutex_*`） | `mbedtls_rom_osi.c`（`xSemaphoreCreateMutex` 等，**非递归**） |
-| 注册时机 | 运行时 `tuya_tls_init()`（`tuya_tls.c:383`） | 启动期**构造函数** `mbedtls_rom_osi_functions_init`（`__attribute__((constructor))`，`mbedtls_rom_osi.c:447`） |
+| 注册时机 | 运行时 `tuya_tls_init()`（`tuya_tls.c:383`） | 启动期**构造函数** `mbedtls_rom_osi_functions_init`（`__attribute__((constructor))`，`mbedtls_rom_osi.c:447`）——**仅 `CONFIG_MBEDTLS_USE_CRYPTO_ROM_IMPL=y` 时该源文件才参与编译**（S3 无此能力，见 §4.5.7） |
 | 服务对象 | core 的 TLS 栈（`tuya_tls.c`） | esp-idf 的 mbedtls 消费者（wifi/wpa_supplicant/esp-tls 等） |
 
-**谁生效**：构造函数在启动早期注册 ROM 回调 → 之后 `tuya_tls_init()` 覆盖为
-tal_mutex 回调 → **全局生效的是 tal_mutex 版**（esp32 的 tal_mutex 底层就是
-`xSemaphoreCreateRecursiveMutex`，与 ROM 版同为 FreeRTOS 信号量，句柄二进制兼容）。
+**谁生效（2026-10-10 按实测更正）**：在**本项目的 esp32s3 固件里，ROM 版压根没有
+注册**——`MBEDTLS_USE_CRYPTO_ROM_IMPL` 依赖 `ESP_ROM_HAS_MBEDTLS_CRYPTO_LIB`（只有
+esp32c2 有），S3 上该 config 不存在、`mbedtls_rom_osi.c` 不参与编译。三重实证：
+build 目录无 `mbedtls_rom_osi*` 目标文件 / sdkconfig 无该 config / 固件符号表
+`nm | grep mbedtls_rom` = 0。**全固件唯一的注册点就是 tuya 的 `tuya_tls_init()`**
+→ 全局生效的是 tal_mutex 版（esp32 的 tal_mutex 底层就是
+`xSemaphoreCreateRecursiveMutex`）。
+（原表述"构造函数先注册、tuya 后注册覆盖"只在支持 ROM crypto 的芯片上成立。
+教训：核实"某代码注册了什么"要先核"它编进固件了吗"——1c 此前的复核基于源码
+存在性、漏了这一跳。）
 
 **风险点（已做代码级核实，2026-10-10）**：两套的**递归性不同**——tal 版用递归
 信号量（`xSemaphoreTakeRecursive`），ROM 版用非递归（`xSemaphoreTake`）。全局
@@ -213,12 +220,12 @@ tal_mutex 回调 → **全局生效的是 tal_mutex 版**（esp32 的 tal_mutex 
    注意：这是 esp32 平台巧合（linux 上 tal_mutex 是 pthread mutex，但 linux
    不用 esp-idf mbedtls，无混用场景）。
 
-**更值得记录的副作用**：`mbedtls_threading_set_alt` 二次调用会**重新初始化**三个
-全局锁（readdir/gmtime/PSA，见 mbedtls `library/threading.c`），tuya 的运行时
-注册因此泄漏 ROM 版初始化时的信号量，且若此刻另一线程正持有全局锁会丢失互斥；
-若某线程的 lock/unlock 跨越了这次指针切换（plain take + recursive give）还会
-导致 `uxRecursiveCallCount` 下溢、永不释放。**正常启动顺序不满足触发条件**
-（`tuya_tls_init` 早于联网）。
+**更值得记录的副作用（仅对支持 ROM crypto 的芯片成立）**：`mbedtls_threading_set_alt`
+二次调用会**重新初始化**三个全局锁（readdir/gmtime/PSA，见 mbedtls
+`library/threading.c`），后注册者会泄漏先注册者的信号量、且若此刻另一线程正持有
+全局锁会丢失互斥；若某线程的 lock/unlock 跨越了这次指针切换（plain take +
+recursive give）还会导致 `uxRecursiveCallCount` 下溢、永不释放。**正常启动顺序
+不满足触发条件**（`tuya_tls_init` 早于联网）；且 S3 上只有一次注册，本副作用不适用。
 
 **改善方向**（通用改动，可讨论）：core 增加"宿主已提供 THREADING_ALT 回调时
 不再覆盖"的开关（例如随 `CONFIG_ENABLE_PLATFORM_MBEDTLS` 联动）——同时消除
@@ -273,6 +280,123 @@ PSA 全路径（仅核了 RNG/init 两条）。
      CMakeLists 加 `REQUIRES mbedtls`（平台差异文件）。
 
 ---
+
+### 4.5 mbedtls 硬件加速（ESP32 加密外设）
+
+ESP32 芯片内置加密加速器，esp-idf 的 mbedtls 把部分算法**编译期重定向**到硬件。
+本项目用平台 mbedtls，因此**自动继承**这套加速——这也是"优先用芯片自带 mbedtls"
+（`CONFIG_ENABLE_PLATFORM_MBEDTLS=y`）的收益之一。
+
+#### 4.5.1 两层结构
+
+```
+mbedtls 上游 API（mbedtls_aes_* / mbedtls_sha256_* / mbedtls_mpi_* / mbedtls_gcm_*）
+   │ 编译期重定向：-DMBEDTLS_CONFIG_FILE="mbedtls/esp_config.h"
+   │  ├─ ALT 宏（esp_config.h:150-239）：MBEDTLS_AES_ALT / SHA*_ALT / MPI_*_ALT / GCM_ALT…
+   │  └─ ALT 头（aes_alt.h 等）把 context 类型与函数名 #define（或同名符号覆盖）到 esp_* 实现
+   ▼
+port 实现层（esp-idf/components/mbedtls/port/，11 个子目录）
+   AES: esp_aes_*（aes/dma|block/esp_aes.c）→ DMA 描述符 + GDMA + 中断等待
+   SHA: esp_sha_*（sha/dma|block|parallel_engine/）→ sha_hal_hash_dma（忙等）
+   MPI: esp_mpi_*_hw_op（bignum/bignum_alt.c）→ RSA 外设（大数乘/模幂）
+   MD5: port/md/esp_md.c → ROM 里的 md5；RNG: esp_hardware.c → esp_fill_random
+   ▼
+HAL（components/hal/：aes_hal.c/sha_hal.c/mpi_hal.c）→ LL 寄存器层
+（esp32s3/include/hal/*_ll.h，含时钟门控）
+   ▼
+互斥：components/esp_security/src/esp_crypto_lock.c
+（SHA/AES 共用一把锁——它们共享 GDMA；MPI 一把；DS/HMAC 各一把）
+   ▼
+硬件：AES / SHA / RSA(MPI) / DS / HMAC / RNG 外设（S3 无 ECC/ECDSA 外设）
+```
+
+#### 4.5.2 ALT 映射表（关键项）
+
+| ALT 宏（esp_config.h） | 打开条件 | 实现来源 |
+|---|---|---|
+| `MBEDTLS_AES_ALT` | `CONFIG_MBEDTLS_HARDWARE_AES` | `aes_alt.h` → `port/aes/…/esp_aes.c`（CBC/CFB/CTR/OFB/XTS 全套） |
+| `MBEDTLS_GCM_ALT` | **只看 HARDWARE_AES**（与 HARDWARE_GCM 无关） | `gcm_alt.h` → `esp_aes_gcm_*` |
+| `MBEDTLS_SHA1/256_ALT`（`SHA512_ALT` 另加 SOC 条件） | `CONFIG_MBEDTLS_HARDWARE_SHA` | `sha*_alt.h` + `port/sha/<形态>/esp_sha{1,256,512}.c`（**同名符号直接覆盖上游**） |
+| `MBEDTLS_MPI_MUL_MPI_ALT` / `EXP_MOD_ALT(_FALLBACK)` | `CONFIG_MBEDTLS_HARDWARE_MPI` | `port/bignum/esp_bignum.c`（只换这两个函数） |
+| `MBEDTLS_MD5_ALT` | `CONFIG_MBEDTLS_ROM_MD5` | `port/md/esp_md.c` → ROM md5 |
+| `MBEDTLS_ECP_MUL/VERIFY_ALT` | `CONFIG_MBEDTLS_HARDWARE_ECC`（**S3 无此项**） | `port/ecc/ecc_alt.c` |
+
+ALT 语义：mbedtls 上游每个算法模块都用 `#if !defined(MBEDTLS_XXX_ALT)` 包住自带
+实现——定义 ALT 后上游实现被排除，改由 port 提供。
+
+#### 4.5.3 esp32s3 的加速能力（对照 classic）
+
+| 能力 | ESP32-S3 | ESP32 classic |
+|---|---|---|
+| AES | ✅ 128/256 位 + **DMA/GDMA**；**无 AES-192** | ✅ 128/192/256，**无 DMA**（块模式） |
+| AES 中断等待 | ✅（默认开） | ❌（只能忙等） |
+| AES-GCM 全硬件 | ❌（AES 块硬件 + GHASH 软件） | ❌ |
+| SHA | ✅ SHA1/224/256/384/512 + DMA | ✅（parallel_engine 形态，无 DMA、无 224） |
+| MPI/RSA | ✅ 最大 4096 位，3 路流水 | ✅ 最大 4096 位，1 路 |
+| ECC/ECDSA 外设 | ❌（无 `SOC_ECC_SUPPORTED`/`SOC_ECDSA_SUPPORTED`） | ❌ |
+| DS / HMAC / RNG | ✅ | 未暴露 |
+| ROM crypto 实现 | ❌（`ESP_ROM_HAS_MBEDTLS_CRYPTO_LIB` 仅 C2） | ❌ |
+
+#### 4.5.4 我们固件的实际配置（sdkconfig 实测）
+
+| 项 | 值 | 说明 |
+|---|---|---|
+| `CONFIG_MBEDTLS_HARDWARE_AES` | **y** | AES 加速 |
+| `CONFIG_MBEDTLS_AES_USE_INTERRUPT` | **y** | 长操作走中断（不忙等，其他任务可调度） |
+| `CONFIG_MBEDTLS_HARDWARE_SHA` | **y** | SHA 加速 |
+| `CONFIG_MBEDTLS_HARDWARE_MPI` | **y** | RSA 大数加速 |
+| `CONFIG_MBEDTLS_MPI_USE_INTERRUPT` | **y** | |
+| `CONFIG_MBEDTLS_LARGE_KEY_SOFTWARE_MPI` | **not set** | 纯硬件模式：>4096 位密钥直接失败（S3 上限），无软回退 |
+| `CONFIG_MBEDTLS_ROM_MD5` | **y** | MD5 走 ROM |
+| `CONFIG_ESP_TLS_USE_DS_PERIPHERAL` | **y** | 编入 DS 签名路径（真正使用需 efuse 烧密钥） |
+| `CONFIG_MBEDTLS_USE_CRYPTO_ROM_IMPL` | **不存在** | S3 无此能力（见 §4.5.7） |
+| `CONFIG_MBEDTLS_HARDWARE_ECC/ECDSA/GCM` | **不存在** | S3 无这些外设（是"没这项"，不是"关了"） |
+
+**固件级证据**（`nm build/iot_demo.elf`）：`esp_aes_dma_start/done`、
+`esp_sha_dma`、`esp_mpi_*_hw_op` 均在符号表 ✓（加速真实链入）；`mbedtls_rom_osi`
+符号 = 0 ✓（与 §4.2 的更正互相印证）。
+
+#### 4.5.5 与本项目的关系（两条链都受益）
+
+1. **TLS 链**：`tuya_tls.c` → mbedtls_ssl（esp-idf mbedtls）→ 其内部 AES-GCM /
+   SHA256 / ECDHE 运算**自动走硬件**；
+2. **core 的 crypto 接口链**：`tal_security`（DP 加解密等）→ `tkl_hash` /
+   `tkl_symmetry` 接口 → core 的 `mbedtls_hash.c` / `mbedtls_symmetry.c`（用**标准
+   mbedtls API**：`mbedtls_sha256_*` / `mbedtls_aes_*` / `mbedtls_md5_*`）→ 在 esp32
+   上同样解析到 esp-idf 的 mbedtls → **硬件加速** ✓（这条不经过 TLS，是 core 自己的
+   TKL 接口，同样受益）。
+
+对照：**core 自带的 mbedtls（linux 用，3.1.0）是纯软件实现**——如果 esp32 选
+`PLATFORM_MBEDTLS=OFF` 用 core 自带副本，除符号冲突外还会**丢掉全部硬件加速**。
+
+#### 4.5.6 坑与注意点
+
+1. **S3 无 AES-192**（classic 反而支持）——本地自测用 192 位密钥会莫名失败
+   （`esp_aes_setkey` 返回 `MBEDTLS_ERR_PLATFORM_FEATURE_UNSUPPORTED`）；
+2. **S3 的 AES-GCM 是半硬件**（GHASH 软件）——别按"全硬件 GCM"理解；且
+   `MBEDTLS_GCM_ALT` 只依赖 `HARDWARE_AES`，关 `HARDWARE_GCM` 也不会退回上游软件 GCM；
+3. **"没有 CONFIG 项"≠"关了"**：S3 上 `MBEDTLS_HARDWARE_ECC/ECDSA/GCM` 根本不存在——
+   条件编译要判 `SOC_*_SUPPORTED`，不能判 CONFIG；
+4. **SHA 的等待是忙等**（`sha_hal_wait_idle`，无中断选项）——大块 hash 会阻塞 CPU
+   （AES/MPI 有中断选项，SHA 没有）；
+5. **flash 常量不能 DMA**：`esp_sha_dma` 会自动降级为逐块模式（证书等若在 flash，
+   hash 走慢路径）；PSRAM 缓冲需 cache msync + 对齐；
+6. **`mbedtls_rom` 目录名有误导**：`threading_alt.h`（线程适配，我们只借它）与
+   `mbedtls_rom_osi.c`（ROM crypto 函数表，S3 不编译）是同目录的**两套无关机制**
+   （详见 §4.2 与 §4.5.7）；
+7. `MBEDTLS_HARDWARE_AES/SHA/MPI` 都带 `!SPIRAM_CACHE_WORKAROUND_STRATEGY_DUPLDST`
+   依赖——某些 PSRAM 配置下加速会被**静默禁用**（我们没开 SPIRAM，不受影响）；
+8. **中断注册在 `esp_aes_init` 里**（失败直接 `abort()`）——`MBEDTLS_AES_INTERRUPT_LEVEL`
+   设太高可能影响系统其他中断（我们用默认 0 = 自动分配）。
+
+#### 4.5.7 附：`CONFIG_MBEDTLS_USE_CRYPTO_ROM_IMPL`（S3 用不上，知识性）
+
+芯片掩膜 ROM 里固化了 mbedtls crypto 代码（ECO4 为 3.6.0）。打开后**方向是反的**：
+ROM 里的 mbedtls 在跑，它把 mutex/calloc/free 及 SHA 的 update 等回调**指回 IDF 的
+实现**（因此 ROM 版仍然用到 IDF 的 SHA 硬件加速）。收益是省 flash，代价是版本冻结
+（安全补丁要靠 IDF"patch 符号"）。**只有 esp32c2 支持**
+（`ESP_ROM_HAS_MBEDTLS_CRYPTO_LIB`），S3 上该 config 不存在——§4.2 的注册点更正正
+与此相关（ROM 版代码在 S3 上不参与编译）。
 
 ## 5. 核心机制四：链接模型（循环引用）
 
