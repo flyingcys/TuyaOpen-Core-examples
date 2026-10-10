@@ -13,3 +13,6 @@ rsource "examples/iot_demo/qrcode/Kconfig"
 
 # p2p_demo 应用开关（P2P 链路开关与 demo 参数，见 examples/p2p_demo/Kconfig）
 rsource "examples/p2p_demo/Kconfig"
+
+# agent_demo 应用开关（AI 链路开关与素材参数，见 examples/agent_demo/Kconfig）
+rsource "examples/agent_demo/Kconfig"

@@ -20,7 +20,7 @@
 
 | # | 事项 | 决策 | 来源 |
 |---|---|---|---|
-| 1 | 云端凭据 | PID 用 iot_demo 的 `qhivvyqawogv04e4` + 配套授权码（`uuid3dfa17df5ff96fc6` / `92J3...`，该组合已验证可激活连云） | 用户确认（2026-10-09，后改） |
+| 1 | 云端凭据 | PID 用上游 your_chat_bot 同款 AI 产品 `alon7qgyjj8yus74` + iot_demo 的授权码（`uuid3dfa17df5ff96fc6` / `92J3...`）；**已实测可激活、可建 AI 会话、可收下行** | 用户确认（2026-10-10，实测修订） |
 | 2 | 触发方式 | 启动后自动上传一次，但**必须可验证**（日志/自测能确认上传发生、云端已响应） | 用户确认 |
 | 3 | 语音素材 | edge-tts 在线合成"请问，现在是几点钟？"（已验证可生成） | 用户确认 |
 | 4 | 下行语音 | 不处理（丢弃） | 用户确认 |
@@ -239,11 +239,13 @@ examples/agent_demo/
 
 ### 4.7 凭据
 
-- PID `qhivvyqawogv04e4`（iot_demo 同款）+ 配套授权码 `uuid3dfa17df5ff96fc6` / `92J3...`
-  （与 iot_demo 相同，已验证可激活连云）。**用户决策：PID 用老 demo 的**（2026-10-09）。
+- PID `alon7qgyjj8yus74`（上游 your_chat_bot 同款 AI 产品）+ 授权码 `uuid3dfa17df5ff96fc6` /
+  `92J3...`（与 iot_demo 相同）。**用户决策 + 实测**（2026-10-10）：
+  - 先用 `qhivvyqawogv04e4`（iot_demo PID）实测：激活成功但 **AI 会话建立失败**
+    （`create ai agent session failed` / `mq token ack timeout`）——该 PID 未开通 AI 服务；
+  - 换 `alon7qgyjj8yus74` 后：激活成功 → `create session:...success` → 33 帧上传 →
+    ASR + NLG 下行全通。
 - uuid/authkey 支持三级覆盖：`-D` 编译宏 > 环境变量 > `tuya_config_secrets.h` > 默认值。
-- **待验证**：该 PID 是否已在涂鸦平台开通 **AI Agent 服务**——未开通则 agent 会话可能建不起来
-  （见 §6 待确认项 1）。
 
 ## 5. 验证方案
 
@@ -281,7 +283,7 @@ cd build && timeout 60 ./agent_demo
 
 | # | 风险/待确认 | 影响 | 处置 |
 |---|---|---|---|
-| 1 | **PID 是否开通 AI Agent 服务**：`qhivvyqawogv04e4` 是老 demo 的 IoT 产品，AI 服务开通状态未知 | 未开通则 agent 会话建不起来 | 实跑验证；未开通需在平台开通或换 PID（用户另定） |
+| 1 | ~~PID 是否开通 AI Agent 服务~~ | ~~未开通则 agent 会话建不起来~~ | **已实测闭环**：`qhivvyqawogv04e4` 建会话失败，换 `alon7qgyjj8yus74` 全通（见 §4.7） |
 | 2 | **PCM 上行云端是否接受**（上游用 Opus） | 云端可能拒收/不识别 | 实施时先验证；不行则启用 Opus（libopus 依赖需解决） |
 | 3 | AI 协议版本：`.config` 为 `CONFIG_AI_VERSION=2`，上游默认 0x01 | v2 分支行为差异 | 跟随本仓配置（v2 已实现）；异常时回退 v1 对比 |
 | 4 | 云端 agent 智能体配置（默认角色）是否就绪 | 无回复 | 激活后在 APP/平台侧确认默认智能体 |
@@ -296,3 +298,32 @@ cd build && timeout 60 ./agent_demo
 4. **T4 链路接线**（tuya_main 主流程 + 上行任务 + 下行打印 + `ai_agent.c` attr 补丁）；
 5. **T5 实跑验证**（§5.2 判据全序列）；
 6. **T6 文档收尾**（README 已知限制、与上游差异表）→ 交付对端 PK 评审。
+
+## 8. 实施记录（2026-10-10，实测修订）
+
+### 8.1 实测发现、超出 §4.4 清单的断点（已修）
+
+| # | 断点 | 修复 |
+|---|---|---|
+| 1 | `tuya_ai_agent.h` / `tuya_ai_input.h` **循环包含**：展开顺序不同时 `AI_ATTR_BASE_T`/`AI_INPUT_SEND_T` 未定义（上游靠 include 顺序侥幸） | `tuya_ai_input.h` 改前置声明 `tuya_ai_agent_get_scode` |
+| 2 | `http_manager.c` 用**旧 coreHTTP API**（`HTTPClient_Request` + `HTTP_SEND_DISABLE_RECV_BODY_FLAG`），本仓官方 v3.1.3 无此二者 | 改 `HTTPClient_Send` + `respOptionFlags = HTTP_RESPONSE_DO_NOT_PARSE_BODY_FLAG`（与 iot-core `http_session.c` 同款用法） |
+| 3 | `http_manager.h` 依赖 nodejs http-parser 的 `enum http_method`（HTTP_GET 等） | 本地定义同名枚举（顺序与 http-parser 一致） |
+| 4 | `ai_skills` 缺 `utility` / `tuya_cloud_service` 依赖（target 化后 include 不传递） | CMakeLists 显式补 |
+| 5 | `tuya_ai_get_encoder` 链接缺失（`svc_ai_agent` 无条件引用；编码器注册表随 `ENABLE_TUYA_CODEC` 门控） | 开 `CONFIG_ENABLE_TUYA_CODEC`（注册表纯实现，无 opus 依赖） |
+| 6 | §4.4 第 7 项（`ai_agent.c` attr 分支）**实测证实必需**：不开音频模块时 attr 全 0，云端拿不到格式、上传后不回 ASR/NLG | 补 `#else` 分支：PCM/16k/mono/16bit + `codec_enable=FALSE` |
+
+### 8.2 实测结论（全链路证据）
+
+- 构建：`cmake -B build && cmake --build build -j` 通过（exit 0）；
+- 自测：`./build/agent_chain_selftest` → `AGENT CHAIN SELFTEST PASSED`；
+  **变异验证**：`tkl_ai_demo_read` 读长减半 → `frame count` 断言红（exit 1），还原后绿；
+- 实跑（PID `alon7qgyjj8yus74`）：扫码激活 → `create session:...success` →
+  `upload done: frames=33, bytes=82944, last_frame_bytes=1024` →
+  `ASR text: 请问现在是几点钟？` → `[AGENT][ASR] 请问现在是几点钟？` →
+  `[AGENT][NLG] >> 现在的时间是无法通过工具获取，/ 我直接告诉你吧，/ 具体时间你可以看看手机或者时钟哦。` → stream end。
+
+### 8.3 已知无害告警
+
+- 上传起始处一条 `tuya_ai_event.c:36 event or session id was null`（会话刚建立时的
+  事件关联时序），不影响后续（`use session ...` 正常、下行正常）；
+- 首启一条 `load tls_ca_cnt fail. no ca in local db`（CA 首次拉取前提示，iot_demo 同样存在）。

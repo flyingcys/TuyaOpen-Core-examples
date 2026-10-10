@@ -1,0 +1,28 @@
+menu "configure app (agent_demo)"
+
+    config AGENT_DEMO
+        bool
+        default y
+        select ENABLE_AI_COMPONENTS
+        select ENABLE_QRCODE
+        select ENABLE_TUYA_CODEC
+        help
+            构建 linux/examples/agent_demo（云端 AI agent 全链路：上传一段
+            语音触发、下行只打印文字；无 UI、下行语音不处理）。
+            默认 y：agent_demo 是独立 CMake 工程，本开关只负责把 AI 链路
+            依赖的 core 开关（ENABLE_AI_COMPONENTS / ENABLE_QRCODE /
+            ENABLE_TUYA_CODEC，后者为编码器注册表——svc_ai_agent 无条件
+            引用 tuya_ai_get_encoder）在共享的 .config 里带起来。本符号无
+            prompt（menuconfig 里不可交互关闭），不构建该 example 即可，
+            无需关闭此符号。
+
+    config AGENT_DEMO_AUDIO_FILE
+        string "Audio source PCM file (empty = bundled voice_16k.pcm)"
+        depends on AGENT_DEMO
+        default ""
+        help
+            上行语音素材路径（16kHz/16bit/单声道 PCM）。留空用内置素材
+            （构建目录的 voice_16k.pcm，由 assets/voice_16k.pcm 复制而来，
+            为 edge-tts 合成的"请问，现在是几点钟？"）；填写则用该文件。
+
+endmenu
