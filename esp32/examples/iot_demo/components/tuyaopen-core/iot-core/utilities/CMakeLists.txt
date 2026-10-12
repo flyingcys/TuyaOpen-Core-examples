@@ -1,4 +1,4 @@
-# 通用工具层：平台无关的纯 C 工具（链表/队列/内存堆/ringbuf/slist/tools/crc/random/
+# 通用工具层：平台无关的纯 C 工具（链表/内存堆/slist/tools/crc/random/
 # mix_method/dev_evt/queue_template）。**零自研依赖**——只依赖 tuyaopen-headers
 # （port 头基底）与 third_party（mbedtls base64）；由 tal_system PUBLIC 依赖，
 # 消费者自动可达。

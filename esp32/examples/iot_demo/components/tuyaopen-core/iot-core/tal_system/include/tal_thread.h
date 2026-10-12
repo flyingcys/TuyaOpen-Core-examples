@@ -124,6 +124,19 @@ OPERATE_RET tal_thread_delete(const THREAD_HANDLE handle);
  */
 THREAD_STATE_E tal_thread_get_state(const THREAD_HANDLE handle);
 
+/**
+ * @brief 取"当前调用线程"的不透明身份句柄
+ *
+ * @param[out] thread: 线程身份句柄。同一线程恒得同一值；不要求与
+ *             tal_thread_create_and_start 产出的 handle 同类
+ *
+ * @note 用途：p2p pjlib（os_core_tuyaos.c）的 TLS 行匹配——按身份区分
+ *       各 OS 任务，同一线程复用同一行。
+ * @return OPRT_OK on success. Others on error, please refer to
+ * tuya_error_code.h
+ */
+OPERATE_RET tal_thread_get_id(THREAD_HANDLE *thread);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

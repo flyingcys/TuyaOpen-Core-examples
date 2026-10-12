@@ -29,7 +29,7 @@ typedef struct {
     uint8_t channel;
     uint8_t progress_percent;
     THREAD_HANDLE upgrade_thrd;
-    TKL_HASH_HANDLE sha256;
+    TAL_HASH_HANDLE sha256;
 } tuya_ota_t;
 
 int tuya_ota_upgrade_status_report(tuya_ota_t *handle, int status);

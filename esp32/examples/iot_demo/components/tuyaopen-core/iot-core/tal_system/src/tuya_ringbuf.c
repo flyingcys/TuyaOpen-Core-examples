@@ -1,10 +1,10 @@
-#include "tkl_memory.h"
+#include "tal_memory.h"
 #include "tuya_ringbuf.h"
 
 
 
-#define RINGBUFF_FREE     tkl_system_free
-#define RINGBUFF_MALLOC   tkl_system_malloc
+#define RINGBUFF_FREE     tal_free
+#define RINGBUFF_MALLOC   tal_malloc
 
 #define GET_MIN(x, y)   ((x) < (y) ? (x) : (y))
 #define GET_MAX(x, y)   ((x) > (y) ? (x) : (y))

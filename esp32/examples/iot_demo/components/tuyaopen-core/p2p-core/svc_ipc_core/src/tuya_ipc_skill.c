@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "tal_log.h"
+#include "tal_memory.h"
 #include "tal_time_service.h"
 #include "tuya_ipc_media_adapter.h"
 #include "atop_service.h"
@@ -44,8 +45,6 @@ static BOOL_T sg_uploaded = FALSE;
 // Force HTTPS POST 4.1
 #define TI_DEV_SKILL_UPDATE            "tuya.device.skill.update"
 #define TI_DEV_SKILL_MULTIMEDIA_UPDATE "tuya.device.skill.multimedia.update"
-extern void *tkl_system_psram_malloc(const size_t size);
-extern void tkl_system_psram_free(void *ptr);
 // extern int tuya_ipc_ring_buffer_get_video_num_skill(int,int);
 
 int tuya_imm_get_security_ability(void);
@@ -56,9 +55,9 @@ OPERATE_RET httpc_dev_update_skill_multimedia(const char *gw_id, const char *ski
     // HTTPC_NULL_CHECK(skill);
 
     int buffer_len = 70 + strlen(skill);
-    char *post_data = tkl_system_psram_malloc(buffer_len);
+    char *post_data = tal_malloc(buffer_len);
     if (post_data == NULL) {
-        PR_ERR("tkl_system_psram_malloc Fail");
+        PR_ERR("tal_malloc Fail");
         return OPRT_MALLOC_FAILED;
     }
     memset(post_data, 0, buffer_len);
@@ -71,7 +70,7 @@ OPERATE_RET httpc_dev_update_skill_multimedia(const char *gw_id, const char *ski
     //                            post_data, buffer_len, NULL,
     //                            NULL);
     op_ret = atop_service_comm_post_simple(TI_DEV_SKILL_MULTIMEDIA_UPDATE, "1.0", post_data, NULL, NULL);
-    tkl_system_psram_free(post_data);
+    tal_free(post_data);
     return op_ret;
 }
 
@@ -81,9 +80,9 @@ OPERATE_RET httpc_dev_update_skill_v10(const char *gw_id, const char *sub_id, co
     // HTTPC_NULL_CHECK(skill);
 
     int buffer_len = 70 + strlen(skill);
-    char *post_data = tkl_system_psram_malloc(buffer_len);
+    char *post_data = tal_malloc(buffer_len);
     if (post_data == NULL) {
-        PR_ERR("tkl_system_psram_malloc Fail");
+        PR_ERR("tal_malloc Fail");
         return OPRT_MALLOC_FAILED;
     }
     memset(post_data, 0, buffer_len);
@@ -104,7 +103,7 @@ OPERATE_RET httpc_dev_update_skill_v10(const char *gw_id, const char *sub_id, co
     //                            post_data, buffer_len, NULL,
     //                            NULL);
     op_ret = atop_service_comm_post_simple(TI_DEV_SKILL_UPDATE, "1.0", post_data, NULL, NULL);
-    tkl_system_psram_free(post_data);
+    tal_free(post_data);
     return op_ret;
 }
 
@@ -145,7 +144,7 @@ OPERATE_RET tuya_ipc_skill_enable_person_flow(void)
 
 void tuya_ipc_upload_skills()
 {
-    char *skill_buf = (char *)tkl_system_psram_malloc(SKILL_PARAM_LEN);
+    char *skill_buf = (char *)tal_malloc(SKILL_PARAM_LEN);
     if (skill_buf == NULL) {
         return;
     }
@@ -338,11 +337,11 @@ void tuya_ipc_upload_skills()
 
 out:
     if (skill_buf) {
-        tkl_system_psram_free(skill_buf);
+        tal_free(skill_buf);
         skill_buf = NULL;
     }
     if (g_skill_info.cloud_gw_info) {
-        tkl_system_psram_free(g_skill_info.cloud_gw_info);
+        tal_free(g_skill_info.cloud_gw_info);
         g_skill_info.cloud_gw_info = NULL;
     }
     return;
@@ -351,7 +350,7 @@ out:
 OPERATE_RET tuya_ipc_upload_media_info(void)
 {
     OPERATE_RET ret = OPRT_COM_ERROR;
-    char *skill_buf = tkl_system_psram_malloc(SKILL_PARAM_LEN);
+    char *skill_buf = tal_malloc(SKILL_PARAM_LEN);
     if (NULL == skill_buf) {
         PR_ERR("malloc skill buf failed");
         return ret;
@@ -367,12 +366,12 @@ OPERATE_RET tuya_ipc_upload_media_info(void)
                 ret = http_device_update_skill_multimedia(NULL, skill_buf);
             }
         }
-        tkl_system_psram_free(g_skill_info.media_info);
+        tal_free(g_skill_info.media_info);
         g_skill_info.media_info = NULL;
     }
 
     if (skill_buf) {
-        tkl_system_psram_free(skill_buf);
+        tal_free(skill_buf);
         skill_buf = NULL;
     }
     PR_DEBUG("upload finish");
@@ -418,7 +417,7 @@ OPERATE_RET tuya_ipc_skill_enable(TUYA_IPC_SKILL_E skill, TUYA_IPC_SKILL_PARAM_U
         break;
     case TUYA_IPC_SKILL_TMM:
         if (g_skill_info.media_info == NULL) {
-            g_skill_info.media_info = tkl_system_psram_malloc(SKILL_INFO_LEN);
+            g_skill_info.media_info = tal_malloc(SKILL_INFO_LEN);
             if (g_skill_info.media_info == NULL) {
                 PR_ERR("malloc media_info failed");
                 return OPRT_MALLOC_FAILED;
@@ -431,7 +430,7 @@ OPERATE_RET tuya_ipc_skill_enable(TUYA_IPC_SKILL_E skill, TUYA_IPC_SKILL_PARAM_U
         break;
     case TUYA_IPC_SKILL_CLOUDGW_INFO:
         if (g_skill_info.cloud_gw_info == NULL) {
-            g_skill_info.cloud_gw_info = tkl_system_psram_malloc(SKILL_INFO_LEN);
+            g_skill_info.cloud_gw_info = tal_malloc(SKILL_INFO_LEN);
             if (g_skill_info.cloud_gw_info == NULL) {
                 PR_ERR("malloc cloud_gw_info failed");
                 return OPRT_MALLOC_FAILED;

@@ -1,11 +1,12 @@
 /**
  * @file tal_symmetry.c
  * @brief This file provides the implementation of AES encryption and decryption
- * functionalities. It includes functions for creating and initializing AES
- * contexts, setting encryption and decryption keys, and performing encryption
- * and decryption operations in various modes (ECB, CBC, CTR). This
- * implementation serves as a thin layer, abstracting the underlying AES
- * functionality.
+ * functionalities. It includes functions for performing encryption and
+ * decryption operations in various modes (ECB, CBC, CTR), the PKCS7 padding
+ * helpers, and the one-shot buffer level helpers.
+ *
+ * 本文件是组合层：AES 原语（create/free/setkey/crypt_ecb/crypt_cbc/GCM）由 TAL
+ * 对称实现（mbedtls_symmetry.c）直接提供，此处不再经 tkl 透传。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -15,143 +16,6 @@
 #include "tal_symmetry.h"
 #include "tal_log.h"
 #include "tal_memory.h"
-
-/**
- * @brief This function Create&initializes a aes context.
- *
- * @param[out] ctx: aes handle
- *
- * @note This API is used to create and init aes.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_aes_create_init(TKL_SYMMETRY_HANDLE *ctx)
-{
-
-    return tkl_aes_create_init(ctx);
-}
-/**
- * @brief This function releases and clears the specified AES context.
- *
- * @param[in] ctx: The AES context to clear.
- *
- * @note This API is used to release aes.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_aes_free(TKL_SYMMETRY_HANDLE ctx)
-{
-    return tkl_aes_free(ctx);
-}
-
-/**
- * @brief This function sets the encryption key.
- *
- * @param[in] ctx: The AES context to which the key should be bound.
- *                 It must be initialized.
- * @param[in] key:  The encryption key..
- * @param[in] keybits:  The size of data passed in bits. Valid options are:
- *                 <ul><li>128 bits</li>
- *                 <li>192 bits</li>
- *                 <li>256 bits</li></ul>
- *
- * @note This API is used to set aes key.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_aes_setkey_enc(TKL_SYMMETRY_HANDLE ctx, uint8_t *key, uint32_t keybits)
-{
-    return tkl_aes_setkey_enc(ctx, key, keybits);
-}
-/**
- * @brief This function sets the decryption key.
- *
- * @param[in] ctx: The AES context to which the key should be bound.
- *                 It must be initialized.
- * @param[in] key:  The decryption key..
- * @param[in] keybits:  The size of data passed in bits. Valid options are:
- *                 <ul><li>128 bits</li>
- *                 <li>192 bits</li>
- *                 <li>256 bits</li></ul>
- *
- * @note This API is used to set aes key.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_aes_setkey_dec(TKL_SYMMETRY_HANDLE ctx, uint8_t *key, uint32_t keybits)
-{
-    return tkl_aes_setkey_dec(ctx, key, keybits);
-}
-
-/**
- * @brief This function performs an AES encryption or decryption operation.
- *
- * @param[in] ctx:  The AES context to use for encryption or decryption.
- *                 It must be initialized and bound to a key.
- * @param[in] mode     The AES operation:
- * @param[in] length   The length of the input data in Bytes. This must be a
- *                 multiple of the block size (\c 16 Bytes).
- * @param[in] input    The buffer holding the input data.
- *                 It must be readable and of size \p length Bytes.
- * @param[in] output   The buffer where the output data will be written.
- *                 It must be writeable and of size \p length Bytes.
- * @note This function operates on full blocks, that is, the input size
- *         must be a multiple of the AES block size of \c 16 Bytes.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_aes_crypt_ecb(TKL_SYMMETRY_HANDLE ctx, int32_t mode, size_t length, uint8_t *input, uint8_t *output)
-{
-    return tkl_aes_crypt_ecb(ctx, mode, length, input, output);
-}
-
-/**
- * @brief This function performs an AES-CBC encryption or decryption operation
- *         on full blocks.
- *
- *         It performs the operation defined in the \p mode
- *         parameter (encrypt/decrypt), on the input data buffer defined in
- *         the \p input parameter.
- *
- *         It can be called as many times as needed, until all the input
- *         data is processed. tal_aes_init(), and either
- *         tal_aes_setkey_enc() or tal_aes_setkey_dec() must be called
- *         before the first call to this API with the same context.
- *
- * @param[in] ctx:  The AES context to use for encryption or decryption.
- *                 It must be initialized and bound to a key.
- * @param[in] mode     The AES operation:
- * @param[in] length   The length of the input data in Bytes. This must be a
- *                 multiple of the block size (\c 16 Bytes).
- * @param[in] iv       Initialization vector (updated after use).
- *                 It must be a readable and writeable buffer of \c 16 Bytes.
- * @param[in] input    The buffer holding the input data.
- *                 It must be readable and of size \p length Bytes.
- * @param[in] output   The buffer where the output data will be written.
- *                 It must be writeable and of size \p length Bytes.
- *
- * @note This function operates on full blocks, that is, the input size
- *         must be a multiple of the AES block size of \c 16 Bytes.
- * @note Upon exit, the content of the IV is updated so that you can
- *         call the same function again on the next
- *         block(s) of data and get the same result as if it was
- *         encrypted in one call. This allows a "streaming" usage.
- *         If you need to retain the contents of the IV, you should
- *         either save it manually or use the cipher module instead.
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_aes_crypt_cbc(TKL_SYMMETRY_HANDLE ctx, int32_t mode, size_t length, uint8_t iv[16], uint8_t *input,
-                              uint8_t *output)
-{
-
-    return tkl_aes_crypt_cbc(ctx, mode, length, iv, input, output);
-}
 
 /**
  * @brief Performs AES-CTR encryption or decryption using the provided context
@@ -170,7 +34,7 @@ OPERATE_RET tal_aes_crypt_cbc(TKL_SYMMETRY_HANDLE ctx, int32_t mode, size_t leng
  *
  * @return The result of the operation.
  */
-OPERATE_RET tal_aes_crypt_ctr(TKL_SYMMETRY_HANDLE ctx, size_t length, size_t *nc_off, uint8_t nonce_counter[16],
+OPERATE_RET tal_aes_crypt_ctr(TAL_SYMMETRY_HANDLE ctx, size_t length, size_t *nc_off, uint8_t nonce_counter[16],
                               uint8_t stream_block[16], uint8_t *input, uint8_t *output)
 {
     OPERATE_RET ret;
@@ -230,7 +94,7 @@ exit:
 OPERATE_RET tal_aes128_ecb_encode_raw(uint8_t *data, size_t len, uint8_t *ec_data, uint8_t *key)
 {
     OPERATE_RET ret;
-    TKL_SYMMETRY_HANDLE ctx = NULL;
+    TAL_SYMMETRY_HANDLE ctx = NULL;
 
     if ((ret = tal_aes_create_init(&ctx)) != OPRT_OK) {
         goto exit;
@@ -270,7 +134,7 @@ exit:
 OPERATE_RET tal_aes128_ecb_decode_raw(uint8_t *data, size_t len, uint8_t *dec_data, uint8_t *key)
 {
     OPERATE_RET ret;
-    TKL_SYMMETRY_HANDLE ctx = NULL;
+    TAL_SYMMETRY_HANDLE ctx = NULL;
 
     if ((ret = tal_aes_create_init(&ctx)) != OPRT_OK) {
         goto exit;
@@ -310,7 +174,7 @@ exit:
 OPERATE_RET tal_aes128_cbc_encode_raw(uint8_t *data, size_t len, uint8_t *key, uint8_t *iv, uint8_t *ec_data)
 {
     OPERATE_RET ret;
-    TKL_SYMMETRY_HANDLE ctx = NULL;
+    TAL_SYMMETRY_HANDLE ctx = NULL;
 
     if ((ret = tal_aes_create_init(&ctx)) != OPRT_OK) {
         goto exit;
@@ -350,7 +214,7 @@ exit:
 OPERATE_RET tal_aes128_cbc_decode_raw(uint8_t *data, size_t len, uint8_t *key, uint8_t *iv, uint8_t *dec_data)
 {
     OPERATE_RET ret;
-    TKL_SYMMETRY_HANDLE ctx = NULL;
+    TAL_SYMMETRY_HANDLE ctx = NULL;
 
     if ((ret = tal_aes_create_init(&ctx)) != OPRT_OK) {
         goto exit;
@@ -389,7 +253,7 @@ exit:
 OPERATE_RET tal_aes256_cbc_encode_raw(uint8_t *data, size_t len, uint8_t *key, uint8_t *iv, uint8_t *ec_data)
 {
     OPERATE_RET ret;
-    TKL_SYMMETRY_HANDLE ctx = NULL;
+    TAL_SYMMETRY_HANDLE ctx = NULL;
 
     if ((ret = tal_aes_create_init(&ctx)) != OPRT_OK) {
         goto exit;
@@ -427,7 +291,7 @@ exit:
 OPERATE_RET tal_aes256_cbc_decode_raw(uint8_t *data, size_t len, uint8_t *key, uint8_t *iv, uint8_t *dec_data)
 {
     OPERATE_RET ret;
-    TKL_SYMMETRY_HANDLE ctx = NULL;
+    TAL_SYMMETRY_HANDLE ctx = NULL;
 
     if ((ret = tal_aes_create_init(&ctx)) != OPRT_OK) {
         goto exit;
@@ -469,7 +333,7 @@ OPERATE_RET tal_aes256_ctr_raw(uint8_t *input, size_t len, uint8_t *key, size_t 
                                uint8_t stream_block[16], uint8_t *output)
 {
     OPERATE_RET ret;
-    TKL_SYMMETRY_HANDLE ctx = NULL;
+    TAL_SYMMETRY_HANDLE ctx = NULL;
 
     if ((ret = tal_aes_create_init(&ctx)) != OPRT_OK) {
         goto exit;
@@ -727,28 +591,4 @@ OPERATE_RET tal_aes_free_data(uint8_t *data)
 
     tal_free(data);
     return OPRT_OK;
-}
-
-OPERATE_RET tal_aes_gcm_encode(const uint8_t *key, uint32_t key_len,
-                                const uint8_t *nonce, uint32_t nonce_len,
-                                const uint8_t *ad, uint32_t ad_len,
-                                const uint8_t *input, uint32_t input_len,
-                                uint8_t *output, uint32_t *output_len,
-                                uint8_t *tag, uint32_t tag_len)
-{
-return tkl_aes_gcm_encode(key, key_len, nonce, nonce_len,
-                            ad, ad_len, input, input_len,
-                            output, output_len, tag, tag_len);
-}
-
-OPERATE_RET tal_aes_gcm_decode(const uint8_t *key, uint32_t key_len,
-                                const uint8_t *nonce, uint32_t nonce_len,
-                                const uint8_t *ad, uint32_t ad_len,
-                                const uint8_t *input, uint32_t input_len,
-                                uint8_t *output, uint32_t *output_len,
-                                uint8_t *tag, uint32_t tag_len)
-{
-return tkl_aes_gcm_decode(key, key_len, nonce, nonce_len,
-                            ad, ad_len, input, input_len,
-                            output, output_len, tag, tag_len);
 }

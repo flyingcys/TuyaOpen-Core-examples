@@ -8,20 +8,20 @@
  * 
  */
 
-#include "tkl_system.h"
-#include "tkl_memory.h"
-#include "tkl_mutex.h"
+#include "tal_memory.h"
+#include "tal_mutex.h"
 
 #include "tuya_list.h"
 #include "tuya_queue.h"
 
-/* 锁统一走 tkl_mutex：每个 port 都必须提供 mutex 卡成员，跨平台文件不应依赖
- * 单平台私有符号。原 SYSTEM_NON_OS 分支依赖 TKL_ENTER/EXIT_CRITICAL 宏，已随
- * linux port 清理删除（裸机 port 需自行把 mutex 实现为临界区或等价物）。 */
-#define QUEUE_CREATE_LOCK(queue)  tkl_mutex_create_init(&queue->mutex)
-#define QUEUE_RELEASE_LOCK(queue) tkl_mutex_release(queue->mutex)
-#define QUEUE_LOCK(queue)   tkl_mutex_lock(queue->mutex)
-#define QUEUE_UNLOCK(queue) tkl_mutex_unlock(queue->mutex)
+/* 锁统一走 tal_mutex：经主卡（tal_api ops）分发到各 port 的 mutex 实现，跨平台
+ * 文件不直调 tkl、不依赖单平台私有符号。原 SYSTEM_NON_OS 分支依赖 TKL_ENTER/
+ * EXIT_CRITICAL 宏，已随 linux port 清理删除（裸机 port 需自行实现 mutex 卡成员，
+ * 即把 mutex 实现为临界区或等价物）。 */
+#define QUEUE_CREATE_LOCK(queue)  tal_mutex_create_init(&queue->mutex)
+#define QUEUE_RELEASE_LOCK(queue) tal_mutex_release(queue->mutex)
+#define QUEUE_LOCK(queue)   tal_mutex_lock(queue->mutex)
+#define QUEUE_UNLOCK(queue) tal_mutex_unlock(queue->mutex)
 
 typedef enum {
     POLICY_SEND_TO_BACK,
@@ -35,7 +35,7 @@ typedef struct {
 }QUEUE_ITEM_T;
 
 typedef struct {
-    TKL_MUTEX_HANDLE mutex;
+    MUTEX_HANDLE mutex;
 
     uint32_t item_size;
     uint32_t queue_len;
@@ -54,7 +54,7 @@ static OPERATE_RET __enqueue(TUYA_QUEUE_HANDLE handle, const void *item, ENQUEUE
 
     TUYA_QUEUE_T *queue = (TUYA_QUEUE_T *)handle;
     
-    QUEUE_ITEM_T *queue_item = (QUEUE_ITEM_T *)tkl_system_malloc(sizeof(QUEUE_ITEM_T) + queue->item_size);
+    QUEUE_ITEM_T *queue_item = (QUEUE_ITEM_T *)tal_malloc(sizeof(QUEUE_ITEM_T) + queue->item_size);
     if(NULL == queue_item) {
         return OPRT_MALLOC_FAILED;
     }
@@ -71,7 +71,7 @@ static OPERATE_RET __enqueue(TUYA_QUEUE_HANDLE handle, const void *item, ENQUEUE
         }
         queue->queue_free--;
     } else {
-        tkl_system_free(queue_item);
+        tal_free(queue_item);
         op_ret = OPRT_EXCEED_UPPER_LIMIT;
     }
     QUEUE_UNLOCK(queue);
@@ -100,14 +100,14 @@ OPERATE_RET tuya_queue_create(const uint32_t queue_len, const uint32_t item_size
         return OPRT_INVALID_PARM;
     }
 
-    queue = (TUYA_QUEUE_T *)tkl_system_malloc(sizeof(TUYA_QUEUE_T));
+    queue = (TUYA_QUEUE_T *)tal_malloc(sizeof(TUYA_QUEUE_T));
     if(!queue) {
         return OPRT_MALLOC_FAILED;
     }
 
     op_ret = QUEUE_CREATE_LOCK(queue);
     if(OPRT_OK != op_ret) {
-        tkl_system_free(queue);
+        tal_free(queue);
         return OPRT_COM_ERROR;
     }
 
@@ -172,7 +172,7 @@ OPERATE_RET tuya_queue_output(TUYA_QUEUE_HANDLE handle, const void *item)
             memcpy((void *)item, queue_item->data, queue->item_size);
         }
         tuya_list_del(&(queue_item->node));
-        tkl_system_free(queue_item);
+        tal_free(queue_item);
         queue->queue_free++;
     } else {
         op_ret = OPRT_NOT_FOUND;
@@ -263,7 +263,7 @@ OPERATE_RET tuya_queue_clear(TUYA_QUEUE_HANDLE handle)
     tuya_list_for_each_safe(p, n, &(queue->head)) {
         queue_item = tuya_list_entry(p, QUEUE_ITEM_T, node);
         tuya_list_del(&queue_item->node);
-        tkl_system_free(queue_item);
+        tal_free(queue_item);
     }
     queue->queue_free = queue->queue_len;
     QUEUE_UNLOCK(queue);
@@ -420,7 +420,7 @@ OPERATE_RET tuya_queue_release(TUYA_QUEUE_HANDLE handle)
     tuya_queue_clear(handle);
 
     op_ret = QUEUE_RELEASE_LOCK(queue);
-    tkl_system_free(queue);
+    tal_free(queue);
 
     return op_ret;
 }

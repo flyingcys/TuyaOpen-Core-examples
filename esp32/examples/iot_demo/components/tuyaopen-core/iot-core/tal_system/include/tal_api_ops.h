@@ -66,6 +66,7 @@ typedef struct {
     OPERATE_RET (*thread_release)(const THREAD_HANDLE thread);
     OPERATE_RET (*thread_set_self_name)(const char *name);
     OPERATE_RET (*thread_is_self)(const THREAD_HANDLE thread, BOOL_T *is_self);
+    OPERATE_RET (*thread_get_id)(THREAD_HANDLE *thread);
     //! queue
     OPERATE_RET (*queue_create_init)(QUEUE_HANDLE *queue, int msgsize, int msgcount);
     OPERATE_RET (*queue_post)(const QUEUE_HANDLE queue, void *data, uint32_t timeout);

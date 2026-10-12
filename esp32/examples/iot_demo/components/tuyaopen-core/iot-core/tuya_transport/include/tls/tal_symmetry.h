@@ -16,8 +16,8 @@
  * information is protected against unauthorized access and manipulation.
  *
  * @note This file is part of the Tuya IoT Development Platform and is intended
- * for use in Tuya-based applications. It requires the underlying cryptographic
- * library "tkl_symmetry.h" for actual cryptographic operations.
+ * for use in Tuya-based applications. The underlying AES primitives are
+ * provided by the TAL symmetry backend (mbedtls_symmetry.c).
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -26,11 +26,13 @@
 #ifndef __TAL_SYMMETRY_H__
 #define __TAL_SYMMETRY_H__
 
-#include "tkl_symmetry.h"
+#include "tuya_cloud_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef void *TAL_SYMMETRY_HANDLE;
 
 typedef enum {
     SYMMETRY_DECRYPT = 0,
@@ -47,7 +49,7 @@ typedef enum {
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_aes_create_init(TKL_SYMMETRY_HANDLE *ctx);
+OPERATE_RET tal_aes_create_init(TAL_SYMMETRY_HANDLE *ctx);
 
 /**
  * @brief This function releases and clears the specified AES context.
@@ -59,7 +61,7 @@ OPERATE_RET tal_aes_create_init(TKL_SYMMETRY_HANDLE *ctx);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_aes_free(TKL_SYMMETRY_HANDLE ctx);
+OPERATE_RET tal_aes_free(TAL_SYMMETRY_HANDLE ctx);
 
 /**
  * @brief This function sets the encryption key.
@@ -77,7 +79,7 @@ OPERATE_RET tal_aes_free(TKL_SYMMETRY_HANDLE ctx);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_aes_setkey_enc(TKL_SYMMETRY_HANDLE ctx, uint8_t *key, uint32_t keybits);
+OPERATE_RET tal_aes_setkey_enc(TAL_SYMMETRY_HANDLE ctx, uint8_t *key, uint32_t keybits);
 
 /**
  * @brief This function sets the decryption key.
@@ -95,7 +97,7 @@ OPERATE_RET tal_aes_setkey_enc(TKL_SYMMETRY_HANDLE ctx, uint8_t *key, uint32_t k
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_aes_setkey_dec(TKL_SYMMETRY_HANDLE ctx, uint8_t *key, uint32_t keybits);
+OPERATE_RET tal_aes_setkey_dec(TAL_SYMMETRY_HANDLE ctx, uint8_t *key, uint32_t keybits);
 
 /**
  * @brief This function performs an AES encryption or decryption operation.
@@ -115,7 +117,7 @@ OPERATE_RET tal_aes_setkey_dec(TKL_SYMMETRY_HANDLE ctx, uint8_t *key, uint32_t k
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_aes_crypt_ecb(TKL_SYMMETRY_HANDLE ctx, int32_t mode, size_t length, uint8_t *input, uint8_t *output);
+OPERATE_RET tal_aes_crypt_ecb(TAL_SYMMETRY_HANDLE ctx, int32_t mode, size_t length, uint8_t *input, uint8_t *output);
 
 /**
  * @brief This function performs an AES-CBC encryption or decryption operation
@@ -153,7 +155,7 @@ OPERATE_RET tal_aes_crypt_ecb(TKL_SYMMETRY_HANDLE ctx, int32_t mode, size_t leng
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_aes_crypt_cbc(TKL_SYMMETRY_HANDLE ctx, int32_t mode, size_t length, uint8_t iv[16], uint8_t *input,
+OPERATE_RET tal_aes_crypt_cbc(TAL_SYMMETRY_HANDLE ctx, int32_t mode, size_t length, uint8_t iv[16], uint8_t *input,
                               uint8_t *output);
 
 /**
@@ -173,7 +175,7 @@ OPERATE_RET tal_aes_crypt_cbc(TKL_SYMMETRY_HANDLE ctx, int32_t mode, size_t leng
  *
  * @return The result of the operation.
  */
-OPERATE_RET tal_aes_crypt_ctr(TKL_SYMMETRY_HANDLE ctx, size_t length, size_t *nc_off, uint8_t nonce_counter[16],
+OPERATE_RET tal_aes_crypt_ctr(TAL_SYMMETRY_HANDLE ctx, size_t length, size_t *nc_off, uint8_t nonce_counter[16],
                               uint8_t stream_block[16], uint8_t *input, uint8_t *output);
 
 /**

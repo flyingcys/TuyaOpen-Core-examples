@@ -66,6 +66,11 @@ rsync -a --exclude='.git' --exclude='.gitmodules' --exclude='third_party/mbedtls
 - `iot-core/tuya_transport/CMakeLists.txt`：mbedtls 配置头注入加
   `NOT CONFIG_ENABLE_PLATFORM_MBEDTLS` 条件——平台 mbedtls 模式下原会误把 core 的
   config 目录注入宿主 mbedtls 目标、污染宿主组件。
+- **core 与 tkl 层解耦（2026-10）**：core 在编代码不再直调任何 `tkl_*`——`tuya_queue`/
+  `tuya_ringbuf` 上移 `iot-core/tal_system/` 并改走 `tal_mutex_*`/`tal_malloc`/`tal_free`；
+  crypto 透传层合并（`mbedtls_hash.c`/`mbedtls_symmetry.c` 即 `tal_*` 实现本体，句柄类型改
+  `TAL_HASH_HANDLE`/`TAL_SYMMETRY_HANDLE`）；p2p 清 psram、`thread_get_id` 走主卡新成员
+  （新 TAL API `tal_thread_get_id`）。两 port 同步接线。详见 `porting-study.md` §2.3。
 
 ## 构建（需要 esp-idf 环境）
 

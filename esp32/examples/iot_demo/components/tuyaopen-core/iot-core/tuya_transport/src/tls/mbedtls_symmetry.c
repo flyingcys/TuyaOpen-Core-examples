@@ -18,7 +18,10 @@
  * 
  * Usage of this file should be preceded by proper initialization of the AES context
  * and followed by the appropriate cleanup to prevent memory leaks.
- * 
+ *
+ * 本文件即 TAL 对称原语的实现本体：原 tkl_* 透传层已删除，此处的 mbedtls 实现
+ * 直接作为 tal_symmetry.h 中声明的实现（合并式收编）。
+ *
  * @note This file is part of the Tuya IoT SDK and is subject to the SDK's license terms.
  * 
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
@@ -26,14 +29,10 @@
  */
 
 #include "tuya_iot_config.h"
-#include "tkl_memory.h"
-#include "tkl_symmetry.h"
-#if !defined(ENABLE_PLATFORM_AES)
+#include "tal_memory.h"
+#include "tal_symmetry.h"
 #include "cipher_wrapper.h"
 #include "mbedtls/aes.h"
-#endif
-
-#if !defined(ENABLE_PLATFORM_AES)
 
 /**
 * @brief This function Create&initializes a aes context.
@@ -44,11 +43,11 @@
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tkl_aes_create_init( TKL_SYMMETRY_HANDLE *ctx ){
+OPERATE_RET  tal_aes_create_init( TAL_SYMMETRY_HANDLE *ctx ){
 
     mbedtls_aes_context *mbedtls_aes_ctx;
 
-    mbedtls_aes_ctx =(mbedtls_aes_context *) tkl_system_malloc(sizeof(mbedtls_aes_context));    
+    mbedtls_aes_ctx =(mbedtls_aes_context *) tal_malloc(sizeof(mbedtls_aes_context));    
     mbedtls_aes_init(mbedtls_aes_ctx);
     *ctx = mbedtls_aes_ctx;
 
@@ -63,11 +62,11 @@ OPERATE_RET  tkl_aes_create_init( TKL_SYMMETRY_HANDLE *ctx ){
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tkl_aes_free( TKL_SYMMETRY_HANDLE ctx )
+OPERATE_RET  tal_aes_free( TAL_SYMMETRY_HANDLE ctx )
 {
     if(ctx != NULL){
         mbedtls_aes_free( (mbedtls_aes_context *) ctx );
-        tkl_system_free(ctx);
+        tal_free(ctx);
     }
 
     return OPRT_OK;
@@ -87,7 +86,7 @@ OPERATE_RET  tkl_aes_free( TKL_SYMMETRY_HANDLE ctx )
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tkl_aes_setkey_enc( TKL_SYMMETRY_HANDLE ctx, const uint8_t *key,
+OPERATE_RET  tal_aes_setkey_enc( TAL_SYMMETRY_HANDLE ctx, uint8_t *key,
                     uint32_t keybits )
 {
     if( mbedtls_aes_setkey_enc( (mbedtls_aes_context *)ctx, key,keybits ) != 0)
@@ -110,7 +109,7 @@ OPERATE_RET  tkl_aes_setkey_enc( TKL_SYMMETRY_HANDLE ctx, const uint8_t *key,
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tkl_aes_setkey_dec( TKL_SYMMETRY_HANDLE ctx, const uint8_t *key,
+OPERATE_RET  tal_aes_setkey_dec( TAL_SYMMETRY_HANDLE ctx, uint8_t *key,
                     uint32_t keybits )
 {
     if( mbedtls_aes_setkey_dec( (mbedtls_aes_context *)ctx, key,keybits ) != 0)
@@ -135,10 +134,10 @@ OPERATE_RET  tkl_aes_setkey_dec( TKL_SYMMETRY_HANDLE ctx, const uint8_t *key,
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tkl_aes_crypt_ecb( TKL_SYMMETRY_HANDLE ctx,
+OPERATE_RET  tal_aes_crypt_ecb( TAL_SYMMETRY_HANDLE ctx,
                     int32_t mode,
                     size_t length,
-                    const uint8_t *input,
+                    uint8_t *input,
                     uint8_t *output )
 {
     uint32_t i;
@@ -163,8 +162,8 @@ OPERATE_RET  tkl_aes_crypt_ecb( TKL_SYMMETRY_HANDLE ctx,
 *         the \p input parameter.
 *
 *         It can be called as many times as needed, until all the input
-*         data is processed. tkl_aes_init(), and either
-*         tkl_aes_setkey_enc() or tkl_aes_setkey_dec() must be called
+*         data is processed. tal_aes_init(), and either
+*         tal_aes_setkey_enc() or tal_aes_setkey_dec() must be called
 *         before the first call to this API with the same context.
 * 
 * @param[in] ctx:  The AES context to use for encryption or decryption.
@@ -189,11 +188,11 @@ OPERATE_RET  tkl_aes_crypt_ecb( TKL_SYMMETRY_HANDLE ctx,
 *         either save it manually or use the cipher module instead.
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tkl_aes_crypt_cbc( TKL_SYMMETRY_HANDLE ctx,
+OPERATE_RET  tal_aes_crypt_cbc( TAL_SYMMETRY_HANDLE ctx,
                     int32_t mode,
                     size_t length,
                     uint8_t iv[16],
-                    const uint8_t *input,
+                    uint8_t *input,
                     uint8_t *output )
 {
     if( mbedtls_aes_crypt_cbc( (mbedtls_aes_context *)ctx,mode,length,iv,input,output ) != 0)
@@ -226,7 +225,7 @@ OPERATE_RET  tkl_aes_crypt_cbc( TKL_SYMMETRY_HANDLE ctx,
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET tkl_aes_gcm_encode(const uint8_t *key, uint32_t key_len,
+OPERATE_RET tal_aes_gcm_encode(const uint8_t *key, uint32_t key_len,
                                 const uint8_t *nonce, uint32_t nonce_len,
                                 const uint8_t *ad, uint32_t ad_len,
                                 const uint8_t *input, uint32_t input_len,
@@ -287,7 +286,7 @@ OPERATE_RET tkl_aes_gcm_encode(const uint8_t *key, uint32_t key_len,
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET tkl_aes_gcm_decode(const uint8_t *key, uint32_t key_len,
+OPERATE_RET tal_aes_gcm_decode(const uint8_t *key, uint32_t key_len,
                                 const uint8_t *nonce, uint32_t nonce_len,
                                 const uint8_t *ad, uint32_t ad_len,
                                 const uint8_t *input, uint32_t input_len,
@@ -323,5 +322,3 @@ OPERATE_RET tkl_aes_gcm_decode(const uint8_t *key, uint32_t key_len,
 
 return OPRT_OK;
 }
-
-#endif

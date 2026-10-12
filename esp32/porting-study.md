@@ -61,7 +61,7 @@ port（平台适配层，每个平台一份：linux/port、esp32/port）
 
 | 卡（core 定义） | 契约头 | port 组装点 | 谁在用 |
 |---|---|---|---|
-| `TAL_API_OPS_T`（主卡：log/memory/system/semaphore/mutex/thread/queue） | `iot-core/tal_system/include/tal_api_ops.h` | `port/src/tkl_runtime.c` 文件尾 | `tal_api.c` / `tal_thread.c` / `tal_system.c` |
+| `TAL_API_OPS_T`（主卡：log/memory/system/semaphore/mutex/thread/queue，24 成员；thread 组含 p2p 用的 `thread_get_id`） | `iot-core/tal_system/include/tal_api_ops.h` | `port/src/tkl_runtime.c` 文件尾 | `tal_api.c` / `tal_thread.c` / `tal_system.c` |
 | `TAL_OTA_OPS_T`（3 成员） | `tal_ota_ops.h` | `port/src/tkl_ota.c` | `tal_api.c`（**强引用**：不实现也必须给空桩） |
 | `TAL_KV_OPS_T`（4 成员） | `tal_kv_ops.h` | `port/src/tkl_kv.c` | `tal_kv.c`（4 接口纯透传） |
 | `TAL_NETIF_OPS_T`（2 成员：get_ip/set_link_cb） | `tal_netif_ops.h` | `port/src/tkl_netif.c` | `tal_netif.c` |
@@ -76,28 +76,50 @@ demo: tal_system_sleep(500)
   → port: tkl_runtime.c 的 tkl_system_sleep → vTaskDelay(pdMS_TO_TICKS(...))
 ```
 
-### 2.3 直调符号的例外（不走卡）
+### 2.3 直调符号：已全部收编（2026-10 解耦）
 
-少数符号是**直接链接**的（core 里 `extern` 后直调，不经卡）：
+**现状：core 在编代码零 tkl 符号**（调用 / 类型 / include 三个口径），可直接做门禁：
 
-- `tkl_system_malloc` / `tkl_system_free`：core 的 `tuya_transport`（mbedtls 适配层、
-  base64 等）与 `tuya_utilities` 直调（`mbedtls_hash.c` 等）；
-- `tkl_mutex_create_init` / `lock` / `unlock` / `release`：core 的
-  `iot-core/utilities/tuya_queue.c` 经宏直调；
-- `tkl_thread_get_id`、`tkl_system_psram_malloc/free`：仅 p2p（`ENABLE_TUYA_P2P` 门控）。
+```bash
+/usr/bin/grep -rn '\btkl_[a-z_]*(' linux/tuyaopen-core --include='*.c' --include='*.h'
+# 期望：仅剩注释 + 两个门控模块（见本节末尾）
+```
 
-**这些符号由 port 以普通全局符号提供**（不是 static 成员），链接时必须能找到——
-这也是 §5"循环引用"的成因之一。
+曾经有 5 组"不走卡"的直调例外，已按"core 不直调 tkl"原则逐一收编：
+
+| 原直调 | 收编方式 |
+|---|---|
+| `tkl_system_malloc/free`（tuya_queue / tuya_ringbuf / mbedtls 适配层） | 前两模块**上移** `iot-core/tal_system/`，改走 `tal_malloc`/`tal_free`（经主卡分发）；mbedtls 适配层改 `tal_*` |
+| `tkl_mutex_*`（tuya_queue 宏直调） | 同上，改走 `tal_mutex_*`；句柄类型 `TKL_MUTEX_HANDLE` → `MUTEX_HANDLE` |
+| crypto 透传层（`tal_hash.c`/`tal_symmetry.c` → `tkl_sha256_*`/`tkl_aes_*`） | 透传层删除，`mbedtls_hash.c`/`mbedtls_symmetry.c` 的实现**直接就是** `tal_*`；句柄类型改 core 自持的 `TAL_HASH_HANDLE`/`TAL_SYMMETRY_HANDLE`；原 `ENABLE_PLATFORM_*` 平台覆盖点一并删除（全仓无人定义，是死代码；硬件加速走 mbedtls ALT，见 §4.5） |
+| `tkl_system_psram_malloc/free`（p2p） | **删除**（口径：psram 全部去掉）；`tuya_ipc_skill.c` 改 `tal_malloc`/`tal_free`；两 port 的 tkl psram 符号与声明一并清理 |
+| `tkl_thread_get_id`（p2p pjlib） | 主卡新增 `thread_get_id` 成员 + 新 TAL API `tal_thread_get_id`；两 port 原有实现解门控、接线到卡 |
+
+**为什么 tuya_queue / tuya_ringbuf 要上移**：它们在 `tuya_utilities`（最底层，被
+`tal_system` PUBLIC 依赖，`tal_workqueue` 就在 tal_system 内用它），不能反向依赖
+`tal_system` 去调 `tal_mutex_*`；上移到 `tal_system` 目标后即普通 TAL 层文件
+（消费方本就全链 tal_system，include 裸名不变）。
+
+**仅剩的门控代码直调**（当前构建不编译，记录在案）：`iot-core/ble/tal_bluetooth.c`
+（32 处 `tkl_ble_*` + 112 处 `TKL_BLE_*` 类型，`CONFIG_ENABLE_BLUETOOTH` 门控）、
+`agent-core/ai_audio/src/ai_audio_input.c`（`tkl_vad_*`）、
+`agent-core/tuya_ai_service/svc_ai_codec/src/tuya_ai_encoder_{opus,speex}_ipc.c`
+（`tkl_audio_enc_request`——该符号在 core/port 均无实现，是死代码）。要清这三处需
+分别建 BLE 卡（约 34 成员）与 AI 音频卡，工作量另计。
 
 ### 2.4 TKL 头与 core 的关系
 
 - TKL 接口头（`tkl_*.h`）**全部在 port 里**（`port/include/{common,system,network,security}/`），
-  core 内没有任何 `tkl_*.h`；core 只引用**部分** TKL 头（`tkl_memory.h`/`tkl_hash.h`/
-  `tkl_symmetry.h`/`tkl_asymmetrical.h`/`tkl_mutex.h` 等，用于直调声明与 mbedtls 适配）。
+  core 内没有任何 `tkl_*.h`。
+- **core 在编代码零 TKL 头依赖**（2026-10 解耦后）：曾用于直调声明与 mbedtls 适配的
+  `tkl_memory.h`/`tkl_hash.h`/`tkl_symmetry.h`/`tkl_asymmetrical.h`/`tkl_mutex.h` 均已清除
+  （见 §2.3）；仅门控代码（ble / agent-core AI，当前构建不编译）仍 include
+  `tkl_bluetooth*.h`/`tkl_vad.h`/`tkl_ipc.h`/`tkl_memory.h`。
 - port 头经构建系统**注入 core 的环境基底**（`tuyaopen-headers`），core 编译单元
   才能 include 到（详见 §3.3）。
 - 各平台 port 的 TKL 接口集合**同构**（esp32 port 的 15 个头从 linux port 同步而来，
-  不含平台多余接口）——这是"不新扩"原则的落地。
+  不含平台多余接口）——这是"不新扩"原则的落地。解耦后 `tkl_hash.h`/`tkl_symmetry.h`/
+  `tkl_asymmetrical.h` 已无 includer（crypto 实现归 core），作为 TKL 接口面暂留。
 
 ---
 
@@ -363,11 +385,12 @@ ALT 语义：mbedtls 上游每个算法模块都用 `#if !defined(MBEDTLS_XXX_AL
 
 1. **TLS 链**：`tuya_tls.c` → mbedtls_ssl（esp-idf mbedtls）→ 其内部 AES-GCM /
    SHA256 / ECDHE 运算**自动走硬件**；
-2. **core 的 crypto 接口链**：`tal_security`（DP 加解密等）→ `tkl_hash` /
-   `tkl_symmetry` 接口 → core 的 `mbedtls_hash.c` / `mbedtls_symmetry.c`（用**标准
-   mbedtls API**：`mbedtls_sha256_*` / `mbedtls_aes_*` / `mbedtls_md5_*`）→ 在 esp32
-   上同样解析到 esp-idf 的 mbedtls → **硬件加速** ✓（这条不经过 TLS，是 core 自己的
-   TKL 接口，同样受益）。
+2. **core 的 crypto 接口链**：`tal_hash` / `tal_symmetry`（DP 加解密、OTA 校验等）→
+   core 的 `mbedtls_hash.c` / `mbedtls_symmetry.c`（用**标准 mbedtls API**：
+   `mbedtls_sha256_*` / `mbedtls_aes_*` / `mbedtls_md5_*`；2026-10 解耦后这两文件即
+   `tal_*` 原语的实现本体，原 `tkl_hash`/`tkl_symmetry` 透传层已删除，见 §2.3）→
+   在 esp32 上同样解析到 esp-idf 的 mbedtls → **硬件加速** ✓（这条不经过 TLS，是 core
+   自己的 crypto 层，同样受益）。
 
 对照：**core 自带的 mbedtls（linux 用，3.1.0）是纯软件实现**——如果 esp32 选
 `PLATFORM_MBEDTLS=OFF` 用 core 自带副本，除符号冲突外还会**丢掉全部硬件加速**。
@@ -405,11 +428,16 @@ ROM 里的 mbedtls 在跑，它把 mutex/calloc/free 及 SHA 的 update 等回�
 
 ### 5.1 环从哪来
 
-- core 的库引用 port 的符号：`tkl_system_malloc/free`、`tkl_mutex_*`（§2.3 直调）、
-  以及**卡的实例**（`tal_*_ops_platform`，core 的 `tal_*.c` extern 引用）；
+- core 的库引用 port 的符号：**卡的实例**（`tal_*_ops_platform`，core 的 `tal_*.c`
+  extern 引用）。2026-10 解耦后 tkl_* 直调已清（§2.3），环只剩卡实例这一条；
 - port 的库引用 core 的符号：`tal_mutex_*`（卡的实现里用 core 的 API）、
   `tal_log` 等；
-- 两个方向的引用都真实存在 → **静态库循环依赖**。
+- 两个方向的引用都真实存在 → **静态库循环依赖**。解耦不消环：core 引卡实例、
+  port 引 tal API 是卡机制的固有双向依赖。**实测（2026-10 解耦后）**：
+  - esp32：去掉链接组后链接失败，报的正是**卡实例未定义**
+    （`tal_api_ops_platform`/`tal_ota_ops_platform`/…）→ 组必需；
+  - linux：CMake 对静态库依赖环会自动重复库（链接行里 `libtuyaopen-port.a`、
+    核心库出现两次），去掉显式组仍链接成功 → 显式组是冗余保险。
 
 ### 5.2 两个平台的解法（同一个机制）
 

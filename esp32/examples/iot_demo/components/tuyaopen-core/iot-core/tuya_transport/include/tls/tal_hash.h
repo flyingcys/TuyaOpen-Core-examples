@@ -27,14 +27,16 @@
 #ifndef __TAL_HASH_H__
 #define __TAL_HASH_H__
 
-#include "tkl_hash.h"
+#include "tuya_cloud_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+typedef void *TAL_HASH_HANDLE;
+
 typedef struct {
-    TKL_HASH_HANDLE ctx;
+    TAL_HASH_HANDLE ctx;
     uint8_t ipad[64]; /*!< HMAC: inner padding */
     uint8_t opad[64]; /*!< HMAC: outer padding */
 } tal_hash_mac_context_t;
@@ -49,7 +51,7 @@ typedef struct {
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_sha256_create_init(TKL_HASH_HANDLE *ctx);
+OPERATE_RET tal_sha256_create_init(TAL_HASH_HANDLE *ctx);
 
 /**
  * @brief This function clears a sha256 context.
@@ -61,7 +63,7 @@ OPERATE_RET tal_sha256_create_init(TKL_HASH_HANDLE *ctx);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_sha256_free(TKL_HASH_HANDLE ctx);
+OPERATE_RET tal_sha256_free(TAL_HASH_HANDLE ctx);
 
 /**
  * @brief This function starts a sha224 or sha256 checksum
@@ -76,7 +78,7 @@ OPERATE_RET tal_sha256_free(TKL_HASH_HANDLE ctx);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_sha256_starts_ret(TKL_HASH_HANDLE ctx, int32_t is224);
+OPERATE_RET tal_sha256_starts_ret(TAL_HASH_HANDLE ctx, int32_t is224);
 
 /**
  * @brief This function feeds an input buffer into an ongoing
@@ -92,7 +94,7 @@ OPERATE_RET tal_sha256_starts_ret(TKL_HASH_HANDLE ctx, int32_t is224);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_sha256_update_ret(TKL_HASH_HANDLE ctx, const uint8_t *input, size_t ilen);
+OPERATE_RET tal_sha256_update_ret(TAL_HASH_HANDLE ctx, const uint8_t *input, size_t ilen);
 
 /**
  * @brief This function finishes the sha256 operation, and writes
@@ -107,7 +109,7 @@ OPERATE_RET tal_sha256_update_ret(TKL_HASH_HANDLE ctx, const uint8_t *input, siz
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_sha256_finish_ret(TKL_HASH_HANDLE ctx, uint8_t output[32]);
+OPERATE_RET tal_sha256_finish_ret(TAL_HASH_HANDLE ctx, uint8_t output[32]);
 
 /**
  * @brief This function Create&initializes a md5 context.
@@ -119,7 +121,7 @@ OPERATE_RET tal_sha256_finish_ret(TKL_HASH_HANDLE ctx, uint8_t output[32]);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_md5_create_init(TKL_HASH_HANDLE *ctx);
+OPERATE_RET tal_md5_create_init(TAL_HASH_HANDLE *ctx);
 
 /**
  * @brief This function clears a md5 context.
@@ -131,7 +133,7 @@ OPERATE_RET tal_md5_create_init(TKL_HASH_HANDLE *ctx);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_md5_free(TKL_HASH_HANDLE ctx);
+OPERATE_RET tal_md5_free(TAL_HASH_HANDLE ctx);
 
 /**
  * @brief This function starts a md5 checksum
@@ -144,7 +146,7 @@ OPERATE_RET tal_md5_free(TKL_HASH_HANDLE ctx);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_md5_starts_ret(TKL_HASH_HANDLE ctx);
+OPERATE_RET tal_md5_starts_ret(TAL_HASH_HANDLE ctx);
 
 /**
  * @brief This function feeds an input buffer into an ongoing
@@ -160,7 +162,7 @@ OPERATE_RET tal_md5_starts_ret(TKL_HASH_HANDLE ctx);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_md5_update_ret(TKL_HASH_HANDLE ctx, const uint8_t *input, size_t ilen);
+OPERATE_RET tal_md5_update_ret(TAL_HASH_HANDLE ctx, const uint8_t *input, size_t ilen);
 
 /**
  * @brief This function finishes the md5 operation, and writes
@@ -175,7 +177,7 @@ OPERATE_RET tal_md5_update_ret(TKL_HASH_HANDLE ctx, const uint8_t *input, size_t
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_md5_finish_ret(TKL_HASH_HANDLE ctx, uint8_t output[16]);
+OPERATE_RET tal_md5_finish_ret(TAL_HASH_HANDLE ctx, uint8_t output[16]);
 
 /**
  * @brief This function Create&initializes a sha1 context.
@@ -187,7 +189,7 @@ OPERATE_RET tal_md5_finish_ret(TKL_HASH_HANDLE ctx, uint8_t output[16]);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_sha1_create_init(TKL_HASH_HANDLE *ctx);
+OPERATE_RET tal_sha1_create_init(TAL_HASH_HANDLE *ctx);
 
 /**
  * @brief This function clears a sha1 context.
@@ -199,7 +201,7 @@ OPERATE_RET tal_sha1_create_init(TKL_HASH_HANDLE *ctx);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_sha1_free(TKL_HASH_HANDLE ctx);
+OPERATE_RET tal_sha1_free(TAL_HASH_HANDLE ctx);
 
 /**
  * @brief This function starts a sha1 checksum
@@ -212,7 +214,7 @@ OPERATE_RET tal_sha1_free(TKL_HASH_HANDLE ctx);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_sha1_starts_ret(TKL_HASH_HANDLE ctx);
+OPERATE_RET tal_sha1_starts_ret(TAL_HASH_HANDLE ctx);
 
 /**
  * @brief This function feeds an input buffer into an ongoing
@@ -228,7 +230,7 @@ OPERATE_RET tal_sha1_starts_ret(TKL_HASH_HANDLE ctx);
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_sha1_update_ret(TKL_HASH_HANDLE ctx, const uint8_t *input, size_t ilen);
+OPERATE_RET tal_sha1_update_ret(TAL_HASH_HANDLE ctx, const uint8_t *input, size_t ilen);
 
 /**
  * @brief This function finishes the sha1 operation, and writes
@@ -243,7 +245,7 @@ OPERATE_RET tal_sha1_update_ret(TKL_HASH_HANDLE ctx, const uint8_t *input, size_
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
-OPERATE_RET tal_sha1_finish_ret(TKL_HASH_HANDLE ctx, uint8_t output[20]);
+OPERATE_RET tal_sha1_finish_ret(TAL_HASH_HANDLE ctx, uint8_t output[20]);
 /**
  * @brief          This function calculates the SHA-224 or SHA-256
  *                 checksum of a buffer.

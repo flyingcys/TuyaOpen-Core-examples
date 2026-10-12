@@ -418,7 +418,7 @@ OPERATE_RET p2p_get_userinfo(int session, int p2pType)
     }
 
     char sign[32 + 1] = {0};
-    TKL_HASH_HANDLE md5;
+    TAL_HASH_HANDLE md5;
     tal_md5_create_init(&md5);
     tal_md5_starts_ret(md5);
     unsigned char decrypt[16];

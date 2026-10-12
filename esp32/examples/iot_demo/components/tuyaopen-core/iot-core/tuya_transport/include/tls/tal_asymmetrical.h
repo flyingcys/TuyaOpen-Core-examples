@@ -25,8 +25,6 @@
 #ifndef __TAL_ASYMMETRICAL_H__
 #define __TAL_ASYMMETRICAL_H__
 
-#include "tkl_asymmetrical.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

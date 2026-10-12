@@ -23,7 +23,6 @@
 #include "tal_semaphore.h"
 #include "tal_thread.h"
 #include "tal_system.h"
-#include "tkl_thread.h"
 #include "tuya_cloud_types.h"
 
 #include <errno.h>
@@ -73,7 +72,7 @@ struct pj_sem_t {
 #endif
 
 typedef struct pj_tuyaos_tls_row {
-    TKL_THREAD_HANDLE task; /* FreeRTOS task handle from tkl_thread_get_id() */
+    THREAD_HANDLE task; /* OS task identity from tal_thread_get_id() */
     int in_use;
     void *vals[PJ_TUYAOS_TLS_KEYS];
 } pj_tuyaos_tls_row;
@@ -102,11 +101,11 @@ static pj_status_t map_oprt(OPERATE_RET rt)
  * @brief Current OS task id (same identity OS pthread shim uses)
  * @return task handle, or NULL on failure
  */
-static TKL_THREAD_HANDLE __tls_self_task(void)
+static THREAD_HANDLE __tls_self_task(void)
 {
-    TKL_THREAD_HANDLE id = NULL;
+    THREAD_HANDLE id = NULL;
 
-    (void)tkl_thread_get_id(&id);
+    (void)tal_thread_get_id(&id);
     return id;
 }
 
@@ -114,13 +113,13 @@ static TKL_THREAD_HANDLE __tls_self_task(void)
  * @brief Find or allocate TLS row for the calling OS task
  * @param[in] create allocate a free row when not found
  * @return row pointer or NULL
- * @note Match by tkl_thread_get_id() only. Never share a "main" row across tasks
+ * @note Match by tal_thread_get_id() only. Never share a "main" row across tasks
  *       (that caused pj_thread_register2 on every sendto and heap thrashing).
  */
 static pj_tuyaos_tls_row *__tls_row_current(int create)
 {
     int i;
-    TKL_THREAD_HANDLE self = __tls_self_task();
+    THREAD_HANDLE self = __tls_self_task();
 
     if (s_tls_lock) {
         tal_mutex_lock(s_tls_lock);

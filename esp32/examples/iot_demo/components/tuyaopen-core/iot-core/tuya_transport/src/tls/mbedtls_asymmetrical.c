@@ -1,6 +1,10 @@
 /**
  * @file mbedtls_asymmetrical.c
- * @brief This is aes implementation based on mbedtls
+ * @brief 非对称加密（RSA/ECC）占位文件：当前无任何实现，待后续接入。
+ *
+ * 原文件仅为非对称加密的 mbedtls 实现预留位置，未定义任何函数；后续按需在此
+ * 补充 RSA/ECC 的 TAL 实现（直接作为 TAL 层实现，不再经 tkl 透传）。
+ * 本文件保留（至少保留一个 include），以避免空编译单元告警。
  *
  * @copyright Copyright 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -11,11 +15,7 @@
  ** INCLUDE                                                           **
  **********************************************************************/
 #include "tuya_iot_config.h"
-#include "tkl_memory.h"
-#include "tkl_asymmetrical.h"
-#if !defined(ENABLE_PLATFORM_RSA)
 #include "mbedtls/rsa.h"
-#endif
 /***********************************************************************
  ** CONSTANT ( MACRO AND ENUM )                                       **
  **********************************************************************/
@@ -34,9 +34,3 @@
 /***********************************************************************
  ** FUNCTON                                                           **
  **********************************************************************/
-
-
-#if !defined(ENABLE_PLATFORM_RSA)
-
-
-#endif

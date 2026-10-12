@@ -325,3 +325,30 @@ OPERATE_RET tal_thread_delete(const THREAD_HANDLE handle)
     return OPRT_OK;
 }
 
+/**
+ * @brief 取"当前调用线程"的不透明身份句柄
+ *
+ * @param[out] thread: 线程身份句柄。同一线程恒得同一值；不要求与
+ *             tal_thread_create_and_start 产出的 handle 同类
+ *
+ * @return OPERATE_RET
+ *     - OPRT_OK: 成功
+ *     - OPRT_INVALID_PARM: thread 为 NULL
+ *     - OPRT_COM_ERROR: 平台 ops 未提供 thread_get_id
+ */
+OPERATE_RET tal_thread_get_id(THREAD_HANDLE *thread)
+{
+    if (NULL == thread) {
+        PR_ERR("Para null");
+        return OPRT_INVALID_PARM;
+    }
+
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL == ops || NULL == ops->thread_get_id) {
+        PR_ERR("TAL API operation %s not available", "thread_get_id");
+        return OPRT_COM_ERROR;
+    }
+
+    return ops->thread_get_id(thread);
+}
+
