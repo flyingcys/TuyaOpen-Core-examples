@@ -4,14 +4,11 @@
 #include "tal_log.h"
 #include "tal_memory.h"
 #include "tal_system.h"
-#include "tal_ipc.h"
-#include "tkl_memory.h"
+#include "tal_audio_enc.h"
 
 #define OS_Malloc(req_size) tal_malloc(req_size)
 #define OS_Calloc(req_count, req_size) tal_calloc(req_count, req_size)
 #define OS_Free(ptr) tal_free(ptr)
-
-extern OPERATE_RET tkl_audio_enc_request(VOID *enc_para);
 
 STATIC IPC_AUDIO_ENC_PARA_T *__ipc_para_alloc(IPC_AUDIO_ENC_OPS_E ops, TUYA_AI_ENCODER_INFO_T *info, int out_buf_len)
 {
@@ -56,7 +53,7 @@ STATIC OPERATE_RET _encoder_opus_ipc_create(AI_ENCODE_HANDLE_T *handle, TUYA_AI_
         return OPRT_MALLOC_FAILED;
     }
 
-    rt = tkl_audio_enc_request(enc_para);
+    rt = tal_audio_enc_request(enc_para);
     if (rt != OPRT_OK || enc_para->handle == NULL) {
         __ipc_para_free(enc_para);
         return rt;
@@ -74,7 +71,7 @@ STATIC OPERATE_RET _encoder_opus_ipc_destroy(AI_ENCODE_HANDLE_T handle)
         return OPRT_MALLOC_FAILED;
     }
     enc_para->handle = handle; // Set the encoder handle to be destroyed
-    rt = tkl_audio_enc_request(enc_para);
+    rt = tal_audio_enc_request(enc_para);
     if (rt != OPRT_OK) {
         __ipc_para_free(enc_para);
         return rt;
@@ -98,7 +95,7 @@ STATIC OPERATE_RET _encoder_opus_ipc_encode(AI_ENCODE_HANDLE_T handle, UCHAR_T *
 #if ENCODER_TIMESTAMP_PR
     SYS_TIME_T start = tal_system_get_millisecond();
 #endif
-    rt = tkl_audio_enc_request(enc_para);
+    rt = tal_audio_enc_request(enc_para);
 #if ENCODER_TIMESTAMP_PR
     SYS_TIME_T end = tal_system_get_millisecond();
     SYS_TIME_T delta = end - start;

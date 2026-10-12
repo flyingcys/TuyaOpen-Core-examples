@@ -137,13 +137,18 @@ port 侧 `tuya_cloud_types.h` 的两个类型枚举（`TUYA_QSPI_TYPE_PSRAM`/`TY
 
 **仅剩的门控代码直调**（当前构建不编译，记录在案）：`iot-core/ble/tal_bluetooth.c`
 （32 处 `tkl_ble_*` + 112 处 `TKL_BLE_*` 类型，`CONFIG_ENABLE_BLUETOOTH` 门控）、
-`agent-core/ai_audio/src/ai_audio_input.c`（`tkl_vad_*`）、
-`agent-core/tuya_ai_service/svc_ai_codec/src/tuya_ai_encoder_{opus,speex}_ipc.c`
-（`tkl_audio_enc_request`——该符号在 core/port 均无实现，是死代码）。注意 encoder
-两个文件是**二级开关**门控：`CONFIG_ENABLE_TUYA_CODEC` 只带进 `tuya_ai_encoder.c`，
-带 tkl 的 `*_ipc.c` 由 `CONFIG_ENABLE_TUYA_CODEC_OPUS_IPC`/`_SPEEX` 控制
-（`agent_demo` 只开了第一级）——未来误开二级开关会让 tkl_ 进编译，本门禁会立即报红。
-要清这三处需分别建 BLE 卡（约 34 成员）与 AI 音频卡，工作量另计。
+`agent-core/ai_audio/src/ai_audio_input.c`（`tkl_vad_*`，`CONFIG_ENABLE_COMP_AI_AUDIO`
+门控）。要清这两处需分别建 BLE 卡（约 34 成员）与 VAD 卡（4 接口），工作量另计。
+
+**AI 音频编码已建卡收编（2026-10 二轮）**：`svc_ai_codec` 的 opus/speex IPC 编码器
+变体原直调 `tkl_audio_enc_request`（上游 TKL 平台接口；文件还带着全树不存在的
+`tal_ipc.h`/`tkl_ipc.h` 死 include，从基线起就编不了），现经 `tal_audio_enc_request`
+→ `TAL_AUDIO_ENC_OPS_T`（`tal_audio_enc_ops.h`）分发；两 port 以空卡组装
+（`port/src/tkl_ai_codec.c`，成员 NULL → 分发返回 OPRT_NOT_SUPPORTED，与门控关闭
+现状一致）。附带收益：两文件变为可编译——**二级开关（`CONFIG_ENABLE_TUYA_CODEC_*_IPC`）
+打开后整条路径可编译可链接**（实测 agent_demo `-DCONFIG_ENABLE_TUYA_CODEC_OPUS_IPC=ON
+-DCONFIG_ENABLE_TUYA_CODEC_SPEEX_IPC=ON` 构建 exit=0，`tal_audio_enc_request` 与
+`g_tuya_ai_encoder_opus_ipc` 均在二进制符号表）。
 
 ### 2.4 TKL 头与 core 的关系
 
