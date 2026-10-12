@@ -114,13 +114,20 @@ for a in $(find <build> -name 'lib*.a' -path '*tuyaopen-core*'); do nm -u "$a" |
 port 侧仅剩 `tuya_cloud_types.h` 的两个类型枚举（`TUYA_QSPI_TYPE_PSRAM`/
 `TYPE_PSRAM`，芯片/内存类型分类、无使用者，删除会移动枚举数值，暂留）。
 
-**改动文件的验证分档**（供后续评审区分证据强度，勿平铺成"都不被编译"）：24 个
-文件中 20 个经三 demo / esp32 构建编译验证；4 个不被任何构建编译——
-`ai_mcp_server.c`/`local_store.c` 经 `-fsyntax-only`（新基线 include 路径）
-**编译验证通过**（纯删除）；`ai_audio_input.c`/`tuya_ai_encoder_opus_ipc.c` 因
-依赖头整层不在本树（`tkl_vad.h`/`tdl_audio_manage.h`/`tal_ipc.h`，pre-existing：
-44fb790 基线即如此、这些 include 行未被改动触及）**无法编译验证**，仅
-"diff 纯删除 + 字段无读取方（全仓 grep 只有 setter）"佐证。
+**改动文件的验证分档**（供后续评审区分证据强度，勿平铺成"都不被编译"；**分母口径：
+24 个改动文件 = 18 个 .c + 4 个 .h + 2 个 Kconfig**）：
+- **18 个 .c**：14 个经三 demo / esp32 构建编译验证；4 个不被任何构建编译——
+  `ai_mcp_server.c`/`local_store.c` 经 `-fsyntax-only`（新基线 include 路径）
+  **编译验证通过**（纯删除）；`ai_audio_input.c`/`tuya_ai_encoder_opus_ipc.c` 因
+  依赖头整层不在本树（`tkl_vad.h`/`tdl_audio_manage.h`/`tal_ipc.h`，pre-existing：
+  44fb790 基线即如此、这些 include 行未被改动触及）**无法编译验证**，仅
+  "diff 纯删除 + 字段无读取方（全仓 grep 只有 setter）"佐证。注意同层两文件缺头
+  成因不同（opus 是 `tal_ipc.h`、未改动的 speex 是 `tkl_ipc.h`，两者都不存在），
+  将来补这层时名字不同；
+- **4 个 .h**：经包含它们的在编 TU 间接验证（`tal_thread.h` / `tuya_ringbuf.h` /
+  `core_http_config.h`〔coreHTTP 的 `core_http_client.h:57` 包含〕/ `tuya_ai_private.h`）；
+- **2 个 Kconfig**：经 linux `.config` 与 esp32 sdkconfig 的构建解析验证；
+- 另：预处理指令配平检查的分母是 **22** = 18 .c + 4 .h（Kconfig 非 C 预处理文件）。
 
 **为什么 tuya_queue / tuya_ringbuf 要上移**：它们在 `tuya_utilities`（最底层，被
 `tal_system` PUBLIC 依赖，`tal_workqueue` 就在 tal_system 内用它），不能反向依赖
