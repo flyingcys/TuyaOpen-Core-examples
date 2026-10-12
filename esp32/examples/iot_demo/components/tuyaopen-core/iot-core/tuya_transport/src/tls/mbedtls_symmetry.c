@@ -47,8 +47,12 @@ OPERATE_RET  tal_aes_create_init( TAL_SYMMETRY_HANDLE *ctx ){
 
     mbedtls_aes_context *mbedtls_aes_ctx;
 
-    mbedtls_aes_ctx =(mbedtls_aes_context *) tal_malloc(sizeof(mbedtls_aes_context));    
-    mbedtls_aes_init(mbedtls_aes_ctx);
+    mbedtls_aes_ctx =(mbedtls_aes_context *) tal_malloc(sizeof(mbedtls_aes_context));
+    if (mbedtls_aes_ctx) {
+        mbedtls_aes_init(mbedtls_aes_ctx);
+    } else {
+        return OPRT_MALLOC_FAILED;
+    }
     *ctx = mbedtls_aes_ctx;
 
     return OPRT_OK;

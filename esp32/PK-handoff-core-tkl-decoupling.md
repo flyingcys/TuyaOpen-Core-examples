@@ -53,7 +53,9 @@
 
 ### 仍开放的欠账（待用户拍板，非本次引入）
 
-- `tal_aes_create_init` 不查 `tal_malloc` 返回值（对端用户裁决中，与 cipher_wrapper 同类不同点）
+- `tal_aes_create_init` 不查 `tal_malloc` 返回值——**2026-10-12 用户裁决"修复"，
+  已落地**（镜像 hash 版写法：`if (ctx) init else return OPRT_MALLOC_FAILED`；
+  linux 三 demo + esp32 构建通过）。至此 PK 记录的两条同类欠账全部关闭。
 
 ---
 
