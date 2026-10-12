@@ -91,6 +91,10 @@ for a in $(find <build> -name 'lib*.a' -path '*tuyaopen-core*'); do nm -u "$a" |
 # 2026-10 基线实测：三个 demo 构建树 × 19 个 core 归档 → 全部 0；port 归档定义 92 个
 ```
 
+**验证边界**：以上为**静态/链接期**判据，**不含真机运行验证**（esp32 真机截至
+2026-10-12 未烧录）。运行时证据在 linux 侧（自检 + demo 运行对比）；esp32 侧烧录后
+以串口实际行为为准（见 §8 的边界提示）。
+
 曾经有 5 组"不走卡"的直调例外，已按"core 不直调 tkl"原则逐一收编：
 
 | 原直调 | 收编方式 |
@@ -98,8 +102,8 @@ for a in $(find <build> -name 'lib*.a' -path '*tuyaopen-core*'); do nm -u "$a" |
 | `tkl_system_malloc/free`（tuya_queue / tuya_ringbuf / mbedtls 适配层） | 前两模块**上移** `iot-core/tal_system/`，改走 `tal_malloc`/`tal_free`（经主卡分发）；mbedtls 适配层改 `tal_*` |
 | `tkl_mutex_*`（tuya_queue 宏直调） | 同上，改走 `tal_mutex_*`；句柄类型 `TKL_MUTEX_HANDLE` → `MUTEX_HANDLE` |
 | crypto 透传层（`tal_hash.c`/`tal_symmetry.c` → `tkl_sha256_*`/`tkl_aes_*`） | 透传层删除，`mbedtls_hash.c`/`mbedtls_symmetry.c` 的实现**直接就是** `tal_*`；句柄类型改 core 自持的 `TAL_HASH_HANDLE`/`TAL_SYMMETRY_HANDLE`；原 `ENABLE_PLATFORM_*` 平台覆盖点一并删除（全仓无人定义，是死代码；硬件加速走 mbedtls ALT，见 §4.5） |
-| `tkl_system_psram_malloc/free`（p2p） | **删除**（口径：psram 全部去掉）；`tuya_ipc_skill.c` 改 `tal_malloc`/`tal_free`；两 port 的 tkl psram 符号与声明一并清理。**注意语义变化**：原为 PSRAM 专属分配，现走普通堆——esp32 开 SPIRAM 时 IDF 的 malloc 默认优先用 PSRAM，但大 buffer（如 SKILL_PARAM_LEN）的分配区域**不再是显式保证** |
-| `tkl_thread_get_id`（p2p pjlib） | 主卡新增 `thread_get_id` 成员 + 新 TAL API `tal_thread_get_id`；两 port 原有实现解门控、接线到卡 |
+| `tkl_system_psram_malloc/free`（p2p） | **删除**（口径：psram 全部去掉）；`tuya_ipc_skill.c` 改 `tal_malloc`/`tal_free`；两 port 的 tkl psram 符号与声明一并清理。**等价性（实测）**：当前 esp32 sdkconfig 未开 SPIRAM（`# CONFIG_SPIRAM is not set`），改造前该实现经 `#if CONFIG_SPIRAM` 直接落到普通 `tkl_system_malloc` → **当前配置下改造前后落点完全相同**；仅将来启用 SPIRAM 时，显式 `MALLOC_CAP_SPIRAM` 能力位才退化为 malloc 默认策略（落点不再显式钉外部 RAM；常驻增量仅 2×512B） |
+| `tkl_thread_get_id`（p2p pjlib） | 主卡新增 `thread_get_id` 成员 + 新 TAL API `tal_thread_get_id`；两 port 原有实现解门控、接线到卡（**函数体逐字未变**——值域/语义与改造前相同；任务退出后 TCB 复用导致 pjlib TLS 旧行失配属 pjlib 既有属性，与本次解耦无关） |
 
 **为什么 tuya_queue / tuya_ringbuf 要上移**：它们在 `tuya_utilities`（最底层，被
 `tal_system` PUBLIC 依赖，`tal_workqueue` 就在 tal_system 内用它），不能反向依赖
@@ -546,6 +550,11 @@ core 已无 wifi 抽象（`tal_wifi`/`tkl_wifi` 随 netmgr 整体移除），所
 ---
 
 ## 8. 构建与烧录速查（esp-idf v5.4）
+
+> **验证边界**：本文档中"零 tkl / 构建通过 / 符号核对"等判据均为**静态/链接期**口径，
+> **不含 esp32 真机运行验证**（截至 2026-10-12 未烧录）。linux 侧有运行时证据
+> （自检 + demo 运行对比）；esp32 侧烧录后请以串口实际行为为准，不要把"门禁全绿"
+> 当作"真机可用"。
 
 ```bash
 # 环境（v5.4 的 venv 是 py3.12，需让 PATH 先找到 py3.12；用 tuyaopen 自带的）
