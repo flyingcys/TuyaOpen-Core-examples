@@ -101,6 +101,30 @@ if(_port_srcs)
         target_compile_definitions(tuyaopen-port PRIVATE ENABLE_AI_COMPONENTS=1)
     endif()
 
+    # AI 播放器消费端（tkl_ai_player_consumer.c）：把 svc_ai_player 解码后的 PCM
+    # 写进 ALSA（16k/16bit/mono）。core 的契约头 svc_ai_player.h 在
+    # agent-core/audio_player/include，需补进包含路径；libasound 经 pkg-config
+    # 探测（写法同 BT 的 GIO/DBUS）。
+    # 同一宏还放行 tkl_fs.c 的门控（见文件头：P2P || AI_PLAYER）——AI 播放器的
+    # 文件源（datasink_file.c → tal_fopen）会把 core 的 tal_fs.o 拉进链接，
+    # 没有 P2P 也必须提供 tal_fs_ops 卡。
+    if(CONFIG_ENABLE_AI_PLAYER)
+        target_compile_definitions(tuyaopen-port PRIVATE ENABLE_AI_PLAYER=1)
+        target_include_directories(tuyaopen-port PRIVATE
+            "${PORT_ROOT}/../tuyaopen-core/agent-core/audio_player/include")
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(ALSA alsa QUIET)
+        endif()
+        if(ALSA_FOUND)
+            target_include_directories(tuyaopen-port PRIVATE ${ALSA_INCLUDE_DIRS})
+            target_link_libraries(tuyaopen-port PRIVATE ${ALSA_LIBRARIES})
+        else()
+            # 无 pkg-config 的兜底：直接按库名链接（libasound2-dev 提供）
+            target_link_libraries(tuyaopen-port PRIVATE asound)
+        endif()
+    endif()
+
     if(EXISTS "${PORT_ROOT}/src/tkl_kv.c")
         # tkl_kv（littlefs + AES）：include tal_log/tal_memory/tal_mutex（tal_system）
         # 与 tal_security（tuya_transport，随 tal_system 的 PUBLIC 依赖传播）

@@ -3,9 +3,10 @@
  * @brief agent_demo 主流程
  *
  * 链路：IoT 激活/连云 →（MQTT 连上后）初始化 AI agent → 等客户端就绪 →
- *       自动上传一段预置语音（触发）→ 下行只打印文字（ASR/NLG）。
+ *       自动上传一段预置语音（触发）→ 下行打印文字（ASR/NLG）。
  *
- * 无 UI；下行语音不处理（AI 音频模块整体关闭，媒体包在 core 内丢弃）；
+ * 无 UI；下行语音在 CONFIG_ENABLE_COMP_AI_AUDIO 开启时经 port 注入的 ALSA
+ * 消费端播放（tkl_ai_player_consumer），关闭时媒体包在 core 内丢弃；
  * 上行音频经 port 的 tkl_ai_demo_* 契约取得（Linux：PCM 文件回放）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
@@ -30,6 +31,14 @@
  * include 路径也随之消失，故 include 与调用一并由宏守卫（同下方 ENABLE_QRCODE 写法） */
 #if defined(ENABLE_COMP_AI_MCP) && (ENABLE_COMP_AI_MCP == 1)
 #include "ai_mcp.h"
+#endif
+
+/* 下行语音播放（agent-core/ai_audio，B 波次恢复）：ai_audio_player_init 建立
+ * 播放服务（内部 tuya_ai_player_service_init），port 的 ALSA 消费端随后注入。
+ * 同 MCP：关开关时头与目标都不存在，include 与调用一并由宏守卫 */
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+#include "ai_audio_player.h"
+#include "tkl_ai_player_consumer.h"
 #endif
 
 #include <assert.h>
@@ -311,6 +320,24 @@ void user_main(void)
     });
     tal_sw_timer_init();
     tal_workq_init();
+
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+    /* 下行语音播放初始化（放 main 初始化段、MQTT 之前的理由）：
+     * - ai_audio_player_init 内部走 tuya_ai_player_service_init（建线程/队列，
+     *   纯本地、不依赖网络），只需 TAL 运行时先就绪（故在 tal_workq_init 之后）；
+     * - 下行 TTS 在 MQTT_CONNECTED 之后才可能到达，播放服务须先就绪，
+     *   否则首个音频包落在默认空消费端上被丢弃；
+     * - install 必须在 init 之后：service_init 会装载默认空消费端，
+     *   set_consumer 才是最终替换点（时序见 tkl_ai_player_consumer.h）；
+     * - 失败不阻断主流程：打印错误继续，下行降级为无声（默认空消费端行为） */
+    rt = ai_audio_player_init();
+    if (rt == OPRT_OK) {
+        PR_NOTICE("[AGENT] ai_audio_player initialized, ALSA consumer install rt=%d",
+                  tkl_ai_player_consumer_install());
+    } else {
+        PR_ERR("[AGENT] ai_audio_player_init failed: %d (downlink audio disabled)", rt);
+    }
+#endif
 
     /* 连续复位 3 次清配网（同 iot_demo/p2p_demo 的 reset_netcfg） */
     reset_netconfig_start();

@@ -85,7 +85,7 @@ static void __agent_downlink_event(AI_NOTIFY_EVENT_T *event)
 OPERATE_RET agent_downlink_init(void)
 {
     ai_user_event_notify_register(__agent_downlink_event);
-    PR_NOTICE("[AGENT] downlink handler registered (text only, audio dropped)");
+    PR_NOTICE("[AGENT] downlink handler registered (text events; TTS/music audio via ai_audio_player)");
 
     return OPRT_OK;
 }

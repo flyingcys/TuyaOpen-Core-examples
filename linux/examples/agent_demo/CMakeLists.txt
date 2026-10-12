@@ -62,6 +62,18 @@ endif()
 if(NOT DEFINED CONFIG_ENABLE_TUYA_CODEC)
     set(CONFIG_ENABLE_TUYA_CODEC ON)
 endif()
+# 下行语音播放：agent-core 的 AI 播放器（audio_player）及其平台消费端。
+# - CONFIG_ENABLE_AI_PLAYER：audio_player 模块 + port 的 ALSA 消费端
+#   （tkl_ai_player_consumer）+ tkl_fs 卡（文件源用）；不开则无播放能力；
+# - CONFIG_ENABLE_COMP_AI_AUDIO：ai_audio 组件（ai_audio_player_init 包装
+#   svc_ai_player），tuya_main.c 的接线调用由该宏守卫。
+# 二者都内置默认 ON（关掉需显式 -D 或在 .config 里 is not set）
+if(NOT DEFINED CONFIG_ENABLE_AI_PLAYER)
+    set(CONFIG_ENABLE_AI_PLAYER ON)
+endif()
+if(NOT DEFINED CONFIG_ENABLE_COMP_AI_AUDIO)
+    set(CONFIG_ENABLE_COMP_AI_AUDIO ON)
+endif()
 
 # 素材路径默认（与 Kconfig 默认一致；空值走构建目录的 voice_16k.pcm）
 if(NOT DEFINED CONFIG_AGENT_DEMO_AUDIO_FILE)
