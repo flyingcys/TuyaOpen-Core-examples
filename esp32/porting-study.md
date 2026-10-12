@@ -82,7 +82,13 @@ demo: tal_system_sleep(500)
 
 ```bash
 /usr/bin/grep -rn '\btkl_[a-z_]*(' linux/tuyaopen-core --include='*.c' --include='*.h'
-# 期望：仅剩注释 + 两个门控模块（见本节末尾）
+# 期望（2026-10 基线，esp32 快照同数）：48 行命中 = 46 行门控代码
+# （ble 32 + agent-core AI 14）+ 2 行注释（tal_system.c 的 doxygen）；在编代码 0 行
+
+# 对象级补充门禁（更强，需构建产物）：core 全部归档的 tkl_ 未定义符号应为 0
+# （二进制级 nm -u 为 0 是必要不充分——被 port 解析后就隐形了，对象级才是真门禁）
+for a in $(find <build> -name 'lib*.a' -path '*tuyaopen-core*'); do nm -u "$a" | grep -c '\btkl_'; done
+# 2026-10 基线实测：三个 demo 构建树 × 19 个 core 归档 → 全部 0；port 归档定义 92 个
 ```
 
 曾经有 5 组"不走卡"的直调例外，已按"core 不直调 tkl"原则逐一收编：
@@ -92,7 +98,7 @@ demo: tal_system_sleep(500)
 | `tkl_system_malloc/free`（tuya_queue / tuya_ringbuf / mbedtls 适配层） | 前两模块**上移** `iot-core/tal_system/`，改走 `tal_malloc`/`tal_free`（经主卡分发）；mbedtls 适配层改 `tal_*` |
 | `tkl_mutex_*`（tuya_queue 宏直调） | 同上，改走 `tal_mutex_*`；句柄类型 `TKL_MUTEX_HANDLE` → `MUTEX_HANDLE` |
 | crypto 透传层（`tal_hash.c`/`tal_symmetry.c` → `tkl_sha256_*`/`tkl_aes_*`） | 透传层删除，`mbedtls_hash.c`/`mbedtls_symmetry.c` 的实现**直接就是** `tal_*`；句柄类型改 core 自持的 `TAL_HASH_HANDLE`/`TAL_SYMMETRY_HANDLE`；原 `ENABLE_PLATFORM_*` 平台覆盖点一并删除（全仓无人定义，是死代码；硬件加速走 mbedtls ALT，见 §4.5） |
-| `tkl_system_psram_malloc/free`（p2p） | **删除**（口径：psram 全部去掉）；`tuya_ipc_skill.c` 改 `tal_malloc`/`tal_free`；两 port 的 tkl psram 符号与声明一并清理 |
+| `tkl_system_psram_malloc/free`（p2p） | **删除**（口径：psram 全部去掉）；`tuya_ipc_skill.c` 改 `tal_malloc`/`tal_free`；两 port 的 tkl psram 符号与声明一并清理。**注意语义变化**：原为 PSRAM 专属分配，现走普通堆——esp32 开 SPIRAM 时 IDF 的 malloc 默认优先用 PSRAM，但大 buffer（如 SKILL_PARAM_LEN）的分配区域**不再是显式保证** |
 | `tkl_thread_get_id`（p2p pjlib） | 主卡新增 `thread_get_id` 成员 + 新 TAL API `tal_thread_get_id`；两 port 原有实现解门控、接线到卡 |
 
 **为什么 tuya_queue / tuya_ringbuf 要上移**：它们在 `tuya_utilities`（最底层，被
@@ -104,8 +110,11 @@ demo: tal_system_sleep(500)
 （32 处 `tkl_ble_*` + 112 处 `TKL_BLE_*` 类型，`CONFIG_ENABLE_BLUETOOTH` 门控）、
 `agent-core/ai_audio/src/ai_audio_input.c`（`tkl_vad_*`）、
 `agent-core/tuya_ai_service/svc_ai_codec/src/tuya_ai_encoder_{opus,speex}_ipc.c`
-（`tkl_audio_enc_request`——该符号在 core/port 均无实现，是死代码）。要清这三处需
-分别建 BLE 卡（约 34 成员）与 AI 音频卡，工作量另计。
+（`tkl_audio_enc_request`——该符号在 core/port 均无实现，是死代码）。注意 encoder
+两个文件是**二级开关**门控：`CONFIG_ENABLE_TUYA_CODEC` 只带进 `tuya_ai_encoder.c`，
+带 tkl 的 `*_ipc.c` 由 `CONFIG_ENABLE_TUYA_CODEC_OPUS_IPC`/`_SPEEX` 控制
+（`agent_demo` 只开了第一级）——未来误开二级开关会让 tkl_ 进编译，本门禁会立即报红。
+要清这三处需分别建 BLE 卡（约 34 成员）与 AI 音频卡，工作量另计。
 
 ### 2.4 TKL 头与 core 的关系
 
@@ -436,8 +445,10 @@ ROM 里的 mbedtls 在跑，它把 mutex/calloc/free 及 SHA 的 update 等回�
   port 引 tal API 是卡机制的固有双向依赖。**实测（2026-10 解耦后）**：
   - esp32：去掉链接组后链接失败，报的正是**卡实例未定义**
     （`tal_api_ops_platform`/`tal_ota_ops_platform`/…）→ 组必需；
-  - linux：CMake 对静态库依赖环会自动重复库（链接行里 `libtuyaopen-port.a`、
-    核心库出现两次），去掉显式组仍链接成功 → 显式组是冗余保险。
+  - linux：链接行由 CMake 按依赖闭包生成、库列表本身就含重复（`libtuyaopen-port.a`
+    在组内/组外各出现一次，是 app 的 CMakeLists 显式列了两处；`libtal_system.a`
+    出现三次是 CMake 的闭包展开），去掉显式组后仍链接成功 → 显式组在 linux 侧
+    是冗余保险。
 
 ### 5.2 两个平台的解法（同一个机制）
 
