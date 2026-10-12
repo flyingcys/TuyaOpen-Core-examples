@@ -35,7 +35,6 @@
 
 #define AI_MQ_PROTO_NUM        9000
 #define AI_SEM_ACK_TIMEOUT     6000
-#define AI_ATOP_THING_CONFIG_INFO "thing.aigc.basic.server.config.info"
 
 typedef struct {
     AI_SERVER_CFG_INFO_T config;
@@ -347,31 +346,6 @@ STATIC OPERATE_RET __ai_mq_parse_ser_cfg(ty_cJSON *root)
 
 EXIT:
     __ai_mq_ser_cfg_free();
-    return rt;
-}
-
-OPERATE_RET tuya_ai_atop_ser_cfg_req(VOID)
-{
-    OPERATE_RET rt = OPRT_OK;
-    UINT64_T bizTag = 0;
-    ty_cJSON *root = ty_cJSON_CreateObject();
-    TUYA_CHECK_NULL_RETURN(root, OPRT_MALLOC_FAILED);
-    ty_cJSON_AddNumberToObject(root, "bizTag", bizTag);
-    CHAR_T *post_data = ty_cJSON_PrintUnformatted(root);
-    ty_cJSON_Delete(root);
-    TUYA_CHECK_NULL_RETURN(post_data, OPRT_MALLOC_FAILED);
-
-    ty_cJSON *result = NULL;
-    rt = iot_httpc_common_post(AI_ATOP_THING_CONFIG_INFO, "1.0", NULL, get_gw_dev_id(),
-                               post_data, NULL, &result);
-    OS_FREE(post_data);
-    if (OPRT_OK != rt) {
-        PR_ERR("http post err, rt:%d", rt);
-        return rt;
-    }
-
-    rt = __ai_mq_parse_ser_cfg(result);
-    ty_cJSON_Delete(result);
     return rt;
 }
 

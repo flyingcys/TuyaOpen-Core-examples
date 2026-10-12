@@ -3,7 +3,7 @@
  * @brief Cloud event skill module header.
  *
  * This header provides function declarations for parsing and processing
- * cloud events, including TTS playback commands.
+ * cloud events (playTts / alert action dispatch).
  *
  * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.
  *
@@ -14,7 +14,6 @@
 
 #include "tuya_cloud_types.h"
 #include "cJSON.h"
-#include "skill_music_story.h"
 #include "tuya_ai_protocol.h"
 
 #ifdef __cplusplus

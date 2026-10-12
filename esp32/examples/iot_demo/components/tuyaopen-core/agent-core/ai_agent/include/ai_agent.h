@@ -38,49 +38,6 @@ extern "C" {
 */
 OPERATE_RET ai_agent_init(void);
 
-/**
-@brief Deinitialize the AI agent module
-@return OPERATE_RET Operation result
-*/
-OPERATE_RET ai_agent_deinit(void);
-
-/**
-@brief Send text input to AI agent
-@param content Text content to send
-@return OPERATE_RET Operation result
-*/
-OPERATE_RET ai_agent_send_text(char *content);
-
-/**
-@brief Send file data to AI agent
-@param data Pointer to file data
-@param len File data length
-@return OPERATE_RET Operation result
-*/
-OPERATE_RET ai_agent_send_file(uint8_t *data, uint32_t len);
-
-/**
-@brief Send image data to AI agent
-@param data Pointer to image data
-@param len Image data length
-@return OPERATE_RET Operation result
-*/
-OPERATE_RET ai_agent_send_image(uint8_t *data, uint32_t len);
-
-/**
-@brief Request cloud alert from AI agent
-@param type Alert type
-@return OPERATE_RET Operation result
-*/
-OPERATE_RET ai_agent_cloud_alert(AI_ALERT_TYPE_E type);
-
-/**
-@brief Switch AI agent role
-@param role Role name to switch to
-@return OPERATE_RET Operation result
-*/
-OPERATE_RET ai_agent_role_switch(char *role);
-
 #ifdef __cplusplus
 }
 #endif

@@ -31,7 +31,6 @@
 #define AI_BIZ_MAX_NUM 5
 #endif
 
-#define EVENT_AI_SESSION_NEW       "ai.session.new"
 #define EVENT_AI_SESSION_CLOSE     "ai.session.close"
 
 typedef union {
@@ -211,16 +210,6 @@ typedef struct {
 OPERATE_RET tuya_ai_biz_crt_session(UINT_T bizCode, UINT64_T bizTag, AI_SESSION_CFG_T *cfg, BYTE_T *attr, UINT_T attr_len, CHAR_T *token, AI_SESSION_ID id);
 
 /**
- * @brief delete session
- *
- * @param[in] id session id
- * @param[in] code close code
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_biz_del_session(AI_SESSION_ID id, AI_STATUS_CODE code);
-
-/**
  * @brief send ai biz packet
  *
  * @param[in] id channel id
@@ -283,61 +272,6 @@ VOID tuya_ai_biz_deinit(VOID);
  * @return session cfg
  */
 AI_SESSION_CFG_T* tuya_ai_biz_get_session_cfg(AI_SESSION_ID id);
-
-/**
- * @brief parse video attribute
- *
- * @param[in] de_buf decrypted buffer
- * @param[in] attr_len length of the attribute
- * @param[out] video pointer to AI_VIDEO_ATTR_T structure to fill in
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_parse_video_attr(CHAR_T *de_buf, UINT_T attr_len, AI_VIDEO_ATTR_T *video);
-
-/**
- * @brief parse audio attribute
- *
- * @param[in] de_buf decrypted buffer
- * @param[in] attr_len length of the attribute
- * @param[out] audio pointer to AI_AUDIO_ATTR_T structure to fill in
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_parse_audio_attr(CHAR_T *de_buf, UINT_T attr_len, AI_AUDIO_ATTR_T *audio);
-
-/**
- * @brief parse image attribute
- *
- * @param[in] de_buf decrypted buffer
- * @param[in] attr_len length of the attribute
- * @param[out] image pointer to AI_IMAGE_ATTR_T structure to fill in
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_parse_image_attr(CHAR_T *de_buf, UINT_T attr_len, AI_IMAGE_ATTR_T *image);
-
-/**
- * @brief parse file attribute
- *
- * @param[in] de_buf decrypted buffer
- * @param[in] attr_len length of the attribute
- * @param[out] file pointer to AI_FILE_ATTR_T structure to fill in
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_parse_file_attr(CHAR_T *de_buf, UINT_T attr_len, AI_FILE_ATTR_T *file);
-
-/**
- * @brief parse text attribute
- *
- * @param[in] de_buf decrypted buffer
- * @param[in] attr_len length of the attribute
- * @param[out] text pointer to AI_TEXT_ATTR_T structure to fill in
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_parse_text_attr(CHAR_T *de_buf, UINT_T attr_len, AI_TEXT_ATTR_T *text);
 
 /**
  * @brief parse event attribute

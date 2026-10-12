@@ -109,25 +109,4 @@ OPERATE_RET tuya_ai_event_one_shot(AI_SESSION_ID sid, AI_EVENT_ID eid, BYTE_T *a
  */
 OPERATE_RET tuya_ai_event_mcp(AI_SESSION_ID sid, AI_EVENT_ID eid, CHAR_T *data);
 
-/**
- * @brief event trigger
- *
- * @param[in] sid session id
- * @param[in] eid event id
- * @param[in] attr attr user data
- * @param[in] len attr user len
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_event_trigger(AI_SESSION_ID sid, AI_EVENT_ID eid, BYTE_T *attr, UINT_T len);
-
-/**
- * @brief Update session context with custom parameters
- * @param[in] sid session id
- * @param[in] eid event id
- * @param[in] value context string
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_event_update_context(AI_SESSION_ID sid, AI_EVENT_ID eid, CHAR_T *value);
-
 #endif

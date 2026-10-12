@@ -18,7 +18,6 @@
  */
 
 #include "uni_log.h"
-#include "tuya_ws_db.h"
 #include "tal_thread.h"
 #include "tal_system.h"
 #include "tal_memory.h"
@@ -47,7 +46,6 @@ typedef enum {
     AI_OUTPUT_PLAYING,
     AI_OUTPUT_STOPPING,
     AI_OUTPUT_IDLE,
-    AI_OUTPUT_MAX
 } AI_OUTPUT_STATUS_E;
 
 typedef struct {

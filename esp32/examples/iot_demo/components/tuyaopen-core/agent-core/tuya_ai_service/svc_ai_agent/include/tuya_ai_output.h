@@ -58,13 +58,6 @@ typedef enum {
     AT_MAX
 } AI_ALERT_TYPE_E;
 
-typedef enum {
-    AI_OUTPUT_CBS_MODE_NORMAL  = 0,
-    AI_OUTPUT_CBS_MODE_MONITOR = AI_OUTPUT_CBS_MODE_NORMAL, // ext cbs callback does not affect default cbs
-    AI_OUTPUT_CBS_MODE_FILTER,                              // after ext cbs callback, default cbs will not be called
-    AI_OUTPUT_CBS_MODE_MAX
-} AI_OUTPUT_CBS_MODE_E;
-
 typedef BYTE_T AI_TEXT_TYPE_E;
 #define AI_TEXT_ASR         0x00
 #define AI_TEXT_NLG         0x01

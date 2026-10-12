@@ -1,8 +1,4 @@
 menu "AI Protocol Config"
-    config ENABLE_AI_MONITOR
-        bool "ENABLE_AI_MONITOR: enable ai debug monitor service"
-        default y
-
     config AI_MAX_FRAGMENT_LENGTH
         int "AI_MAX_FRAGMENT_LENGTH: max fragment length"
         range 1024 512000
@@ -32,11 +28,6 @@ menu "AI Protocol Config"
         range 5 20
         default 10
 
-    config AI_PING_TIMEOUT
-        int "AI_PING_TIMEOUT: ai ping timeout,unit(s)"
-        range 3 20
-        default 6
-
     config AI_HEARTBEAT_INTERVAL
         int "AI_HEARTBEAT_INTERVAL: ai ping heartbeat interval,unit(s)"
         default 120
@@ -58,11 +49,6 @@ menu "AI Protocol Config"
 	config AI_WRITE_SOCKET_BUF_SIZE
         int "AI_WRITE_SOCKET_BUF_SIZE: ai server write socket size"
         default 8192
-
-    config AI_DL_IMAGE_UNIT_SIZE
-        int "AI_DL_IMAGE_UNIT_SIZE: download image unit size"
-        range 1024 40960
-        default 6144
 
     config AI_SEND_PKT_TIMEOUT
         int "AI_SEND_PKT_TIMEOUT: ai send packet timeout, unit(s)"

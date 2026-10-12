@@ -34,16 +34,10 @@
 #define OS_CALLOC(num, size)  tal_calloc(num, size)
 #define OS_REALLOC(ptr, size) tal_realloc(ptr, size)
 
-#define AI_MONITOR_MAX_CLIENTS_MIN 1
-#define AI_MONITOR_MAX_CLIENTS_MAX 3
-
 // Protocol magic number
 #define AI_MONITOR_MAGIC 0x54594149
 
 #define AI_MONITOR_TAG "AI_MON"
-
-// Protocol version
-#define AI_MONITOR_VERSION 0x01
 
 #define AI_MONITOR_DIR_US  0 // Device upload to cloud
 #define AI_MONITOR_DIR_DS  1 // Cloud download to device
@@ -75,7 +69,6 @@ typedef struct {
     BOOL_T               initialized;        // initialized flag
     BOOL_T               running;            // running flag
     ai_monitor_config_t  config;             // server configuration
-    netmgr_linkage_t    *linkage;            // default lan linkage
     int                  server_fd;          // server socket fd
     ai_monitor_client_t *clients;            // client array
     uint32_t             client_count;       // current client count
@@ -83,9 +76,6 @@ typedef struct {
     uint32_t             session_id;         // current session ID
     MUTEX_HANDLE         mutex;              // mutex for thread safety
     TIMER_ID             timer;              // timer ID
-    THREAD_HANDLE        log_thread;         // log thread handle
-    BOOL_T               log_thread_running; // log thread running flag
-    QUEUE_HANDLE         log_queue;          // log queue
 } ai_monitor_server_t;
 
 typedef struct {
@@ -111,7 +101,6 @@ STATIC BOOL_T               __is_client_registered(ai_monitor_client_t *client, 
 STATIC VOID                 __session_close_all(VOID);
 STATIC OPERATE_RET          __default_update(AI_STAGE_E stage, VOID *data, AI_SEND_PACKET_T *info);
 STATIC OPERATE_RET          __default_write(AI_PACKET_WRITER_T *writer, VOID *buf, uint32_t buf_len);
-STATIC VOID                 __log_output(CONST char *str);
 
 ai_monitor_writer_cfg_t s_monitor_writer_cfg = {
     .writer       = NULL, // Will be set later
@@ -314,7 +303,6 @@ STATIC OPERATE_RET __handle_event_filter(ai_monitor_client_t *client, AI_EVENT_A
     }
     if (user_data_bitmap & (1ULL << AI_PT_CUSTOM_LOG)) {
         __client_register(client, AI_PT_CUSTOM_LOG);
-        tal_log_add_output_term(AI_MONITOR_TAG, __log_output);
     } else {
         tal_log_del_output_term(AI_MONITOR_TAG);
     }
@@ -596,10 +584,7 @@ STATIC int __create_server_socket(int port)
     TUYA_IP_ADDR_T ip_addr = TY_IPADDR_ANY;
     memset(&ip, 0, SIZEOF(NW_IP_S));
 
-    CONST netmgr_linkage_t *linkage = g_ai_monitor_server.linkage;
-    if (NULL == linkage) {
-        linkage = tuya_svc_netmgr_linkage_get(LINKAGE_TYPE_DEFAULT);
-    }
+    CONST netmgr_linkage_t *linkage = tuya_svc_netmgr_linkage_get(LINKAGE_TYPE_DEFAULT);
 
     op_ret = linkage->get(LINKAGE_CFG_IP, &ip);
     if (op_ret != OPRT_OK) {
@@ -972,221 +957,6 @@ STATIC VOID __session_close_all(VOID)
     tal_mutex_unlock(g_ai_monitor_server.mutex);
 }
 
-/**
- * @brief stop AI monitor TCP server
- */
-STATIC OPERATE_RET __ai_monitor_stop(VOID)
-{
-    if (!g_ai_monitor_server.initialized || !g_ai_monitor_server.running) {
-        return OPRT_INVALID_PARM;
-    }
-
-    tal_mutex_lock(g_ai_monitor_server.mutex);
-    __session_close_all();
-    g_ai_monitor_server.running = FALSE;
-    tal_mutex_unlock(g_ai_monitor_server.mutex);
-
-    PR_INFO("AI monitor stopped");
-
-    return OPRT_OK;
-}
-
-/**
- * @brief deinitialize AI monitor TCP server
- */
-OPERATE_RET tuya_ai_monitor_deinit(VOID)
-{
-    if (!g_ai_monitor_server.initialized) {
-        return OPRT_INVALID_PARM;
-    }
-
-    // Stop server first
-    if (g_ai_monitor_server.running) {
-        __ai_monitor_stop();
-    }
-
-    // Free resources
-    if (g_ai_monitor_server.clients) {
-        OS_FREE(g_ai_monitor_server.clients);
-        g_ai_monitor_server.clients = NULL;
-    }
-
-    if (g_ai_monitor_server.mutex) {
-        tal_mutex_release(g_ai_monitor_server.mutex);
-        g_ai_monitor_server.mutex = NULL;
-    }
-
-    memset(&g_ai_monitor_server, 0, sizeof(g_ai_monitor_server));
-
-    PR_INFO("AI monitor deinitialized");
-
-    return OPRT_OK;
-}
-
-/**
- * @brief check if server is running
- */
-BOOL_T tuya_ai_monitor_is_running(VOID)
-{
-    return g_ai_monitor_server.initialized && g_ai_monitor_server.running;
-}
-
-/**
- * @brief broadcast message to all connected clients
- */
-OPERATE_RET tuya_ai_monitor_broadcast(uint16_t id, AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO_T *head, char *data)
-{
-    if (!g_ai_monitor_server.initialized || !g_ai_monitor_server.running) {
-        return OPRT_INVALID_PARM;
-    }
-
-    return __ai_biz_handler(AI_MONITOR_DIR_ACK, id, attr, head, data, &g_ai_monitor_server);
-}
-
-#define TY_AI_MONITOR_US_AUDIO 1
-#define TY_AI_MONITOR_US_VIDEO 3
-#define TY_AI_MONITOR_US_TEXT  5
-#define TY_AI_MONITOR_US_IMAGE 7
-#define TY_AI_MONITOR_DS_AUDIO 2
-#define TY_AI_MONITOR_DS_TEXT  4
-#define TY_AI_MONITOR_US_LOG   0x8001
-#define TY_AI_MONITOR_US_MIC   0x8003
-#define TY_AI_MONITOR_US_REF   0x8005
-#define TY_AI_MONITOR_US_AEC   0x8007
-
-/**
- * @brief broadcast text data to all connected clients
- */
-STATIC OPERATE_RET __broadcast_text(uint16_t data_id, char *data, uint32_t len)
-{
-    if (!g_ai_monitor_server.initialized || !g_ai_monitor_server.running) {
-        return OPRT_INVALID_PARM;
-    }
-
-    if (!data || len == 0) {
-        return OPRT_INVALID_PARM;
-    }
-
-    AI_BIZ_ATTR_INFO_T attr = {
-        .flag = AI_HAS_ATTR,
-        .type = AI_PT_TEXT,
-        .value.text =
-            {
-                .session_id_list = NULL,
-            },
-    };
-
-    AI_BIZ_HEAD_INFO_T head = {
-        .stream_flag = AI_STREAM_START | AI_STREAM_END,
-        .total_len   = len,
-        .len         = len,
-    };
-
-    return __ai_biz_handler(AI_MONITOR_DIR_ACK, data_id, &attr, &head, data, &g_ai_monitor_server);
-}
-
-/**
- * @brief broadcast text data to all connected clients
- */
-OPERATE_RET tuya_ai_monitor_broadcast_text(char *data, uint32_t len)
-{
-    return __broadcast_text(TY_AI_MONITOR_US_TEXT, data, len);
-}
-
-/**
- * @brief broadcast log data to all connected clients
- */
-OPERATE_RET tuya_ai_monitor_broadcast_log(char *data, uint32_t len)
-{
-    return __broadcast_text(TY_AI_MONITOR_US_LOG, data, len);
-}
-
-/**
- * @brief broadcast audio data to all connected clients
- */
-OPERATE_RET tuya_ai_monitor_broadcast_audio(uint16_t data_id, AI_STREAM_TYPE stype, AI_AUDIO_CODEC_TYPE codec_type,
-                                            char *data, uint32_t len)
-{
-    if (!g_ai_monitor_server.initialized || !g_ai_monitor_server.running) {
-        return OPRT_INVALID_PARM;
-    }
-
-    if (!data || len == 0) {
-        return OPRT_INVALID_PARM;
-    }
-
-    AI_BIZ_ATTR_INFO_T attr = {
-        .flag = AI_HAS_ATTR,
-        .type = AI_PT_AUDIO,
-        .value.audio =
-            {
-                .base.codec_type  = codec_type,
-                .base.sample_rate = 16000,
-                .base.channels    = AUDIO_CHANNELS_MONO,
-                .base.bit_depth   = 16,
-            },
-    };
-
-    AI_BIZ_HEAD_INFO_T head = {
-        .stream_flag = stype,
-        .total_len   = len,
-        .len         = len,
-    };
-
-    return __ai_biz_handler(AI_MONITOR_DIR_ACK, data_id, &attr, &head, data, &g_ai_monitor_server);
-}
-
-/**
- * @brief broadcast mic audio data to all connected clients
- */
-OPERATE_RET tuya_ai_monitor_broadcast_audio_mic(AI_STREAM_TYPE stype, char *data, uint32_t len)
-{
-    return tuya_ai_monitor_broadcast_audio(TY_AI_MONITOR_US_MIC, stype, AUDIO_CODEC_PCM, data, len);
-}
-
-/**
- * @brief broadcast ref audio data to all connected clients
- */
-OPERATE_RET tuya_ai_monitor_broadcast_audio_ref(AI_STREAM_TYPE stype, char *data, uint32_t len)
-{
-    return tuya_ai_monitor_broadcast_audio(TY_AI_MONITOR_US_REF, stype, AUDIO_CODEC_PCM, data, len);
-}
-
-/**
- * @brief broadcast aec audio data to all connected clients
- */
-OPERATE_RET tuya_ai_monitor_broadcast_audio_aec(AI_STREAM_TYPE stype, char *data, uint32_t len)
-{
-    return tuya_ai_monitor_broadcast_audio(TY_AI_MONITOR_US_AEC, stype, AUDIO_CODEC_PCM, data, len);
-}
-
-/**
- * @brief dump server status information
- */
-VOID tuya_ai_monitor_dump_status(VOID)
-{
-    if (!g_ai_monitor_server.initialized) {
-        PR_INFO("AI monitor not initialized");
-        return;
-    }
-
-    PR_INFO("=== AI Monitor Status ===");
-    PR_INFO("Initialized: %s", g_ai_monitor_server.initialized ? "Yes" : "No");
-    PR_INFO("Running: %s", g_ai_monitor_server.running ? "Yes" : "No");
-    PR_INFO("Port: %d", g_ai_monitor_server.config.port);
-    PR_INFO("Max clients: %d", g_ai_monitor_server.config.max_clients);
-    PR_INFO("Current clients: %d", g_ai_monitor_server.client_count);
-    PR_INFO("Server FD: %d", g_ai_monitor_server.server_fd);
-
-    for (uint32_t i = 0; i < g_ai_monitor_server.config.max_clients; i++) {
-        if (g_ai_monitor_server.clients[i].connected) {
-            PR_INFO("Client[%d]: fd=%d, addr=%s, last_ping=%llu", i, g_ai_monitor_server.clients[i].fd,
-                    g_ai_monitor_server.clients[i].addr, g_ai_monitor_server.clients[i].last_ping_time);
-        }
-    }
-    PR_INFO("========================");
-}
-
 STATIC OPERATE_RET __default_update(AI_STAGE_E stage, VOID *data, AI_SEND_PACKET_T *info)
 {
     ai_monitor_writer_cfg_t *cfg = (ai_monitor_writer_cfg_t *)info->writer->user_data;
@@ -1240,52 +1010,4 @@ STATIC OPERATE_RET __default_write(AI_PACKET_WRITER_T *writer, VOID *buf, uint32
     }
 
     return OPRT_OK;
-}
-
-#if 0
-STATIC VOID __log_recv_task(void* args)
-{
-    while (g_ai_monitor_server.log_thread_running) {
-
-    }
-}
-
-// TODO:
-// start async log server to recv log output from log module, then broadcast to all clients
-STATIC OPERATE_RET __start_log_server(VOID)
-{
-    OPERATE_RET rt = OPRT_OK;
-
-    // Register log output term
-    tal_log_add_output_term(AI_MONITOR_TAG, __log_output);
-
-    // create async log recv task
-    THREAD_CFG_T thrd_param = {0};
-    thrd_param.priority = THREAD_PRIO_1;
-    thrd_param.thrdname = "ai_mon_log";
-    thrd_param.stackDepth = 4096;
-
-    rt = tal_thread_create_and_start(&g_ai_monitor_server.log_thread,
-                                     NULL, NULL,
-                                     __log_recv_task, NULL,
-                                     &thrd_param);
-
-    return rt;
-}
-
-STATIC OPERATE_RET __stop_log_server(VOID)
-{
-
-}
-#endif
-
-STATIC VOID __log_output(CONST char *str)
-{
-    if (!str || strlen(str) == 0) {
-        return; // Ignore empty log messages
-    }
-
-    // TODO: async log output
-    // Broadcast log message to all connected clients
-    // tuya_ai_monitor_broadcast_log((char *)str, strlen(str));
 }

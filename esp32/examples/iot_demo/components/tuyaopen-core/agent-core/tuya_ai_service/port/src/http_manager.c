@@ -59,11 +59,9 @@ static inline void http_safe_free(void *ptr)
 
 static SESSION_ID http_session_create_internal(const char *url, BOOL_T is_persistent);
 static SESSION_ID http_session_create(const char *url, BOOL_T is_persistent);
-static SESSION_ID http_session_create_tls(const char *url, BOOL_T is_persistent, tuya_tls_config_t *config);
 static OPERATE_RET http_session_destroy(SESSION_ID id);
 static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t *req, http_hdr_field_sel_t field_flags);
 static OPERATE_RET http_session_receive(SESSION_ID session, http_resp_t **resp);
-static OPERATE_RET http_session_receive_data(SESSION_ID session, http_resp_t *pResp, uint8_t **pDataOut);
 static OPERATE_RET http_parse_url(const char *url, char **host, char **path, uint16_t *port, BOOL_T *use_tls);
 static const char *http_method_to_string(http_method_t method);
 static void http_session_ctx_reset_response(http_session_ctx_t *ctx);
@@ -82,11 +80,9 @@ S_HTTP_MANAGER *get_http_manager_instance(VOID_T)
 
         s_http_manager.inited = true;
         s_http_manager.create_http_session = http_session_create;
-        s_http_manager.create_http_session_tls = http_session_create_tls;
         s_http_manager.send_http_request = http_session_send;
         s_http_manager.receive_http_response = http_session_receive;
         s_http_manager.destory_http_session = http_session_destroy;
-        s_http_manager.receive_http_data = http_session_receive_data;
     }
 
     return &s_http_manager;
@@ -94,6 +90,8 @@ S_HTTP_MANAGER *get_http_manager_instance(VOID_T)
 
 static SESSION_ID http_session_create_internal(const char *url, BOOL_T is_persistent)
 {
+    (void)is_persistent; /* session 不再保存持久化标志（vtable 签名保留该参数） */
+
     if (NULL == url) {
         return NULL;
     }
@@ -123,10 +121,7 @@ static SESSION_ID http_session_create_internal(const char *url, BOOL_T is_persis
     }
 
     session->s = (http_session_t)ctx;
-    session->is_persistent = is_persistent;
     session->state = HTTP_DISCONNECT;
-    strncpy(session->url, url, MAX_HTTP_URL_LEN - 1);
-    session->url[MAX_HTTP_URL_LEN - 1] = '\0';
 
     tal_mutex_lock(s_http_manager.mutex);
     int idx = -1;
@@ -150,12 +145,6 @@ static SESSION_ID http_session_create_internal(const char *url, BOOL_T is_persis
     tal_mutex_unlock(s_http_manager.mutex);
 
     return session;
-}
-
-static SESSION_ID http_session_create_tls(const char *url, BOOL_T is_persistent, tuya_tls_config_t *config)
-{
-    (void)config;
-    return http_session_create_internal(url, is_persistent);
 }
 
 static SESSION_ID http_session_create(const char *url, BOOL_T is_persistent)
@@ -530,7 +519,6 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
     /* Setup response info (don't call http_session_ctx_reset_response as it would cleanup our streaming resources) */
     ctx->resp_info.status_code = ctx->http_response.statusCode;
     ctx->resp_info.version = HTTP_VER_1_1;
-    ctx->resp_info.chunked = (ctx->http_response.respFlags & HTTP_RESPONSE_CONNECTION_CLOSE_FLAG) ? false : false;
     ctx->resp_info.content_length = ctx->http_response.contentLength;
     ctx->resp_info.keep_alive_ack =
         (ctx->http_response.respFlags & HTTP_RESPONSE_CONNECTION_KEEP_ALIVE_FLAG) ? true : false;
@@ -560,29 +548,5 @@ static OPERATE_RET http_session_receive(SESSION_ID session, http_resp_t **resp)
 
     *resp = &ctx->resp_info;
     session->state = HTTP_CONNECTED;
-    return OPRT_OK;
-}
-
-static OPERATE_RET http_session_receive_data(SESSION_ID session, http_resp_t *pResp, uint8_t **pDataOut)
-{
-    if (!session || !pResp || !pDataOut) {
-        return OPRT_INVALID_PARM;
-    }
-
-    http_session_ctx_t *ctx = (http_session_ctx_t *)session->s;
-    if (!ctx || !ctx->response_ready || !ctx->response.body) {
-        return OPRT_COM_ERROR;
-    }
-
-    size_t total = ctx->response.body_length;
-    uint8_t *buf = HTTP_MEMORY_MALLOC(total + 1);
-    if (!buf) {
-        return OPRT_MALLOC_FAILED;
-    }
-    memcpy(buf, ctx->response.body, total);
-    buf[total] = '\0';
-
-    *pDataOut = buf;
-    (void)pResp;
     return OPRT_OK;
 }

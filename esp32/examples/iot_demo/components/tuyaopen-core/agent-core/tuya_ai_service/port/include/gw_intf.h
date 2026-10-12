@@ -27,28 +27,12 @@ extern "C" {
 ***********************typedef define***********************
 ***********************************************************/
 /**
- * @brief Definition gw BASE information
- */
-typedef struct {
-    int a;
-} GW_BASE_IF_S;
-
-
-/**
  * @brief Definition of active info
  */
 typedef struct {
     /** key used by lan/mqtt/... */
     char local_key[LOCAL_KEY_LEN + 1];
 } GW_ACTV_IF_S;
-
-/**
- * @brief Definition of gateway callback funtions
- */
-typedef struct {
-    /** status update */
-    int a;
-} TY_IOT_CBS_S;
 
 // gw register status
 typedef uint8_t GW_WORK_STAT_T;

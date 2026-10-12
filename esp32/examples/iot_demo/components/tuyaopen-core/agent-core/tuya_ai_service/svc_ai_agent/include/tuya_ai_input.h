@@ -69,11 +69,6 @@ typedef struct {
     AI_BIZ_SEND_FREE_CB free_cb;
 } AI_INPUT_SEND_T;
 
-typedef struct {
-    AI_ATTR_BASE_T attr;
-    AI_INPUT_SEND_T send[AI_BIZ_MAX_NUM];
-} AI_INPUT_CFG_T;
-
 /**
  * @brief ai input start
  *
@@ -94,36 +89,6 @@ VOID tuya_ai_input_start_s(CHAR_T *scode, BOOL_T force);
 VOID tuya_ai_input_stop_s(CHAR_T *scode);
 #define tuya_ai_input_stop() tuya_ai_input_stop_s(tuya_ai_agent_get_scode(NULL))
 /**
- * @brief ai video input
- *
- * @param[in] scode solution code
- * @param[in] timestamp video timestamp
- * @param[in] pts video pts
- * @param[in] frame_type video frame type
- * @param[in] data video data
- * @param[in] len video data length
- * @param[in] total_len video total length
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_video_input_s(CHAR_T *scode, UINT64_T timestamp, UINT64_T pts, AI_VIDEO_FRAME_TYPE frame_type, BYTE_T *data, UINT_T len, UINT_T total_len);
-#define tuya_ai_video_input(timestamp, pts, data, len, total_len) tuya_ai_video_input_s(tuya_ai_agent_get_scode(NULL), timestamp, pts, AI_VIDEO_FRAME_TYPE_I, data, len, total_len)
-/**
- * @brief ai audio input direct, no ringbuf
- *
- * @param[in] scode solution code
- * @param[in] timestamp audio timestamp
- * @param[in] pts audio pts
- * @param[in] data audio data
- * @param[in] len audio data length
- * @param[in] total_len audio total length
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_audio_input_direct_s(CHAR_T *scode, UINT64_T timestamp, UINT64_T pts, BYTE_T *data, UINT_T len, UINT_T total_len);
-#define tuya_ai_audio_input_direct(timestamp, pts, data, len, total_len) tuya_ai_audio_input_direct_s(tuya_ai_agent_get_scode(NULL), timestamp, pts, data, len, total_len)
-
-/**
  * @brief ai audio input
  *
  * @param[in] scode solution code
@@ -138,20 +103,6 @@ OPERATE_RET tuya_ai_audio_input_s(CHAR_T *scode, UINT64_T timestamp, UINT64_T pt
 #define tuya_ai_audio_input(timestamp, pts, data, len, total_len) tuya_ai_audio_input_s(tuya_ai_agent_get_scode(NULL), timestamp, pts, data, len, total_len)
 
 /**
- * @brief ai image input
- *
- * @param[in] scode solution code
- * @param[in] timestamp image timestamp
- * @param[in] data image data
- * @param[in] len image data length
- * @param[in] total_len image total length
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_image_input_s(CHAR_T *scode, UINT64_T timestamp, BYTE_T *data, UINT_T len, UINT_T total_len);
-#define tuya_ai_image_input(timestamp, data, len, total_len) tuya_ai_image_input_s(tuya_ai_agent_get_scode(NULL), timestamp, data, len, total_len)
-
-/**
  * @brief ai text input
  *
  * @param[in] scode solution code
@@ -163,62 +114,6 @@ OPERATE_RET tuya_ai_image_input_s(CHAR_T *scode, UINT64_T timestamp, BYTE_T *dat
  */
 OPERATE_RET tuya_ai_text_input_s(CHAR_T *scode, BYTE_T *data, UINT_T len, UINT_T total_len);
 #define tuya_ai_text_input(data, len, total_len) tuya_ai_text_input_s(tuya_ai_agent_get_scode(NULL), data, len, total_len)
-
-/**
- * @brief ai file input
- *
- * @param[in] scode solution code
- * @param[in] data file data
- * @param[in] len file data length
- * @param[in] total_len file total length
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_file_input_s(CHAR_T *scode, BYTE_T *data, UINT_T len, UINT_T total_len);
-#define tuya_ai_file_input(data, len, total_len) tuya_ai_file_input_s(tuya_ai_agent_get_scode(NULL), data, len, total_len)
-
-/* AI cloud alert type */
-typedef INT_T AI_CLOUD_ALERT_TYPE_E;
-
-/**
- * @brief ai input alert
- *
- * @param[in] type alert type
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- *
- * @note custom_prompt is not supported yet, so it must be NULL
- */
-OPERATE_RET tuya_ai_input_alert(AI_CLOUD_ALERT_TYPE_E type);
-
-/**
- * @brief ai input alert with custom alert type
- *
- * @param[in] type alert type
- * @param[in] event_type custom event type string
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_input_alert_custom(AI_CLOUD_ALERT_TYPE_E type, CONST CHAR_T *event_type);
-
-/**
- * @brief check ai input is started
- *
- * @param[in] scode solution code
- *
- * @return TRUE started, FALSE not started
- */
-BOOL_T tuya_ai_input_is_started_s(CHAR_T *scode);
-#define tuya_ai_input_is_started() tuya_ai_input_is_started_s(tuya_ai_agent_get_scode(NULL))
-
-/**
- *  @brief get how many bytes can ai input ringbuf receive
- *
- *  @param[out] ptr_to_capacity_out pointer to receive result
- *  @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_input_get_buffer_free_capacity_s(CHAR_T *scode, SIZE_T* ptr_to_capacity_out);
-#define tuya_ai_input_get_buffer_free_capacity(ptr_to_capacity_out) tuya_ai_input_get_buffer_free_capacity_s(tuya_ai_agent_get_scode(NULL), ptr_to_capacity_out)
 
 /**
  * @brief Mute or unmute audio input

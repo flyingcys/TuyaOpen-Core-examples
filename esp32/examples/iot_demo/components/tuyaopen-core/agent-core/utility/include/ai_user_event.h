@@ -27,48 +27,20 @@ extern "C" {
 /***********************************************************
 ***********************typedef define***********************
 ***********************************************************/
+/* 事件编号保持与历史一致：零引用的事件值已删除，保留项全部显式赋值钉住编号，
+ * 后续新增事件请追加新值，不要复用已删除项的编号。 */
 typedef enum {
-    AI_USER_EVT_IDLE      = -1,
     AI_USER_EVT_ASR_EMPTY = 0,
-    AI_USER_EVT_ASR_OK,
-    AI_USER_EVT_ASR_ERROR,
-    AI_USER_EVT_MIC_DATA,
-    AI_USER_EVT_TTS_PRE,
-    AI_USER_EVT_TTS_START,
-    AI_USER_EVT_TTS_DATA,
-    AI_USER_EVT_TTS_STOP,
-    AI_USER_EVT_TTS_ABORT,
-    AI_USER_EVT_TTS_ERROR,
-    AI_USER_EVT_VAD_TIMEOUT,
-    AI_USER_EVT_TEXT_STREAM_START, /* 10 */
-    AI_USER_EVT_TEXT_STREAM_DATA,
-    AI_USER_EVT_TEXT_STREAM_STOP,
-    AI_USER_EVT_TEXT_STREAM_ABORT,
-    AI_USER_EVT_EMOTION,
-    AI_USER_EVT_LLM_EMOTION,
-    AI_USER_EVT_SKILL,
-    AI_USER_EVT_CHAT_BREAK,
-    AI_USER_EVT_SERVER_VAD,
-    AI_USER_EVT_END,
-    AI_USER_EVT_PLAY_CTL_PLAY, /* 20 */
-    AI_USER_EVT_PLAY_CTL_RESUME,
-    AI_USER_EVT_PLAY_CTL_PAUSE,
-    AI_USER_EVT_PLAY_CTL_REPLAY,
-    AI_USER_EVT_PLAY_CTL_PREV,
-    AI_USER_EVT_PLAY_CTL_NEXT,
-    AI_USER_EVT_PLAY_CTL_SEQUENTIAL,
-    AI_USER_EVT_PLAY_CTL_SEQUENTIAL_LOOP,
-    AI_USER_EVT_PLAY_CTL_SINGLE_LOOP,
-    AI_USER_EVT_PLAY_CTL_END,
-    AI_USER_EVT_PLAY_END, /* 30 */
-    AI_USER_EVT_PLAY_ALERT,
-    AI_USER_EVT_MODE_SWITCH,
-    AI_USER_EVT_MODE_STATE_UPDATE,
-    AI_USER_EVT_GENERATE_PICTURE, 
-    AI_USER_EVT_GET_PICTURE_FROM_APP, 
-    AI_USER_EVT_SEND_PICTURE_END,
-    AI_USER_EVT_EXIT,
-    AI_USER_EVT_KEY_WAKEUP,  /* user interaction starting (e.g. hold-key press) BEFORE capture; a hook for the app to wake HW (resume codec from ULP) in time so the first utterance isn't dropped */
+    AI_USER_EVT_ASR_OK = 1,
+    AI_USER_EVT_TEXT_STREAM_START = 11,
+    AI_USER_EVT_TEXT_STREAM_DATA = 12,
+    AI_USER_EVT_TEXT_STREAM_STOP = 13,
+    AI_USER_EVT_EMOTION = 15,
+    AI_USER_EVT_SKILL = 17,
+    AI_USER_EVT_CHAT_BREAK = 18,
+    AI_USER_EVT_SERVER_VAD = 19,
+    AI_USER_EVT_PLAY_ALERT = 32,
+    AI_USER_EVT_EXIT = 38,
 } AI_USER_EVT_TYPE_E;
 
 typedef struct {
@@ -91,13 +63,6 @@ typedef struct {
     const char  *emoji;
     const char  *name;
 } AI_AGENT_EMO_T;
-
-typedef AI_AGENT_EMO_T AI_NOTIFY_EMO_T;
-
-typedef struct {
-    uint16_t camera_width;
-    uint16_t camera_height;
-} AI_NOTIFY_VIDEO_START_T;
 
 typedef struct {
     uint8_t *data;

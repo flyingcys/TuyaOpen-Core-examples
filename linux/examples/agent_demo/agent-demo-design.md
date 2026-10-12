@@ -199,6 +199,8 @@ OPERATE_RET tkl_ai_demo_close(VOID);
 **裁剪开关**（agent_demo 档）：`ENABLE_AI_COMPONENTS=y`，
 `ENABLE_COMP_AI_AUDIO=n`、`ENABLE_COMP_AI_MCP=n`、`ENABLE_COMP_AI_VIDEO=n`。
 （audio 关掉后 `ai_audio`/`ai_mcp`/`ai_video` 不参与编译，断点 4/5 自然消失。）
+**2026-10-12 更新**：`ENABLE_COMP_AI_MCP` 已改为 **y** 并在 demo 接通（见 §8.4）；
+`ENABLE_COMP_AI_AUDIO` / `ENABLE_COMP_AI_VIDEO` 仍为 n。
 
 ### 4.5 demo 文件清单
 
@@ -327,6 +329,43 @@ cd build && timeout 60 ./agent_demo
 - 上传起始处一条 `tuya_ai_event.c:36 event or session id was null`（会话刚建立时的
   事件关联时序），不影响后续（`use session ...` 正常、下行正常）；
 - 首启一条 `load tls_ca_cnt fail. no ca in local db`（CA 首次拉取前提示，iot_demo 同样存在）。
+
+### 8.4 MCP 支持接通（2026-10-12）
+
+用户口径："mcp 要在 agent_demo 里面支持上"。此前 `ENABLE_COMP_AI_MCP` 默认 n、demo 未接线。
+
+**core 侧（`agent-core/ai_mcp/`）**：
+
+| # | 改动 | 原因 |
+|---|---|---|
+| 1 | `ai_mcp_tools.c` 删 `#include "ai_manage_mode.h"` + 删 `__set_mode` 及 `device_audio_mode_set` 注册 | `ai_manage_mode.h` 全仓不存在（ai_mode 未移植），该 include 无条件存在 → 编译必炸 |
+| 2 | `ai_mcp_tools.c` 补 `PROJECT_NAME`（`"agent_demo"`）/ `PROJECT_VERSION`（`"1.0.0"`）的 `#ifndef` 兜底 | 两者由构建系统注入（esp-idf 注入 `PROJECT_NAME`），普通 CMake 宿主不注入 → 编译必炸（同 `tuya_main.c:35` 风格） |
+| 3 | 注册表移除 `device_camera_take_photo` / `device_audio_volume_set`（占位实现随之删除） | 依赖未移植的 `ai_video` / `ai_audio`，占位恒返回 NOT_SUPPORTED；保留在列表里会让云端看到"调用必失败"的工具。实现未丢：esp32 快照保留上游带宏门控的完整版本 |
+| 4 | `device_info_get` 的 `serialNumber` 由假数据 `"123456789"` 改为真实 devid | 取 `tuya_iot_client_get()` + `tuya_iot_devid_get()`（激活后落 KV、重启回填；未激活退化 `unknown`）——`ai_mcp/CMakeLists.txt` 相应补 `tuya_cloud_service` 依赖（单向，无环） |
+
+**demo 侧**：`tuya_main.c` 在 `tuya_iot_start()` 前调 `ai_mcp_init()`（仅订阅
+`EVENT_MQTT_CONNECTED`，一次性；初始化在 MQTT 连上后回调执行），调用由
+`#if defined(ENABLE_COMP_AI_MCP)` 守卫（同 `ENABLE_QRCODE` 写法，关开关仍可构建）；
+`CMakeLists.txt` 内置默认 `CONFIG_ENABLE_COMP_AI_MCP=ON`，`linux/.config` 置 `=y`。
+
+**验证（2026-10-12，联网实跑）**：
+
+- 构建：全新 `build/` 配置（缓存里无旧值遮蔽）→ `libai_mcp.a` 生成、`ai_mcp_tools.c` 实际编译、
+  全量 0 warning、exit 0；`nm` 证 `ai_mcp_init`/`ai_mcp_server_init`/`ai_mcp_server_parse_message`
+  均在 `agent_demo` ELF 内；`strings` 证注册表只剩 `device_info_get`（三个被移除工具名不再出现）；
+- 实跑 45s：MQTT 连上后 `mcp cb set`（`tuya_ai_agent.c:1610`）→ `Added tool: device_info_get`
+  → `MCP Server initialized successfully`（`ai_mcp_tools.c:112`）；云端随后完成 MCP 握手
+  `initialize` → `notifications/initialized` → `tools/list`，`tools/list` 返回的正是
+  `device_info_get` 一项（原样回包见下）；同一次运行 ASR/NLG 链路不受影响。
+
+```
+[tuya_ai_agent.c:1616] mcp data: {"jsonrpc":"2.0","id":"cef0e9","method":"tools/list"}
+[ai_mcp_server.c:853] MCP Reply: {"jsonrpc":"2.0","id":"cef0e9","result":{"tools":[{"name":"device_info_get",...
+```
+
+**边界**：本次实跑云端只做了握手 + `tools/list`，**未触发 `tools/call`**（调用时机由云端
+LLM 决定），`device_info_get` 的执行分支与真实 devid 回填未经端到端实测（仅代码路径 +
+`tools/list` 的 schema 回包已证）；三个自测不覆盖 MCP（无云地无法构造 AI 会话内消息）。
 
 ## 9. 能力边界（本 demo 明确不做的项）
 

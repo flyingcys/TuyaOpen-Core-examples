@@ -56,11 +56,9 @@
 
 typedef BYTE_T AI_PACKET_SL;
 #define AI_PACKET_SL0 0x00 // not encrypted
-#define AI_PACKET_SL1 0x01 // not used
 #define AI_PACKET_SL2 0x02 // CHACHA20
 #define AI_PACKET_SL3 0x03 // CBC
 #define AI_PACKET_SL4 0x04 // GCM
-#define AI_PACKET_SL5 0x05 // not used
 
 #ifndef AI_PACKET_SECURITY_LEVEL
 #define AI_PACKET_SECURITY_LEVEL AI_PACKET_SL4
@@ -146,10 +144,7 @@ typedef USHORT_T AI_ATTR_TYPE;
 #define AI_ATTR_AUDIO_CHANNELS 83
 #define AI_ATTR_AUDIO_DEPTH 84
 #define AI_ATTR_AUDIO_FRAME_SIZE 85
-#define AI_ATTR_AUDIO_EXTRA_DATA 86
-#define AI_ATTR_AUDIO_CONTAINER 87
 #define AI_ATTR_AUDIO_BIT_RATE 88
-#define AI_ATTR_AUDIO_FRAME_DURATION 89
 #define AI_ATTR_IMAGE_PARAMS 90
 #define AI_ATTR_IMAGE_FORMAT 91
 #define AI_ATTR_IMAGE_WIDTH 92
@@ -162,13 +157,8 @@ typedef USHORT_T AI_ATTR_TYPE;
 #define AI_ATTR_SESSION_ID_LIST 112
 #define AI_ATTR_CLIENT_TS 113
 #define AI_ATTR_SERVER_TS 114
-#define AI_ATTR_ASSIGN_CMD_ID 118
-#define AI_ATTR_ASSIGN_DATA_IDS 119
-#define AI_ATTR_UNASSIGN_DATA_IDS 120
 
-typedef BYTE_T ATTR_CLIENT_TYPE;
 #define ATTR_CLIENT_TYPE_DEVICE 0x01
-#define ATTR_CLIENT_TYPE_APP 0x02
 
 typedef BYTE_T AI_ATTR_FLAG;
 #define AI_NO_ATTR  0x00
@@ -176,50 +166,22 @@ typedef BYTE_T AI_ATTR_FLAG;
 
 typedef USHORT_T AI_STATUS_CODE;
 #define AI_CODE_OK 200
-#define AI_CODE_BAD_REQUEST 400
-#define AI_CODE_UN_AUTHENTICATED 401
-#define AI_CODE_NOT_FOUND 404
-#define AI_CODE_REQUEST_TIMEOUT 408
-#define AI_CODE_INTERNAL_SERVER_ERR 500
-#define AI_CODE_GW_TIMEOUT 504
 #define AI_CODE_CLOSE_BY_CLIENT 601
-#define AI_CODE_CLOSE_BY_REUSE 602
-#define AI_CODE_CLOSE_BY_IO 603
-#define AI_CODE_CLOSE_BY_KEEP_ALIVE 604
-#define AI_CODE_CLOSE_BY_EXPIRE 605
 
 typedef USHORT_T AI_STATE_CHANGE_CODE;
 #define AI_CODE_AGENT_TOKEN_EXPIRED 1001
 
 typedef USHORT_T AI_VIDEO_CODEC_TYPE;
-#define VIDEO_CODEC_MPEG4 0
-#define VIDEO_CODEC_H263 1
 #define VIDEO_CODEC_H264 2
-#define VIDEO_CODEC_MJPEG 3
-#define VIDEO_CODEC_H265 4
-#define VIDEO_CODEC_YUV420 5
-#define VIDEO_CODEC_YUV422 6
-#define VIDEO_CODEC_MAX 99
 
 typedef USHORT_T AI_AUDIO_CODEC_TYPE;
-#define AUDIO_CODEC_ADPCM 100
 #define AUDIO_CODEC_PCM 101
-#define AUDIO_CODEC_AACRAW 102
-#define AUDIO_CODEC_AACADTS 103
-#define AUDIO_CODEC_AACLATM 104
-#define AUDIO_CODEC_G711U 105
-#define AUDIO_CODEC_G711A 106
-#define AUDIO_CODEC_G726 107
 #define AUDIO_CODEC_SPEEX 108
 #define AUDIO_CODEC_MP3 109
-#define AUDIO_CODEC_G722 110
 #define AUDIO_CODEC_OPUS 111
-#define AUDIO_CODEC_MAX 199
-#define AUDIO_CODEC_INVALID 200
 
 typedef USHORT_T AI_AUDIO_CHANNELS;
 #define AUDIO_CHANNELS_MONO 1
-#define AUDIO_CHANNELS_STEREO 2
 
 typedef BYTE_T AI_IMAGE_PAYLOAD_TYPE;
 #define IMAGE_PAYLOAD_TYPE_RAW 0
@@ -228,9 +190,6 @@ typedef BYTE_T AI_IMAGE_PAYLOAD_TYPE;
 
 typedef BYTE_T AI_IMAGE_FORMAT;
 #define IMAGE_FORMAT_JPEG 1
-#define IMAGE_FORMAT_PNG 2
-#define IMAGE_FORMAT_H264 3         // H264 I frame
-#define IMAGE_FORMAT_H265 4         // H265 I frame
 
 typedef BYTE_T AI_FILE_PAYLOAD_TYPE;
 #define FILE_PAYLOAD_TYPE_RAW 0
@@ -239,11 +198,6 @@ typedef BYTE_T AI_FILE_PAYLOAD_TYPE;
 
 typedef BYTE_T AI_FILE_FORMAT;
 #define FILE_FORMAT_MP4 1
-#define FILE_FORMAT_OGG_OPUS 2
-#define FILE_FORMAT_PDF 3
-#define FILE_FORMAT_JSON 4
-#define FILE_FORMAT_MONITOR_LOG 5
-#define FILE_FORMAT_MAP 6
 
 typedef USHORT_T AI_EVENT_TYPE;
 #define AI_EVENT_START 0x00
@@ -252,11 +206,7 @@ typedef USHORT_T AI_EVENT_TYPE;
 #define AI_EVENT_ONE_SHOT 0x03
 #define AI_EVENT_CHAT_BREAK 0x04
 #define AI_EVENT_SERVER_VAD 0x05
-#define AI_EVENT_CLEAR_DATA_CACHE 0x06
 #define AI_EVENT_MCP_CMD 1000
-#define AI_EVENT_SER_TIMEOVER 1001
-#define AI_EVENT_UPDATE_CONTEXT 1002
-#define AI_EVENT_EVENT_TRIGGER 1003
 /* device custom event start */
 #define AI_EVENT_CHAT_EXIT 0xF000
 
@@ -266,33 +216,20 @@ typedef BYTE_T AI_STREAM_TYPE;
 #define AI_STREAM_ING 0x02
 #define AI_STREAM_END 0x03
 
-typedef BYTE_T AI_SIGN_LEVEL;
 #define AI_SIGN_LEVEL_0 0x00 // no sign
-#define AI_SIGN_LEVEL_1 0x01 // HMAC-SHA1
-#define AI_SIGN_LEVEL_2 0x02 // HMAC-SHA256
 
 typedef BYTE_T AI_DATA_SECURITY_LEVEL;
-#define AI_DATA_SL3 0x03 // AES128-CBC
 #define AI_DATA_SL4 0x04 // AES128-GCM
-#define AI_DATA_SL5 0x05 // AES256-GCM
 
 typedef BYTE_T AI_VIDEO_ENCRYPT_RANGE;
-#define AI_VIDEO_ENCRYPT_I_FR_1K 0x01  // encrypt I frame MAX 1KB
-#define AI_VIDEO_ENCRYPT_I_FR_4K 0x02  // encrypt I frame MAX 4KB
 #define AI_VIDEO_ENCRYPT_I_FR_ALL 0x03 // encrypt all I frame
-#define AI_VIDEO_ENCRYPT_FR_ALL 0x04   // encrypt all frames
 
 typedef BYTE_T AI_IMAGE_ENCRYPT_RANGE;
-#define AI_IMAGE_ENCRYPT_1K 0x01   // encrypt MAX 1KB
-#define AI_IMAGE_ENCRYPT_4K 0x02   // encrypt MAX 4KB
 #define AI_IMAGE_ENCRYPT_ALL 0x03  // encrypt all
 
-typedef BYTE_T AI_AUDIO_CONTAINER;
 #define AI_AUDIO_CONTAINER_RAW 0x00
-#define AI_AUDIO_CONTAINER_OGG 0x01
 
 typedef BYTE_T AI_VIDEO_FRAME_TYPE;
-#define AI_VIDEO_FRAME_TYPE_P_B 0x00
 #define AI_VIDEO_FRAME_TYPE_I 0x01
 
 typedef CHAR_T* AI_SESSION_ID;
@@ -494,7 +431,6 @@ typedef struct {
     CHAR_T session_id[AI_UUID_V4_LEN + 1];
     CHAR_T event_id[AI_UUID_V4_LEN + 1];
     CHAR_T *cmd_data;
-    CHAR_T *assign_cmd_id;
     CHAR_T *assign_datas;
     CHAR_T *unassign_datas;
     UINT64_T end_ts;//unit:ms, used only when event type is AI_EVENT_END
@@ -568,15 +504,6 @@ typedef struct {
 } AI_EVENT_HEAD_T;
 
 typedef struct {
-    USHORT_T send_ids_length;
-    USHORT_T *assign_data_ids;
-} AI_EVENT_PAYLOADS_END_T;
-
-typedef struct {
-    UCHAR_T *paylaod;
-} AI_EVENT_ONE_SHOT_T;
-
-typedef struct {
     AI_DATA_SECURITY_LEVEL data_sl;
     AI_VIDEO_ENCRYPT_RANGE video_er;
     AI_IMAGE_ENCRYPT_RANGE image_er;
@@ -636,15 +563,6 @@ OPERATE_RET tuya_ai_basic_ping(VOID);
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
 OPERATE_RET tuya_ai_basic_pkt_send(AI_SEND_PACKET_T *info);
-
-/**
- * @brief send ai packet fragment
- *
- * @param[in] info packet info
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_basic_pkt_frag_send(AI_SEND_PACKET_T *info);
 
 /**
  * @brief create user attrs
@@ -840,13 +758,6 @@ OPERATE_RET tuya_pack_user_attrs(AI_ATTRIBUTE_T *attr, UINT_T attr_num, BYTE_T *
 OPERATE_RET tuya_parse_user_attrs(CHAR_T *in, UINT_T attr_len, AI_ATTRIBUTE_T **attr_out, UINT_T *attr_num);
 
 /**
- * @brief free user attrs
- *
- * @param[in] attr attribute
- */
-VOID tuya_free_user_attrs(AI_ATTRIBUTE_T *attr);
-
-/**
  * @brief get uuid v4
  *
  * @param[out] uuid_str uuid string
@@ -863,15 +774,6 @@ OPERATE_RET tuya_ai_basic_uuid_v4(CHAR_T *uuid_str);
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
 OPERATE_RET tuya_ai_basic_uuid_short(CHAR_T *uuid_str);
-
-/**
- * @brief is need attr
- *
- * @param[in] frag_flag fragment flag
- *
- * @return TRUE on need. FALSE on not need
- */
-BOOL_T tuya_ai_is_need_attr(AI_FRAG_FLAG frag_flag);
 
 /**
  * @brief parse conn close
@@ -899,16 +801,6 @@ OPERATE_RET tuya_ai_pong(CHAR_T *data, UINT_T len);
  * @param[in] data data buffer
  */
 VOID tuya_ai_basic_pkt_free(CHAR_T *data);
-
-/**
- * @brief set frag flag
- *
- * @param[in] flag fragment flag
- * @note
- * The function should be called after the AI basic protocol is initialized.
- * @return
- */
-VOID tuya_ai_basic_set_frag(BOOL_T flag);
 
 /**
  * @brief get variable sequence number

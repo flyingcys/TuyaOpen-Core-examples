@@ -50,6 +50,7 @@ secrets 会静默覆盖 `-D`）。语音素材在构建时复制到 `build/voice
 |---|---|---|
 | `AGENT_DEMO` | 构建本 example；select `ENABLE_AI_COMPONENTS`、`ENABLE_QRCODE`、`ENABLE_TUYA_CODEC` | y（无 prompt） |
 | `AGENT_DEMO_AUDIO_FILE` | 上行语音素材路径（16k/16bit/mono PCM）；留空用内置素材 | "" |
+| `ENABLE_COMP_AI_MCP`（core 开关） | 编译 `agent-core/ai_mcp`（MCP 工具服务，见"MCP 支持"一节）；demo 在 `CMakeLists.txt` 内置默认 ON | ON（内置默认） |
 
 menuconfig 用法（`AGENT_DEMO` 无 prompt，不构建该 example 即可，无需关闭）：
 
@@ -69,6 +70,44 @@ cmake -B build -DCONFIG_AGENT_DEMO_AUDIO_FILE=/path/to/your_16k.pcm
 注意 `.config` 是 `linux/` 下所有 example 共享的，一旦存在即以它为准；删除可回到
 内置默认（AI 组件 / QRCODE / WIRED 开；与现有 .config 相比：少 `ENABLE_AI_MONITOR`
 与整个 P2P 子树）。
+
+## MCP 支持（云端工具调用）
+
+**开关**：core 的 `CONFIG_ENABLE_COMP_AI_MCP`（`linux/.config` 已置 `=y`，demo 的
+`CMakeLists.txt` 另有内置默认 ON；`-D` 可覆盖）。关闭时 `ai_mcp` 模块不参与编译，
+`tuya_main.c` 的接线由 `ENABLE_COMP_AI_MCP` 宏守卫（同 `ENABLE_QRCODE` 的写法），
+demo 照常构建运行，只是没有 MCP 工具。
+
+**接线**（`src/tuya_main.c`）：`user_main()` 在 `tuya_iot_start()` 之前调 `ai_mcp_init()`。
+该函数只做一件事——`tal_event_subscribe(EVENT_MQTT_CONNECTED, "ai_mcp_init", ...,
+SUBSCRIBE_TYPE_ONETIME)`；真正的初始化在 MQTT 连上后的回调里：`ai_mcp_server_init`
+（设 server 名/版本）→ 注册工具 → `tuya_ai_agent_mcp_set_cb(ai_mcp_server_parse_message)`
+把 MCP 消息回调挂到 AI agent 上（并置 `enable_mcp`，会话建立时向云端上报
+`supportCustomMCP` 能力位）。
+
+之后云端在 AI 会话内下发 JSON-RPC（MCP 协议）消息：`tuya_ai_agent.c` 的 `__mcp_handle`
+→ `ai_mcp_server_parse_message`（处理 `initialize` / `tools/list` / `tools/call`）
+→ 执行工具 → `tuya_ai_agent_mcp_response` 回包。
+
+**当前工具列表**（`agent-core/ai_mcp/src/ai_mcp_tools.c`）：
+
+| 工具名 | 能力 | 参数 | 返回 |
+|---|---|---|---|
+| `device_info_get` | 上报设备信息：`model`（= `PROJECT_NAME`，本 demo 为 `agent_demo`）、`serialNumber`（= IoT 客户端真实 devid，未激活时 `unknown`）、`firmwareVersion`（= `PROJECT_VERSION`） | 无 | JSON |
+
+上游另有 `device_camera_take_photo` / `device_audio_volume_set` / `device_audio_mode_set`
+三个工具，分别依赖**未移植**的 `ai_video` / `ai_audio` / `ai_mode`，本仓**不注册**
+（保证云端 `tools/list` 看到的工具与实际能力一致，不暴露"调用必失败"的占位工具）。
+将来移植对应组件后，从 esp32 快照取回实现并恢复注册即可
+（`esp32/examples/iot_demo/components/tuyaopen-core/agent-core/ai_mcp/src/ai_mcp_tools.c`
+保留了上游带 `ENABLE_COMP_AI_*` 宏门控的完整实现）。
+
+**实跑验证**（2026-10-12，联网 + 已激活设备）：MQTT 连上后日志依次出现
+`mcp cb set` → `Added tool: device_info_get` → `MCP Server initialized successfully`；
+云端随后在 AI 会话内完成 MCP 握手（`initialize` → `notifications/initialized` →
+`tools/list`），`tools/list` 返回的正是 `device_info_get` 一项。
+边界：本次实跑云端只做了握手与工具列举，**未触发 `tools/call`**（调用时机由云端 LLM
+决定），工具执行分支未经端到端实测。
 
 ## 自测
 
@@ -148,7 +187,7 @@ cd build && ./agent_http_selftest
 | 下行音频 | 解码播放（`ai_audio_player` + `svc_ai_player`，MP3/Opus） | **整体关闭**（`ENABLE_COMP_AI_AUDIO=n`），语音包丢弃 |
 | UI | LVGL 聊天界面 + 表情 + 通知音 | 无（仅日志/stdio 打印文字） |
 | 对话主控 | `ai_main`（`ai_chat_main`）+ `ai_mode`（四种对话模式） | 不移植；demo 自己组织主流程（直接复用 `ai_agent` 应用封装） |
-| 附加能力 | 低功耗/电池/打印机/MCP/摄像头/图片/APP 角色切换 | 全部不移植 |
+| 附加能力 | 低功耗/电池/打印机/MCP/摄像头/图片/APP 角色切换 | MCP 已接通（仅 `device_info_get` 一个工具，见"MCP 支持"一节）；其余不移植 |
 | 联网 | `netmgr_*` / lwip / 蓝牙配网 | `tal_netif` + `mqtt_bind` 直连（同 iot_demo） |
 | 激活与凭据 | `tuya_authorize_init/read`（license 授权） | 编译期凭据 `tuya_config.h`（同 iot_demo） |
 | 板级初始化 | `board_register_hardware()`、CLI | 删除（Linux 无对应实现） |

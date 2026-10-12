@@ -8,24 +8,7 @@
 #include "tal_api.h"
 
 #include "tuya_ai_agent.h"
-
-#include "ai_manage_mode.h"
-
-#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
-#include "ai_audio_player.h"
-#endif
-
-#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
-#include "ai_video_input.h"
-#endif
-
-#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
-#include "ai_picture.h"
-#endif
-
-#if defined(ENABLE_COMP_AI_DISPLAY) && (ENABLE_COMP_AI_DISPLAY == 1)
-#include "ai_ui_manage.h"
-#endif
+#include "tuya_iot.h"
 
 #include "ai_mcp_server.h"
 
@@ -33,7 +16,16 @@
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
+/* 构建系统注入的工程信息兜底（与 examples/agent_demo/src/tuya_main.c 同风格）：
+ * PROJECT_NAME/PROJECT_VERSION 由宿主构建注入（esp-idf 注入 PROJECT_NAME），
+ * 普通 CMake 宿主不注入时用下面的默认值。 */
+#ifndef PROJECT_NAME
+#define PROJECT_NAME "agent_demo"
+#endif
 
+#ifndef PROJECT_VERSION
+#define PROJECT_VERSION "1.0.0"
+#endif
 
 /***********************************************************
 ***********************typedef define***********************
@@ -50,7 +42,9 @@
 ***********************************************************/
 static OPERATE_RET __get_device_info(const MCP_PROPERTY_LIST_T *properties, MCP_RETURN_VALUE_T *ret_val, void *user_data)
 {
-    cJSON *json = NULL;
+    cJSON             *json   = NULL;
+    tuya_iot_client_t *client = NULL;
+    const char        *devid  = NULL;
 
     json = cJSON_CreateObject();
     if (!json) {
@@ -58,109 +52,21 @@ static OPERATE_RET __get_device_info(const MCP_PROPERTY_LIST_T *properties, MCP_
         return OPRT_MALLOC_FAILED;
     }
 
-    // Implement device info retrieval logic here
+    /* serialNumber 取 IoT 客户端的真实设备 ID（激活后由云端下发并落 KV，重启后回填）；
+     * 本工具只能在 MQTT 连上后（MCP cb 已注册）被调用，故正常路径 devid 非空。
+     * 未激活/未初始化（client 为空）时退化为 "unknown"。 */
+    client = tuya_iot_client_get();
+    if (client) {
+        devid = tuya_iot_devid_get(client);
+    }
+
     // Add device information
     cJSON_AddStringToObject(json, "model", PROJECT_NAME);
-    cJSON_AddStringToObject(json, "serialNumber", "123456789");
+    cJSON_AddStringToObject(json, "serialNumber", (devid && devid[0] != '\0') ? devid : "unknown");
     cJSON_AddStringToObject(json, "firmwareVersion", PROJECT_VERSION);
 
     // Set return value
     ai_mcp_return_value_set_json(ret_val, json);
-
-    return OPRT_OK;
-}
-#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
-static OPERATE_RET __take_photo(const MCP_PROPERTY_LIST_T *properties, MCP_RETURN_VALUE_T *ret_val, void *user_data)
-{
-    OPERATE_RET rt = OPRT_OK;
-    uint8_t *image_data = NULL;
-    uint32_t image_size = 0;
-
-    TUYA_CALL_ERR_LOG(ai_video_start());
-
-    tal_system_sleep(3000);
-
-    rt = ai_video_get_jpeg_frame(&image_data, &image_size);
-    if (OPRT_OK != rt) {
-        PR_ERR("get jpeg frame err, rt:%d", rt);
-        return rt;
-    }
-
-#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
-    char name[AI_PICTURE_NAME_MAX_LEN + 1] = {0};
-    ai_picture_save_to_album(image_data, image_size, NULL, name);
-
-#if defined(ENABLE_COMP_AI_DISPLAY) && (ENABLE_COMP_AI_DISPLAY == 1)
-    ai_ui_disp_msg(AI_UI_DISP_USER_IMAGE_LINK, (uint8_t *)name, strlen(name)+1);
-#endif
-
-#endif
-
-    rt = ai_mcp_return_value_set_image(ret_val, MCP_IMAGE_MIME_TYPE_JPEG, image_data, image_size);
-    if (OPRT_OK != rt) {
-        PR_ERR("set return image err, rt:%d", rt);
-        ai_video_jpeg_image_free(&image_data);
-        return rt;
-    }
-
-    ai_video_jpeg_image_free(&image_data);
-
-    TUYA_CALL_ERR_LOG(ai_video_stop());
-
-    return OPRT_OK;
-}
-#endif
-
-#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
-static OPERATE_RET __set_volume(const MCP_PROPERTY_LIST_T *properties, MCP_RETURN_VALUE_T *ret_val, void *user_data)
-{
-    uint32_t volume = 50; // default volume
-
-    PR_DEBUG("__set_volume enter");
-
-    // Parse properties to get volume
-    for (int i = 0; i < properties->count; i++) {
-        MCP_PROPERTY_T *prop = properties->properties[i];
-        if (strcmp(prop->name, "volume") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
-            volume = prop->default_val.int_val;
-            break;
-        }
-    }
-
-    // FIXME: Implement actual volume setting logic here
-    ai_audio_player_set_vol(volume);
-    PR_DEBUG("set volume to %d", volume);
-
-    // Set return value
-    ai_mcp_return_value_set_bool(ret_val, TRUE);
-
-    PR_DEBUG("__set_volume exit");
-
-    return OPRT_OK;
-}
-#endif
-static OPERATE_RET __set_mode(const MCP_PROPERTY_LIST_T *properties, MCP_RETURN_VALUE_T *ret_val, void *user_data)
-{
-    AI_CHAT_MODE_E mode = 0;
-    
-    ai_mode_get_curr_mode(&mode);
-
-    // Parse properties to get volume
-    for (int i = 0; i < properties->count; i++) {
-        MCP_PROPERTY_T *prop = properties->properties[i];
-        if (strcmp(prop->name, "mode") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
-            mode = prop->default_val.int_val;
-            break;
-        }
-    }
-
-    // Implement actual volume setting logic here
-    OPERATE_RET rt = ai_mode_switch(mode);
-
-    PR_DEBUG("set mode to %d rt:%d", mode, rt);
-
-    // Set return value
-    ai_mcp_return_value_set_bool(ret_val, (rt == OPRT_OK) ? TRUE : FALSE);
 
     return OPRT_OK;
 }
@@ -177,49 +83,13 @@ static OPERATE_RET __ai_mcp_tools_register(void)
         NULL
     ), err);
 
-#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
-    // device camera take photo tool
-    TUYA_CALL_ERR_GOTO(AI_MCP_TOOL_ADD(
-        "device_camera_take_photo",
-        "Captures one or more photos using the device camera. \n"
-        "Do NOT call this function when the user mentions printing, print, or printer.\n"
-        "Only use when picture or scene change is detected, for visitor detection, or when the user asks for a photo.\n"
-        "Parameters:\n"
-        "- count (int): Number of photos to capture (1-10).\n"
-        "Returns: Captured image(s) in Base64 format.",
-        __take_photo,
-        NULL,
-        MCP_PROP_STR("question", "The question prompting the photo capture."),
-        MCP_PROP_INT_DEF_RANGE("count", "Number of photos to capture (1-10).", 1, 1, 10)
-    ), err);
-#endif
-
-#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
-    // set volume tool
-    TUYA_CALL_ERR_GOTO(AI_MCP_TOOL_ADD(
-        "device_audio_volume_set",
-        "Sets the device's volume level.\n"
-        "Parameters:\n"
-        "- volume (int): The volume level to set (0-100).\n"
-        "Response:\n"
-        "- Returns true if the volume was set successfully.",
-        __set_volume,
-        NULL,
-        MCP_PROP_INT_RANGE("volume", "The volume level to set (0-100).", 0, 100)
-    ), err);
-#endif
-
-    TUYA_CALL_ERR_GOTO(AI_MCP_TOOL_ADD(
-        "device_audio_mode_set",
-        "Sets the device's chat mode.\n"
-        "Parameters:\n"
-        "- mode (integer): The chat mode (0=hold, 1=key_press, 2=wakeup, 3=free).\n"
-        "Response:\n"
-        "- Returns true if the mode was set successfully.",
-        __set_mode,
-        NULL,
-        MCP_PROP_INT_RANGE("mode", "The chat mode (0=hold, 1=key_press, 2=wakeup, 3=free)", 0, 3)
-    ), err);
+    /* 已移除的工具（保证云端工具列表与实际能力一致，不再暴露"调用必失败"的占位工具）：
+     * - device_camera_take_photo：依赖 ai_video（未移植到本仓）
+     * - device_audio_volume_set：依赖 ai_audio（未移植到本仓）
+     * - device_audio_mode_set  ：依赖 ai_mode（未移植到本仓）
+     * 上游带宏门控的完整实现保留在 esp32 快照
+     * （esp32/examples/iot_demo/components/tuyaopen-core/agent-core/ai_mcp/src/ai_mcp_tools.c），
+     * 将来移植对应组件后，从那里取回实现并在此恢复注册即可。 */
 
     return OPRT_OK;
 

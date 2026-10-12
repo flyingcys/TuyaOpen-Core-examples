@@ -15,15 +15,8 @@
 // #define SPEEX_ENCODE_MAX_PACKET     (1500)
 // #define SPEEX_ENCODE_BYTES_MAX      (1500)
 
-#define SPEEX_MODEID_WB_RATE        16000
-#define SPEEX_FRAME_SIZE            (320 * 1)                 //need use SPEEX_GET_FRAME_SIZE
-#define SPEEX_FRAME_BYTE            (SPEEX_FRAME_SIZE * sizeof(short))  //16 bits/sample
 #define SPEEX_MAX_FRAME_BYTES       (200 * 1)
-#define SPEEX_VER_STRING_LEN        16
 #define SPEEX_QUALITY_DEF           5                   //Set the quality to 5(16k rate: 8-->27.8kbps 5-->16.8kbps)
-#define MODE_1_QUALITY_5_FRAME_SIZE 42
-#define MODE_1_QUALITY_8_FRAME_SIZE 70
-#define SPEEX_ENCODE_BUFFER_LEN     (MODE_1_QUALITY_5_FRAME_SIZE * 5)
 
 typedef VOID *SpeexEncoder;
 

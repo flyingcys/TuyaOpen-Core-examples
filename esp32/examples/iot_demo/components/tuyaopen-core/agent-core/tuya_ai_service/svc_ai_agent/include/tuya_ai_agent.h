@@ -38,19 +38,6 @@ typedef OPERATE_RET (*TY_AI_MCP_CB)(CHAR_T *sid, CHAR_T *eid, CONST ty_cJSON *js
 
 typedef BYTE_T AI_VIDEO_STREAM_E;
 #define AI_VIDEO_STREAM_MAIN   0x00
-#define AI_VIDEO_STREAM_SUB    0x01
-#define AI_VIDEO_STREAM_THIRD  0x02
-
-typedef union {
-    /** video attr */
-    AI_VIDEO_ATTR_BASE_T video;
-    /** audio attr */
-    AI_AUDIO_ATTR_BASE_T audio;
-    /** image attr */
-    AI_IMAGE_ATTR_BASE_T image;
-    /** file attr */
-    AI_FILE_ATTR_BASE_T file;
-} AI_ATTR_BIZ_T;
 
 typedef struct {
     UINT32_T bit_rate;          // bit rate in bps, default is 16000, set 48000 or 64000 to reduce latency in poor network conditions
@@ -112,25 +99,6 @@ OPERATE_RET tuya_ai_agent_init(AI_AGENT_CFG_T *cfg);
 VOID tuya_ai_agent_deinit(VOID);
 
 /**
- * @brief ai agent set attribute
- *
- * @param[in] ptype packet type
- * @param[in] attr attribute
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-VOID tuya_ai_agent_set_attr(AI_PACKET_PT ptype, AI_ATTR_BIZ_T *attr);
-
-/**
- * @brief ai agent set tts config
- *
- * @param[in] cfg config for tts
- *
- * @return VOID
- */
-VOID tuya_ai_agent_set_tts_cfg(AI_AGENT_TTS_CFG_T *cfg);
-
-/**
  * @brief ai agent create session
  *
  * @param[in] scode solution code
@@ -142,44 +110,6 @@ VOID tuya_ai_agent_set_tts_cfg(AI_AGENT_TTS_CFG_T *cfg);
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
 OPERATE_RET tuya_ai_agent_crt_session(CHAR_T *scode, UINT_T bizCode, UINT64_T bizTag, BYTE_T *attr, UINT_T attr_len);
-
-/**
- * @brief ai agent del session
- *
- * @param[in] scode solution code
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_agent_del_session(CHAR_T *scode);
-
-/**
- * @brief ai agent set event id
- *
- * @param[in] eid event id
- *
- */
-VOID tuya_ai_agent_set_eid(AI_EVENT_ID eid);
-
-/**
- * @brief Set custom parameters for the next event start
- * @param[in] value event parameter string
- */
-VOID tuya_ai_agent_set_event_param(CHAR_T *value);
-
-/**
- * @brief Set custom parameters for the next session create
- * @param[in] value session parameter string
- */
-VOID tuya_ai_agent_set_session_param(CHAR_T *value);
-
-/**
- * @brief set ai agent solution code
- *
- * @param[in] scode solution code
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_agent_set_scode(CHAR_T *scode);
 
 /**
  * @brief ai agent event
@@ -194,16 +124,6 @@ OPERATE_RET tuya_ai_agent_event_s(CHAR_T *scode, AI_EVENT_TYPE etype, AI_PACKET_
 #define tuya_ai_agent_event(etype, ptype) tuya_ai_agent_event_s(tuya_ai_agent_get_scode(NULL), etype, ptype)
 
 /**
- * @brief ai agent event trigger
- *
- * @param[in] scode solution code
- * @param[in] trigger event trigger string
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_agent_trigger(CHAR_T *scode, CONST CHAR_T *trigger, CHAR_T *param);
-
-/**
  * @brief get ai agent solution code
  *
  * @param[in] scode solution code
@@ -213,64 +133,11 @@ OPERATE_RET tuya_ai_agent_trigger(CHAR_T *scode, CONST CHAR_T *trigger, CHAR_T *
 CHAR_T* tuya_ai_agent_get_scode(CHAR_T *scode);
 
 /**
- * @brief get recv callback by packet type
- *
- * @param[in] scode solution code
- * @param[in] type packet type
- *
- * @return recv callback
- */
-AI_BIZ_RECV_CB tuya_ai_agent_get_recv_cb(CHAR_T *scode, AI_PACKET_PT type);
-
-/**
- * @brief set send callback
- *
- * @param[in] in_send send callback
- *
- * @return VOID
- */
-VOID tuya_ai_agent_send_cb_set(AI_INPUT_SEND_T *in_send);
-
-/**
  * @brief is internal solution code
  *
  * @return TRUE: internal solution code; FALSE: user solution code
  */
 BOOL_T tuya_ai_agent_is_internal_scode(VOID);
-
-/**
- * @brief control internal solution code
- *
- * @param[in] flag TRUE: enable internal solution code; FALSE: disable internal solution code
- *
- * @return VOID
- */
-VOID tuya_ai_agent_internal_scode_ctrl(BOOL_T flag);
-
-/**
- * @brief get session by solution code
- *
- * @param[in] scode solution code
- *
- * @return session pointer, NULL if not found
- */
-AI_AGENT_SESSION_T* tuya_ai_agent_get_session(CHAR_T *scode);
-
-/**
- * @brief server vad control
- *
- * @param[in] flag TRUE: enable server vad; FALSE: disable server vad
- *
- */
-VOID tuya_ai_agent_server_vad_ctrl(BOOL_T flag);
-
-/**
- * @brief processing interrupt control
- *
- * @param[in] flag TRUE: enable processing interrupt; FALSE: disable processing interrupt
- *
- */
-VOID tuya_ai_agent_proc_interrupt_ctrl(BOOL_T flag);
 
 /**
  * @brief get down attribute
@@ -301,33 +168,9 @@ OPERATE_RET tuya_ai_agent_mcp_set_cb(TY_AI_MCP_CB cb, VOID *user_data);
 OPERATE_RET tuya_ai_agent_mcp_response(CHAR_T *sid, CHAR_T *eid, CHAR_T *message);
 
 /**
- * @brief get event callback
- *
- * @param[in] scode solution code
- *
- * @return event callback
- */
-AI_EVENT_CB tuya_ai_agent_get_evt_cb(CHAR_T *scode);
-
-/**
  * @brief is ai agent ready
  *
  * @return TRUE is ready, FALSE is not ready
  */
 BOOL_T tuya_ai_agent_is_ready(VOID);
-
-/**
- * @brief set recv callback
- *
- * @param[in] recv recv callback data
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_agent_set_recv_cb(AI_AGENT_RECV_DATA_T *recv);
-
-/**
- * @brief Set video stream channel type
- * @param[in] stream_type video stream type
- */
-VOID tuya_ai_agent_set_video_stream(AI_VIDEO_STREAM_E stream_type);
 #endif // __TUYA_AI_AGENT_H__

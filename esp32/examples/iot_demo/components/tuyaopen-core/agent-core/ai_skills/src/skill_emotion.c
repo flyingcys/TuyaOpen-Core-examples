@@ -110,69 +110,7 @@ OPERATE_RET ai_skill_emo_process(cJSON *json)
 }
 
 
-/**
- * @brief Convert Unicode code point string "U+XXXX" to UTF-8 bytes
- * @param[in] unicode_str Unicode string in format "U+XXXX" or "u+xxxx" (e.g., "U+1F636")
- * @param[out] utf8_buf Buffer to store UTF-8 bytes (at least 5 bytes)
- * @param[in] buf_size Size of the buffer
- * @return Number of bytes written, or -1 on error
- */
-int ai_emoji_unicode_to_utf8(const char* unicode_str, char* utf8_buf, size_t buf_size)
-{
-    TUYA_CHECK_NULL_RETURN(unicode_str, -1);
-    TUYA_CHECK_NULL_RETURN(utf8_buf, -1);
-    
-    if (buf_size < 5 || (unicode_str[0] != 'U' && unicode_str[0] != 'u') || unicode_str[1] != '+') {
-        return -1;
-    }
-    
-    // Parse hex string after "U+"
-    uint32_t codepoint = 0;
-    for (const char* p = unicode_str + 2; *p != '\0'; p++) {
-        char c = *p;
-        if (c >= '0' && c <= '9') {
-            codepoint = (codepoint << 4) | (c - '0');
-        } else if (c >= 'A' && c <= 'F') {
-            codepoint = (codepoint << 4) | (c - 'A' + 10);
-        } else if (c >= 'a' && c <= 'f') {
-            codepoint = (codepoint << 4) | (c - 'a' + 10);
-        } else {
-            break;
-        }
-    }
-    
-    if (codepoint > 0x10FFFF) {
-        return -1;
-    }
-    
-    // Convert to UTF-8
-    int len = 0;
-    if (codepoint <= 0x7F) {
-        utf8_buf[0] = (char)codepoint;
-        len = 1;
-    } else if (codepoint <= 0x7FF) {
-        utf8_buf[0] = (char)(0xC0 | (codepoint >> 6));
-        utf8_buf[1] = (char)(0x80 | (codepoint & 0x3F));
-        len = 2;
-    } else if (codepoint <= 0xFFFF) {
-        utf8_buf[0] = (char)(0xE0 | (codepoint >> 12));
-        utf8_buf[1] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
-        utf8_buf[2] = (char)(0x80 | (codepoint & 0x3F));
-        len = 3;
-    } else {
-        utf8_buf[0] = (char)(0xF0 | (codepoint >> 18));
-        utf8_buf[1] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
-        utf8_buf[2] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
-        utf8_buf[3] = (char)(0x80 | (codepoint & 0x3F));
-        len = 4;
-    }
-    
-    utf8_buf[len] = '\0';
-
-    return len;
-}
-
-const char* ai_agent_emoji_get_name(const char* emoji) 
+const char* ai_agent_emoji_get_name(const char* emoji)
 {
     TUYA_CHECK_NULL_RETURN(emoji, NULL);
     
@@ -186,20 +124,6 @@ const char* ai_agent_emoji_get_name(const char* emoji)
     
     return cAI_AGENT_EMO[0].name; /* Emoji not found, use neutral as default */
 }
-
-const char* ai_agent_emoji_get_by_name(const char* name) 
-{
-    TUYA_CHECK_NULL_RETURN(name, NULL);
-    
-    for (size_t i = 0; i < CNTSOF(cAI_AGENT_EMO); i++) {
-        if (strcmp(cAI_AGENT_EMO[i].name, name) == 0) {
-            return cAI_AGENT_EMO[i].emoji;
-        }
-    }
-    
-    return cAI_AGENT_EMO[0].emoji; /* Emoji not found, use neutral as default */
-}
-
 
 /**
  * @brief Play emotion expression.

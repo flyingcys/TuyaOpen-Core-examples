@@ -37,7 +37,6 @@
 
 #define AI_SEND_SOCKET_TIMEOUT (10 * 1000)
 #define AI_ADD_PKT_LEN 128
-#define AI_RSA_PKT_LEN 256
 
 #ifndef AI_READ_SOCKET_BUF_SIZE
 #define AI_READ_SOCKET_BUF_SIZE 0
@@ -94,6 +93,7 @@ typedef struct {
 STATIC AI_BASIC_PROTO_T *ai_basic_proto = NULL;
 
 STATIC OPERATE_RET __default_write(AI_PACKET_WRITER_T *writer, VOID *buf, UINT_T buf_len);
+STATIC VOID tuya_free_user_attrs(AI_ATTRIBUTE_T *attr); // 本文件内使用，不再对外导出
 
 STATIC AI_PACKET_WRITER_T s_default_packet_writer = {
     .write = __default_write,
@@ -445,7 +445,7 @@ UINT_T __ai_get_send_attr_len(AI_SEND_PACKET_T *info)
     return len;
 }
 
-BOOL_T tuya_ai_is_need_attr(AI_FRAG_FLAG frag_flag)
+STATIC BOOL_T tuya_ai_is_need_attr(AI_FRAG_FLAG frag_flag)
 {
     if ((frag_flag == AI_PACKET_NO_FRAG) || (frag_flag == AI_PACKET_FRAG_START)) {
         return TRUE;
@@ -1154,7 +1154,7 @@ STATIC VOID __ai_basic_get_send_frag(AI_SEND_PACKET_T *info, AI_FRAG_FLAG *frag_
     return;
 }
 
-OPERATE_RET tuya_ai_basic_pkt_frag_send(AI_SEND_PACKET_T *info)
+STATIC OPERATE_RET tuya_ai_basic_pkt_frag_send(AI_SEND_PACKET_T *info)
 {
     OPERATE_RET rt = OPRT_OK;
     if (info->len > AI_MAX_FRAGMENT_LENGTH) {
@@ -1614,15 +1614,6 @@ VOID tuya_ai_basic_pkt_free(CHAR_T *data)
     }
 }
 
-VOID tuya_ai_basic_set_frag(BOOL_T flag)
-{
-    if (!ai_basic_proto) {
-        AI_PROTO_D("please set after ai basic proto init");
-        return;
-    }
-    ai_basic_proto->frag_flag = flag;
-}
-
 STATIC BOOL_T __ai_basic_get_frag_flag()
 {
     return ai_basic_proto->frag_flag;
@@ -1873,7 +1864,7 @@ EXIT:
     return recv_len;
 }
 
-VOID tuya_free_user_attrs(AI_ATTRIBUTE_T *attr)
+STATIC VOID tuya_free_user_attrs(AI_ATTRIBUTE_T *attr)
 {
     if (attr) {
         OS_FREE(attr);

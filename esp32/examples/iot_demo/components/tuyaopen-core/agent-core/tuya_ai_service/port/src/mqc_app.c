@@ -110,30 +110,6 @@ OPERATE_RET mqc_send_custom_mqtt_msg(IN CONST uint32_t protocol, IN CONST uint8_
 
 // netmgr（netmgr 组件已从 iot-core 移除，此处保留原 linkage 接口形态，IP 取本机网口）
 
-OPERATE_RET __linkage_open(LINKAGE_CAP_E cap)
-{
-    PR_DEBUG("linkage open not supported");
-    return OPRT_NOT_SUPPORTED;
-}
-
-OPERATE_RET __linkage_close(VOID)
-{
-    PR_ERR("linkage close not supported");
-    return OPRT_NOT_SUPPORTED;
-}
-
-OPERATE_RET __linkage_reset(IN GW_RESET_TYPE_E reset_type)
-{
-    PR_ERR("linkage reset not supported");
-    return OPRT_NOT_SUPPORTED;
-}
-
-OPERATE_RET __linkage_set(IN LINKAGE_CFG_E cfg, IN VOID *data)
-{
-    PR_ERR("linkage set not supported");
-    return OPRT_NOT_SUPPORTED;
-}
-
 OPERATE_RET __linkage_get(IN LINKAGE_CFG_E cfg, OUT VOID *data)
 {
     OPERATE_RET rt = OPRT_OK;
@@ -151,10 +127,6 @@ OPERATE_RET __linkage_get(IN LINKAGE_CFG_E cfg, OUT VOID *data)
 static netmgr_linkage_t g_linkage = {
     .type = LINKAGE_TYPE_WIFI,
     .capability = 0,
-    .open = __linkage_open,
-    .close = __linkage_close,
-    .reset = __linkage_reset,
-    .set = __linkage_set,
     .get = __linkage_get,
 };
 

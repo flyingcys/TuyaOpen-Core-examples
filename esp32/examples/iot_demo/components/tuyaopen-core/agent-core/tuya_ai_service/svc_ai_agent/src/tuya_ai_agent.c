@@ -42,9 +42,7 @@
 #elif defined(ENABLE_TUYA_CODEC_OPUS) && (ENABLE_TUYA_CODEC_OPUS == 1)
 #include "tuya_ai_encoder_opus.h"
 #endif
-#if defined(ENABLE_TUYA_CODEC_SPEEX_IPC) && (ENABLE_TUYA_CODEC_SPEEX_IPC == 1)
-#include "tuya_ai_encoder_speex_ipc.h"
-#elif defined(ENABLE_TUYA_CODEC_SPEEX) && (ENABLE_TUYA_CODEC_SPEEX == 1)
+#if defined(ENABLE_TUYA_CODEC_SPEEX) && (ENABLE_TUYA_CODEC_SPEEX == 1)
 #include "tuya_ai_encoder_speex.h"
 #endif
 #include "tuya_ai_protocol.h"
@@ -86,6 +84,7 @@ typedef struct {
 STATIC AI_AGENT_CTX_T ai_agent_ctx;
 
 STATIC OPERATE_RET __mcp_handle(CHAR_T *sid, CHAR_T *eid, CHAR_T *data);
+STATIC VOID tuya_ai_agent_set_eid(AI_EVENT_ID eid); // 本文件内使用（__cloud_trigger_wq），不再对外导出
 
 STATIC OPERATE_RET __parse_attr_time(BYTE_T *data, UINT_T len, CHAR_T *time_str)
 {
@@ -134,7 +133,7 @@ STATIC OPERATE_RET __parse_attr_time(BYTE_T *data, UINT_T len, CHAR_T *time_str)
     return rt;
 }
 
-OPERATE_RET tuya_ai_agent_set_scode(CHAR_T *scode)
+STATIC OPERATE_RET tuya_ai_agent_set_scode(CHAR_T *scode)
 {
     if (scode) {
         memset(&ai_agent_ctx.scode, 0, SIZEOF(ai_agent_ctx.scode));
@@ -830,7 +829,7 @@ STATIC VOID __ai_agent_del_sid(AI_SESSION_ID id)
     return;
 }
 
-AI_AGENT_SESSION_T *tuya_ai_agent_get_session(CHAR_T *scode)
+STATIC AI_AGENT_SESSION_T *tuya_ai_agent_get_session(CHAR_T *scode)
 {
     USHORT_T idx = 0;
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
@@ -855,27 +854,7 @@ VOID __ai_agent_free_recv_cb(VOID)
     }
 }
 
-OPERATE_RET tuya_ai_agent_set_recv_cb(AI_AGENT_RECV_DATA_T *recv)
-{
-    UINT_T idx = 0;
-    for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
-        if (ai_agent_ctx.recv[idx] == NULL) {
-            ai_agent_ctx.recv[idx] = Malloc(SIZEOF(AI_AGENT_RECV_DATA_T));
-            if (ai_agent_ctx.recv[idx] == NULL) {
-                PR_ERR("malloc recv data failed");
-                return OPRT_MALLOC_FAILED;
-            }
-            memset(ai_agent_ctx.recv[idx], 0, SIZEOF(AI_AGENT_RECV_DATA_T));
-            memcpy(ai_agent_ctx.recv[idx], recv, SIZEOF(AI_AGENT_RECV_DATA_T));
-            PR_DEBUG("set recv cb idx:%d, scode:%s", idx, recv->scode);
-            return OPRT_OK;
-        }
-    }
-    PR_ERR("ai agent recv cb full");
-    return OPRT_COM_ERROR;
-}
-
-AI_BIZ_RECV_CB tuya_ai_agent_get_recv_cb(CHAR_T *scode, AI_PACKET_PT type)
+STATIC AI_BIZ_RECV_CB tuya_ai_agent_get_recv_cb(CHAR_T *scode, AI_PACKET_PT type)
 {
     UINT_T idx = 0, jdx = 0;
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
@@ -905,7 +884,7 @@ AI_BIZ_RECV_CB tuya_ai_agent_get_recv_cb(CHAR_T *scode, AI_PACKET_PT type)
     return NULL;
 }
 
-AI_EVENT_CB tuya_ai_agent_get_evt_cb(CHAR_T *scode)
+STATIC AI_EVENT_CB tuya_ai_agent_get_evt_cb(CHAR_T *scode)
 {
     UINT_T idx = 0;
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
@@ -1101,31 +1080,6 @@ OPERATE_RET tuya_ai_agent_crt_session(CHAR_T *scode, UINT_T bizCode, UINT64_T bi
     return rt;
 }
 
-OPERATE_RET tuya_ai_agent_del_session(CHAR_T *scode)
-{
-    if (ai_agent_ctx.enable_joyinside) {
-        return OPRT_OK;
-    }
-    UINT_T idx                     = 0;
-    CHAR_T sid[AI_UUID_V4_LEN + 1] = {0};
-
-    for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
-        if (ai_agent_ctx.session[idx].sid[0] != '\0' &&
-            ((!scode && ai_agent_ctx.session[idx].scode[0] == 0) ||
-             (scode && strcmp(ai_agent_ctx.session[idx].scode, scode) == 0))) {
-            PR_DEBUG("del session idx:%d", idx);
-            strncpy(sid, ai_agent_ctx.session[idx].sid, AI_UUID_V4_LEN);
-            memset(&ai_agent_ctx.session[idx], 0, SIZEOF(AI_AGENT_SESSION_T));
-            break;
-        }
-    }
-    if (idx >= AI_SESSION_MAX_NUM) {
-        PR_ERR("session not found, scode:%s", scode ? scode : "null");
-        return OPRT_COM_ERROR;
-    }
-    return tuya_ai_biz_del_session(sid, AI_CODE_OK);
-}
-
 STATIC OPERATE_RET __ai_session_closed_evt(VOID_T *data)
 {
     OPERATE_RET rt = OPRT_OK;
@@ -1199,9 +1153,7 @@ STATIC VOID __ai_agent_reg_encoder(VOID)
 #elif defined(ENABLE_TUYA_CODEC_OPUS) && (ENABLE_TUYA_CODEC_OPUS == 1)
     tuya_ai_register_encoder(&g_tuya_ai_encoder_opus);
 #endif
-#if defined(ENABLE_TUYA_CODEC_SPEEX_IPC) && (ENABLE_TUYA_CODEC_SPEEX_IPC == 1)
-    tuya_ai_register_encoder(&g_tuya_ai_encoder_speex_ipc);
-#elif defined(ENABLE_TUYA_CODEC_SPEEX) && (ENABLE_TUYA_CODEC_SPEEX == 1)
+#if defined(ENABLE_TUYA_CODEC_SPEEX) && (ENABLE_TUYA_CODEC_SPEEX == 1)
     tuya_ai_register_encoder(&g_tuya_ai_encoder_speex);
 #endif
 }
@@ -1213,20 +1165,9 @@ STATIC VOID __ai_agent_unreg_encoder(VOID)
 #elif defined(ENABLE_TUYA_CODEC_OPUS) && (ENABLE_TUYA_CODEC_OPUS == 1)
     tuya_ai_unregister_encoder(&g_tuya_ai_encoder_opus);
 #endif
-#if defined(ENABLE_TUYA_CODEC_SPEEX_IPC) && (ENABLE_TUYA_CODEC_SPEEX_IPC == 1)
-    tuya_ai_unregister_encoder(&g_tuya_ai_encoder_speex_ipc);
-#elif defined(ENABLE_TUYA_CODEC_SPEEX) && (ENABLE_TUYA_CODEC_SPEEX == 1)
+#if defined(ENABLE_TUYA_CODEC_SPEEX) && (ENABLE_TUYA_CODEC_SPEEX == 1)
     tuya_ai_unregister_encoder(&g_tuya_ai_encoder_speex);
 #endif
-}
-
-VOID tuya_ai_agent_send_cb_set(AI_INPUT_SEND_T *in_send)
-{
-    if (NULL == in_send) {
-        PR_ERR("input is null");
-        return;
-    }
-    memcpy(ai_agent_ctx.biz_get, in_send, AI_BIZ_MAX_NUM * SIZEOF(AI_INPUT_SEND_T));
 }
 
 OPERATE_RET tuya_ai_agent_init(AI_AGENT_CFG_T *cfg)
@@ -1340,11 +1281,6 @@ BOOL_T tuya_ai_agent_is_internal_scode(VOID)
     return ai_agent_ctx.enable_internal_scode;
 }
 
-VOID tuya_ai_agent_internal_scode_ctrl(BOOL_T flag)
-{
-    ai_agent_ctx.enable_internal_scode = flag;
-}
-
 OPERATE_RET tuya_ai_agent_start(CHAR_T *scode)
 {
     OPERATE_RET rt = OPRT_OK;
@@ -1394,32 +1330,6 @@ OPERATE_RET tuya_ai_agent_end(CHAR_T *scode)
         tuya_ai_agent_event_s(scode, AI_EVENT_END, 0);
     }
     return OPRT_OK;
-}
-
-VOID tuya_ai_agent_set_attr(AI_PACKET_PT ptype, AI_ATTR_BIZ_T *attr)
-{
-    if (AI_PT_VIDEO == ptype) {
-        memcpy(&ai_agent_ctx.up_attr.video, &(attr->video), SIZEOF(ai_agent_ctx.up_attr.video));
-    } else if (AI_PT_AUDIO == ptype) {
-        memcpy(&ai_agent_ctx.up_attr.audio, &(attr->audio), SIZEOF(ai_agent_ctx.up_attr.audio));
-        __ai_agent_set_audio_encoder(&(attr->audio));
-    } else if (AI_PT_IMAGE == ptype) {
-        memcpy(&ai_agent_ctx.up_attr.image, &(attr->image), SIZEOF(ai_agent_ctx.up_attr.image));
-    } else if (AI_PT_FILE == ptype) {
-        memcpy(&ai_agent_ctx.up_attr.file, &(attr->file), SIZEOF(ai_agent_ctx.up_attr.file));
-    }
-}
-
-VOID tuya_ai_agent_set_tts_cfg(AI_AGENT_TTS_CFG_T *cfg)
-{
-    if (cfg) {
-        memcpy(&ai_agent_ctx.tts_cfg, cfg, SIZEOF(ai_agent_ctx.tts_cfg));
-    }
-}
-
-VOID tuya_ai_agent_set_video_stream(AI_VIDEO_STREAM_E stream_type)
-{
-    ai_agent_ctx.video_stream = stream_type;
 }
 
 STATIC OPERATE_RET __ai_upload_stream(CHAR_T *scode, AI_PACKET_PT ptype, AI_BIZ_HD_T *biz, CHAR_T *data, UINT_T len, UINT_T total_len)
@@ -1560,16 +1470,6 @@ OPERATE_RET tuya_ai_agent_upload_stream(CHAR_T *scode, AI_PACKET_PT ptype, AI_BI
     }
 }
 
-VOID tuya_ai_agent_server_vad_ctrl(BOOL_T flag)
-{
-    ai_agent_ctx.enable_serv_vad = flag;
-}
-
-VOID tuya_ai_agent_proc_interrupt_ctrl(BOOL_T flag)
-{
-    ai_agent_ctx.enable_proc_intr = flag;
-}
-
 STATIC OPERATE_RET __ai_event_start(AI_SESSION_ID sid, AI_SESSION_ID eid)
 {
     OPERATE_RET rt = OPRT_OK;
@@ -1686,113 +1586,13 @@ OPERATE_RET tuya_ai_agent_event_s(CHAR_T *scode, AI_EVENT_TYPE etype, AI_PACKET_
     return rt;
 }
 
-OPERATE_RET tuya_ai_agent_trigger(CHAR_T *scode, CONST CHAR_T *trigger, CHAR_T *param)
-{
-#if defined(AI_VERSION) && (0x01 == AI_VERSION)
-    return OPRT_NOT_SUPPORTED;
-#endif
-    OPERATE_RET rt      = OPRT_OK;
-    BYTE_T     *out     = NULL;
-    UINT_T      out_len = 0;
-
-    AI_AGENT_SESSION_T *session = tuya_ai_agent_get_session(scode);
-    if ((session == NULL) || (session->sid[0] == 0)) {
-        return OPRT_COM_ERROR;
-    }
-
-    ty_cJSON *attr_info       = ty_cJSON_CreateObject();
-    ty_cJSON *eventAttributes = ty_cJSON_CreateObject();
-    ty_cJSON_AddItemToObject(attr_info, "eventAttributes", eventAttributes);
-    ty_cJSON *custom_param = ty_cJSON_CreateObject();
-    ty_cJSON_AddItemToObject(eventAttributes, "custom.param", custom_param);
-    ty_cJSON *sys_trigger = ty_cJSON_CreateObject();
-    ty_cJSON_AddItemToObject(custom_param, "sys.trigger", sys_trigger);
-    ty_cJSON_AddStringToObject(sys_trigger, "value", trigger);
-    if (param && strlen(param) > 0) {
-        ty_cJSON *extra = ty_cJSON_Parse(param);
-        if (extra) {
-            ty_cJSON *child = extra->child;
-            while (child) {
-                ty_cJSON *next = child->next;
-                ty_cJSON_DetachItemViaPointer(extra, child);
-                ty_cJSON_AddItemToObject(custom_param, child->string, child);
-                child = next;
-            }
-            ty_cJSON_Delete(extra);
-        }
-    }
-    out = (BYTE_T *)ty_cJSON_PrintUnformatted(attr_info);
-    if (out == NULL) {
-        ty_cJSON_Delete(attr_info);
-        return OPRT_MALLOC_FAILED;
-    }
-    out_len = strlen((CHAR_T *)out);
-    ty_cJSON_Delete(attr_info);
-    CHAR_T eid[AI_UUID_V4_LEN + 1] = {0};
-    tuya_ai_basic_uuid_short(eid);
-    PR_DEBUG("event trigger attr: %s, eid:%s, sid:%s", out, eid, session->sid);
-    rt = tuya_ai_event_trigger(session->sid, eid, out, out_len);
-    Free(out);
-    return rt;
-}
-
-VOID tuya_ai_agent_set_eid(AI_EVENT_ID eid)
+STATIC VOID tuya_ai_agent_set_eid(AI_EVENT_ID eid)
 {
     if (eid && strlen(eid) > 0) {
         memset(ai_agent_ctx.cfg_eid, 0, AI_UUID_V4_LEN + 1);
         memcpy(ai_agent_ctx.cfg_eid, eid, AI_UUID_V4_LEN);
         PR_DEBUG("set eid:%s", eid);
     }
-}
-
-VOID tuya_ai_agent_set_event_param(CHAR_T *value)
-{
-    if (value == NULL || strlen(value) == 0) {
-        PR_ERR("event param value is empty");
-        return;
-    }
-    ty_cJSON *json = ty_cJSON_Parse(value);
-    if (json == NULL) {
-        PR_ERR("event param value is not valid json");
-        return;
-    }
-    ty_cJSON_Delete(json);
-    if (ai_agent_ctx.event_param) {
-        Free(ai_agent_ctx.event_param);
-        ai_agent_ctx.event_param = NULL;
-    }
-    ai_agent_ctx.event_param = Malloc(strlen(value) + 1);
-    if (ai_agent_ctx.event_param == NULL) {
-        PR_ERR("malloc event param failed");
-        return;
-    }
-    memset(ai_agent_ctx.event_param, 0, strlen(value) + 1);
-    memcpy(ai_agent_ctx.event_param, value, strlen(value));
-}
-
-VOID tuya_ai_agent_set_session_param(CHAR_T *value)
-{
-    if (value == NULL || strlen(value) == 0) {
-        PR_ERR("session param value is empty");
-        return;
-    }
-    ty_cJSON *json = ty_cJSON_Parse(value);
-    if (json == NULL) {
-        PR_ERR("session param value is not valid json");
-        return;
-    }
-    ty_cJSON_Delete(json);
-    if (ai_agent_ctx.session_param) {
-        Free(ai_agent_ctx.session_param);
-        ai_agent_ctx.session_param = NULL;
-    }
-    ai_agent_ctx.session_param = Malloc(strlen(value) + 1);
-    if (ai_agent_ctx.session_param == NULL) {
-        PR_ERR("malloc session param failed");
-        return;
-    }
-    memset(ai_agent_ctx.session_param, 0, strlen(value) + 1);
-    memcpy(ai_agent_ctx.session_param, value, strlen(value));
 }
 
 OPERATE_RET tuya_ai_agent_mcp_set_cb(TY_AI_MCP_CB cb, VOID *user_data)

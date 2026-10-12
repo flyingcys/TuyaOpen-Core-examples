@@ -33,39 +33,20 @@
 #include "tuya_devos_utils.h"
 #include "uni_base64.h"
 
-#ifndef AI_DL_IMAGE_UNIT_SIZE
-#define AI_DL_IMAGE_UNIT_SIZE (6144)
-#endif
-
 typedef struct {
     CHAR_T        *url;
     AI_PACKET_PT   type;
     AI_BIZ_RECV_CB cb;
 } AI_HTTP_DLD_T;
 
-STATIC BOOL_T sg_ai_dld_stop = FALSE;
-
-STATIC OPERATE_RET __ai_http_output_media(AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO_T *head, CHAR_T *data, AI_BIZ_RECV_CB cb)
-{
-    OPERATE_RET  rt   = OPRT_OK;
-    AI_PACKET_PT type = attr->type;
-    AI_PROTO_D("output media type:%d, len:%d", type, head->len);
-    if (cb) {
-        rt = cb(attr, head, data, NULL);
-    }
-    return rt;
-}
-
 STATIC VOID __ai_http_dld_work(VOID *data)
 {
     OPERATE_RET        rt           = OPRT_OK;
     SESSION_ID         http_sesion  = NULL;
-    CHAR_T            *buf          = NULL;
     AI_HTTP_DLD_T     *dld          = (AI_HTTP_DLD_T *)data;
     AI_PACKET_PT       type         = dld->type;
     CHAR_T            *url          = dld->url;
     S_HTTP_MANAGER    *http_manager = NULL;
-    STATIC BOOL_T      first_pkt    = TRUE;
     AI_BIZ_HEAD_INFO_T head         = {0};
     AI_BIZ_ATTR_INFO_T attr         = {0};
     attr.type                       = type;
@@ -126,8 +107,6 @@ STATIC VOID __ai_http_dld_work(VOID *data)
         .type = HTTP_GET,
         .resource = hu_h->buf,
         .version = HTTP_VER_1_1,
-        .add_head_cb = NULL,
-        .add_head_data = NULL
     };
 
     rt = http_manager->send_http_request(http_sesion, &req, 0);
@@ -167,9 +146,6 @@ EXIT:
         }
         OS_FREE(dld);
     }
-    if (buf) {
-        OS_FREE(buf);
-    }
     if (http_sesion) {
         http_manager->destory_http_session(http_sesion);
     }
@@ -195,7 +171,6 @@ STATIC OPERATE_RET __ai_http_dld_media(CHAR_T *url, AI_PACKET_PT type, AI_BIZ_RE
         return OPRT_MALLOC_FAILED;
     }
     PR_DEBUG("do http dld work");
-    sg_ai_dld_stop = FALSE;
     rt             = tal_workq_schedule(WORKQ_SYSTEM, __ai_http_dld_work, dld);
     if (OPRT_OK != rt) {
         PR_ERR("schedule workq err,rt:%d", rt);
@@ -215,19 +190,9 @@ OPERATE_RET tuya_ai_http_dld_image(CHAR_T *url, AI_BIZ_RECV_CB cb)
     return __ai_http_dld_media(url, AI_PT_IMAGE, cb);
 }
 
-OPERATE_RET tuya_ai_http_dld_video(CHAR_T *url, AI_BIZ_RECV_CB cb)
-{
-    return __ai_http_dld_media(url, AI_PT_VIDEO, cb);
-}
-
 OPERATE_RET tuya_ai_http_dld_file(CHAR_T *url, AI_BIZ_RECV_CB cb)
 {
     return __ai_http_dld_media(url, AI_PT_FILE, cb);
-}
-
-OPERATE_RET tuya_ai_http_dld_text(CHAR_T *url, AI_BIZ_RECV_CB cb)
-{
-    return __ai_http_dld_media(url, AI_PT_TEXT, cb);
 }
 
 OPERATE_RET tuya_ai_http_get_secret_key(UCHAR_T *key)
@@ -261,9 +226,4 @@ OPERATE_RET tuya_ai_http_get_secret_key(UCHAR_T *key)
     return rt;
 #endif
     return OPRT_OK;
-}
-
-VOID tuya_ai_http_stop_dld(VOID)
-{
-    sg_ai_dld_stop = TRUE;
 }

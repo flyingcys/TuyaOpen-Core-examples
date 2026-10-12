@@ -26,6 +26,12 @@
 #include "agent_audio.h"
 #include "agent_downlink.h"
 
+/* MCP 头随 ai_mcp 目标（CONFIG_ENABLE_COMP_AI_MCP）提供：关开关时该目标不存在，
+ * include 路径也随之消失，故 include 与调用一并由宏守卫（同下方 ENABLE_QRCODE 写法） */
+#if defined(ENABLE_COMP_AI_MCP) && (ENABLE_COMP_AI_MCP == 1)
+#include "ai_mcp.h"
+#endif
+
 #include <assert.h>
 
 #if defined(ENABLE_QRCODE) && (ENABLE_QRCODE == 1)
@@ -328,6 +334,19 @@ void user_main(void)
 
     /* token 获取 port：mqtt_bind 直连绑定（未激活时出二维码） */
     tuya_iot_token_get_port_register(&client, mqtt_bind_token_get);
+
+#if defined(ENABLE_COMP_AI_MCP) && (ENABLE_COMP_AI_MCP == 1)
+    /* MCP 工具服务：ai_mcp_init 只订阅 EVENT_MQTT_CONNECTED（一次性），真正的初始化
+     * （注册工具 + tuya_ai_agent_mcp_set_cb）在 MQTT 连上后的回调里执行。
+     * 放这里（tuya_iot_start 之前）：事件由 iot 任务在 MQTT 连上时发布，订阅必须先于
+     * 首次发布；放在 tuya_iot_init 之后则是为了保持"运行时服务（KV/定时器/工作队列）
+     * 先就绪、再接云"的既有顺序——tal_event_subscribe 会惰性初始化事件管理器，
+     * 故此处无硬性依赖，只为可读性。 */
+    rt = ai_mcp_init();
+    if (rt != OPRT_OK) {
+        PR_ERR("[MCP] ai_mcp_init failed: %d", rt);
+    }
+#endif
 
     PR_DEBUG("tuya_iot_init success");
     /* Start tuya iot task */

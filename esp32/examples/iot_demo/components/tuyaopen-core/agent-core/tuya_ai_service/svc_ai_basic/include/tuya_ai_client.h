@@ -74,11 +74,4 @@ BOOL_T tuya_ai_client_is_ready(VOID);
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
 VOID tuya_ai_client_start_ping(VOID);
-
-/**
- * @brief stop ai client ping
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-VOID tuya_ai_client_stop_ping(VOID);
 #endif

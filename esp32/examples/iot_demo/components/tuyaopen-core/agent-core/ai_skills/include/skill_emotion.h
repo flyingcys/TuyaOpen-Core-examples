@@ -44,12 +44,6 @@ extern "C" {
 #define EMOJI_SLEEP        "SLEEP"
 #define EMOJI_SILLY        "SILLY"
 #define EMOJI_CONFUSED     "CONFUSED"
-#define EMOJI_TOUCH        "TOUCH"
-#define EMOJI_DISAPPOINTED "DISAPPOINTED"
-#define EMOJI_ANNOYED      "ANNOYED"
-#define EMOJI_WAKEUP       "WAKEUP"
-#define EMOJI_LEFT         "LEFT"
-#define EMOJI_RIGHT        "RIGHT"
 
 
 /***********************************************************
@@ -70,18 +64,7 @@ extern "C" {
  */
 OPERATE_RET ai_skill_emo_process(cJSON *json);
 
-/**
- * @brief Convert Unicode code point string "U+XXXX" to UTF-8 bytes
- * @param[in] unicode_str Unicode string in format "U+XXXX" or "u+xxxx" (e.g., "U+1F636")
- * @param[out] utf8_buf Buffer to store UTF-8 bytes (at least 5 bytes)
- * @param[in] buf_size Size of the buffer
- * @return Number of bytes written, or -1 on error
- */
-int ai_emoji_unicode_to_utf8(const char* unicode_str, char* utf8_buf, size_t buf_size);
-
 const char* ai_agent_emoji_get_name(const char* emoji);
-
-const char* ai_agent_emoji_get_by_name(const char* name);
 
 /**
  * @brief Play emotion expression.

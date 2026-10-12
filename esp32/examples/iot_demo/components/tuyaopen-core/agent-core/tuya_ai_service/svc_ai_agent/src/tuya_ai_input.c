@@ -24,7 +24,6 @@
 #include "uni_log.h"
 #include "tuya_ai_agent.h"
 #include "tuya_ai_biz.h"
-#include "base_event_info.h"
 #include "base_event.h"
 #include "tuya_ai_internal.h"
 #include "tuya_ai_input.h"
@@ -118,15 +117,6 @@ STATIC AI_INPUT_SESSION_CTX_T* __ai_crt_sctx(CHAR_T *scode)
     return NULL;
 }
 
-
-STATIC TUYA_RINGBUFF_T __ai_get_ringbuf(CHAR_T *scode) 
-{
-    AI_INPUT_SESSION_CTX_T* sctx = __ai_get_sctx(scode);
-    if (sctx && sctx->ringbuf) {
-        return sctx->ringbuf;
-    }
-    return NULL;
-}
 
 STATIC TUYA_RINGBUFF_T __ai_crt_ringbuf(CHAR_T *scode)
 {
@@ -253,7 +243,7 @@ STATIC OPERATE_RET __ai_ringbuf_read(AI_INPUT_SESSION_CTX_T *sctx, AI_RINGBUF_HE
     return rt;
 }
 
-BOOL_T tuya_ai_input_is_started_s(CHAR_T *scode)
+STATIC BOOL_T tuya_ai_input_is_started_s(CHAR_T *scode)
 {
     UINT_T cnt = 0;
     AI_INPUT_SESSION_CTX_T *sctx = __ai_get_sctx(scode);
@@ -270,31 +260,6 @@ BOOL_T tuya_ai_input_is_started_s(CHAR_T *scode)
         }
     }
     return TRUE;
-}
-
-OPERATE_RET tuya_ai_video_input_s(CHAR_T *scode, UINT64_T timestamp, UINT64_T pts, AI_VIDEO_FRAME_TYPE frame_type, BYTE_T *data, UINT_T len, UINT_T total_len)
-{
-    if (!tuya_ai_input_is_started_s(scode)) {
-        return OPRT_RESOURCE_NOT_READY;
-    }
-    AI_BIZ_HD_T biz = {0};
-    biz.video.timestamp = timestamp;
-    biz.video.pts = pts;
-#if defined(AI_SUB_VERSION) && (0x02 == AI_SUB_VERSION)
-    biz.video.frame_type = frame_type;
-#endif
-    return tuya_ai_agent_upload_stream(scode, AI_PT_VIDEO, &biz, (CHAR_T *)data, len, total_len);
-}
-
-OPERATE_RET tuya_ai_audio_input_direct_s(CHAR_T *scode, UINT64_T timestamp, UINT64_T pts, BYTE_T *data, UINT_T len, UINT_T total_len)
-{
-    if (!tuya_ai_input_is_started_s(scode)) {
-        return OPRT_RESOURCE_NOT_READY;
-    }
-    AI_BIZ_HD_T biz = {0};
-    biz.audio.timestamp = timestamp;
-    biz.audio.pts = pts;
-    return tuya_ai_agent_upload_stream(scode, AI_PT_AUDIO, &biz, (CHAR_T *)data, len, total_len);
 }
 
 OPERATE_RET tuya_ai_audio_input_s(CHAR_T *scode, UINT64_T timestamp, UINT64_T pts, BYTE_T *data, UINT_T len, UINT_T total_len)
@@ -322,30 +287,12 @@ OPERATE_RET tuya_ai_audio_input_s(CHAR_T *scode, UINT64_T timestamp, UINT64_T pt
     return rt;
 }
 
-OPERATE_RET tuya_ai_image_input_s(CHAR_T *scode, UINT64_T timestamp, BYTE_T *data, UINT_T len, UINT_T total_len)
-{
-    if (!tuya_ai_input_is_started_s(scode)) {
-        return OPRT_RESOURCE_NOT_READY;
-    }
-    AI_BIZ_HD_T biz = {0};
-    biz.image.timestamp = timestamp;
-    return tuya_ai_agent_upload_stream(scode, AI_PT_IMAGE, &biz, (CHAR_T *)data, len, total_len);
-}
-
 OPERATE_RET tuya_ai_text_input_s(CHAR_T *scode, BYTE_T *data, UINT_T len, UINT_T total_len)
 {
     if (!tuya_ai_input_is_started_s(scode)) {
         return OPRT_RESOURCE_NOT_READY;
     }
     return tuya_ai_agent_upload_stream(scode, AI_PT_TEXT, NULL, (CHAR_T *)data, len, total_len);
-}
-
-OPERATE_RET tuya_ai_file_input_s(CHAR_T *scode, BYTE_T *data, UINT_T len, UINT_T total_len)
-{
-    if (!tuya_ai_input_is_started_s(scode)) {
-        return OPRT_RESOURCE_NOT_READY;
-    }
-    return tuya_ai_agent_upload_stream(scode, AI_PT_FILE, NULL, (CHAR_T *)data, len, total_len);
 }
 
 VOID tuya_ai_input_start_s(CHAR_T *scode, BOOL_T force)
@@ -585,100 +532,6 @@ OPERATE_RET tuya_ai_input_init(VOID)
 
 EXIT:
     __ai_input_free();
-    return rt;
-}
-
-OPERATE_RET tuya_ai_input_alert_custom(AI_CLOUD_ALERT_TYPE_E type, CONST CHAR_T *event_type)
-{
-    OPERATE_RET rt = OPRT_OK;
-
-    PR_DEBUG("[cloud] alert type: %d(%s)", type, event_type);
-    if (event_type == NULL) {
-        PR_ERR("event_type is NULL");
-        return OPRT_INVALID_PARM;
-    }
-
-    // get network status
-    if (!tuya_ai_agent_is_ready()) {
-        PR_ERR("network is not ready");
-        return OPRT_COM_ERROR;
-    }
-
-    tuya_ai_input_stop();
-    tuya_ai_output_stop(TRUE);
-
-    rt = tuya_ai_agent_crt_session(tuya_ai_agent_get_scode(NULL), 0, 0, NULL, 0);
-    if (rt != OPRT_OK) {
-        PR_ERR("create ai agent session failed, rt:%d", rt);
-        return rt;
-    }
-    return tuya_ai_agent_trigger(tuya_ai_agent_get_scode(NULL), event_type, NULL);
-}
-
-OPERATE_RET tuya_ai_input_alert(AI_CLOUD_ALERT_TYPE_E type)
-{
-    CONST CHAR_T *event_type = NULL;
-
-    switch (type) {
-    case AT_NETWORK_CONNECTED:
-        event_type = "networkConnected";
-        break;
-    case AT_PLEASE_AGAIN:
-        event_type = "pleaseAgain";
-        break;
-    case AT_WAKEUP:
-        event_type = "wakeUp";
-        break;
-    case AT_LONG_KEY_TALK:
-        event_type = "talkModeSwitch_longPressTalk";
-        break;
-    case AT_KEY_TALK:
-        event_type = "talkModeSwitch_pressTalk";
-        break;
-    case AT_WAKEUP_TALK:
-        event_type = "talkModeSwitch_wakeWordTalk";
-        break;
-    case AT_RANDOM_TALK:
-        event_type = "talkModeSwitch_continuousTalk";
-        break;
-    default:
-        PR_WARN("alert type %d is not support", type);
-        return OPRT_NOT_SUPPORTED;
-    }
-    return tuya_ai_input_alert_custom(type, event_type);
-}
-
-OPERATE_RET tuya_ai_input_get_buffer_free_capacity_s(CHAR_T *scode, SIZE_T *capa_out) 
-{
-    OPERATE_RET rt = OPRT_OK;
-
-    TUYA_CALL_ERR_GOTO(tal_mutex_lock(ai_input_ctx.mutex), LOCK_FAIL);
-
-    if (capa_out == NULL) {
-        rt = OPRT_INVALID_PARM;
-        goto EXIT;
-    }
-
-    TUYA_RINGBUFF_T ringbuf = __ai_get_ringbuf(scode);
-    if (ringbuf == NULL) {
-        rt = OPRT_RESOURCE_NOT_READY;
-        goto EXIT;
-    }
-
-    SIZE_T raw_free_capa = tuya_ring_buff_free_size_get(ringbuf);
-    if (raw_free_capa <= sizeof(AI_RINGBUF_HEAD_T))
-        *capa_out = 0;
-    else 
-        *capa_out = raw_free_capa - sizeof(AI_RINGBUF_HEAD_T);
-
-    rt = OPRT_OK;
-
-EXIT:
-    if (OPRT_OK != tal_mutex_unlock(ai_input_ctx.mutex)) {
-        PR_ERR("Failed to unlock ai_input_ctx.mutex.");
-    }
-    
-LOCK_FAIL:
     return rt;
 }
 

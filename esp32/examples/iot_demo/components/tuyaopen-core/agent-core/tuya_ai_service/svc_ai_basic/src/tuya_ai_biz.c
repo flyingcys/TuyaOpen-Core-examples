@@ -1455,11 +1455,6 @@ OPERATE_RET tuya_ai_biz_crt_session(UINT_T bizCode, UINT64_T bizTag, AI_SESSION_
     return rt;
 }
 
-OPERATE_RET tuya_ai_biz_del_session(AI_SESSION_ID id, AI_STATUS_CODE code)
-{
-    return __ai_biz_session_destory(id, code, TRUE);
-}
-
 STATIC UINT_T s_ai_resv_send_id[AI_BIZ_MAX_NUM] = {101, 103, 105, 107, 109};
 INT_T         tuya_ai_biz_get_send_id(VOID)
 {
@@ -1510,31 +1505,6 @@ AI_SESSION_CFG_T *tuya_ai_biz_get_session_cfg(AI_SESSION_ID id)
         tal_mutex_unlock(ai_basic_biz->mutex);
     }
     return cfg;
-}
-
-OPERATE_RET tuya_ai_parse_video_attr(CHAR_T *de_buf, UINT_T attr_len, AI_VIDEO_ATTR_T *video)
-{
-    return __ai_parse_video_attr(de_buf, attr_len, video);
-}
-
-OPERATE_RET tuya_ai_parse_audio_attr(CHAR_T *de_buf, UINT_T attr_len, AI_AUDIO_ATTR_T *audio)
-{
-    return __ai_parse_audio_attr(de_buf, attr_len, audio);
-}
-
-OPERATE_RET tuya_ai_parse_image_attr(CHAR_T *de_buf, UINT_T attr_len, AI_IMAGE_ATTR_T *image)
-{
-    return __ai_parse_image_attr(de_buf, attr_len, image);
-}
-
-OPERATE_RET tuya_ai_parse_file_attr(CHAR_T *de_buf, UINT_T attr_len, AI_FILE_ATTR_T *file)
-{
-    return __ai_parse_file_attr(de_buf, attr_len, file);
-}
-
-OPERATE_RET tuya_ai_parse_text_attr(CHAR_T *de_buf, UINT_T attr_len, AI_TEXT_ATTR_T *text)
-{
-    return __ai_parse_text_attr(de_buf, attr_len, text);
 }
 
 OPERATE_RET tuya_ai_parse_event_attr(CHAR_T *de_buf, UINT_T attr_len, AI_EVENT_ATTR_T *event)

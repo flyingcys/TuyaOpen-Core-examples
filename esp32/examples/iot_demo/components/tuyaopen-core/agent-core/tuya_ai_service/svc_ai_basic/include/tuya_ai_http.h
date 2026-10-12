@@ -41,16 +41,6 @@
 OPERATE_RET tuya_ai_http_dld_audio(CHAR_T *url, AI_BIZ_RECV_CB cb);
 
 /**
- * @brief http download ai video
- *
- * @param[in] url media url
- * @param[in] cb callback function to receive the video data
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_http_dld_video(CHAR_T *url, AI_BIZ_RECV_CB cb);
-
-/**
  * @brief http download ai image
  *
  * @param[in] url media url
@@ -71,16 +61,6 @@ OPERATE_RET tuya_ai_http_dld_image(CHAR_T *url, AI_BIZ_RECV_CB cb);
 OPERATE_RET tuya_ai_http_dld_file(CHAR_T *url, AI_BIZ_RECV_CB cb);
 
 /**
- * @brief http download ai text
- *
- * @param[in] url media url
- * @param[in] cb callback function to receive the text data
- *
- * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
- */
-OPERATE_RET tuya_ai_http_dld_text(CHAR_T *url, AI_BIZ_RECV_CB cb);
-
-/**
  * @brief get http secret key for AI media AES-GCM
  *
  * @param[out] key secret key buffer
@@ -88,11 +68,4 @@ OPERATE_RET tuya_ai_http_dld_text(CHAR_T *url, AI_BIZ_RECV_CB cb);
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
 OPERATE_RET tuya_ai_http_get_secret_key(UCHAR_T *key);
-
-/**
- * @brief stop http download
- *
- * @return VOID
- */
-VOID tuya_ai_http_stop_dld(VOID);
 #endif // __TUYA_AI_HTTP_H__

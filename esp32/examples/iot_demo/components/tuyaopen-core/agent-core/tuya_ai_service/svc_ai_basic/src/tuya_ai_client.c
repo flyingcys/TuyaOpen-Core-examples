@@ -31,12 +31,10 @@
 #include "tal_memory.h"
 #include "tuya_ai_client.h"
 #include "base_event.h"
-#include "base_event_info.h"
 #include "tuya_ai_biz.h"
 #include "tal_semaphore.h"
 #include "tuya_ai_mqtt.h"
 #include "tuya_ai_private.h"
-#include "tuya_ws_db.h"
 #include "tuya_cert_manager.h"
 #include "tal_event_info.h"
 #include "tal_kv.h"
@@ -69,8 +67,6 @@ typedef enum {
     AI_STATE_AUTH_REQ,
     AI_STATE_AUTH_RESP,
     AI_STATE_RUNNING,
-
-    AI_STATE_END
 } AI_CLIENT_STATE_E;
 
 typedef struct {
@@ -98,6 +94,8 @@ STATIC UINT_T __ai_get_random_value(UINT_T min, UINT_T max)
 {
     return min + uni_random() % (max - min + 1);
 }
+
+STATIC VOID tuya_ai_client_stop_ping(VOID); // 本文件内使用（__ai_conn_close），不再对外导出
 
 STATIC VOID __ai_client_set_state(AI_CLIENT_STATE_E state)
 {
@@ -544,7 +542,7 @@ BOOL_T tuya_ai_client_is_ready(VOID)
     return FALSE;
 }
 
-VOID tuya_ai_client_stop_ping(VOID)
+STATIC VOID tuya_ai_client_stop_ping(VOID)
 {
     if (ai_basic_client) {
         tal_workq_stop_delayed(ai_basic_client->alive_work);
