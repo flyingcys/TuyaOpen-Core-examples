@@ -542,9 +542,6 @@ STATIC OPERATE_RET __ai_biz_create_task(VOID)
     thrd_param.priority     = THREAD_PRIO_1;
     thrd_param.thrdname     = "ai_biz_thread";
     thrd_param.stackDepth   = 4096;
-#if defined(AI_STACK_IN_PSRAM) && (AI_STACK_IN_PSRAM == 1)
-    thrd_param.psram_mode = 1;
-#endif
 
     rt = tal_thread_create_and_start(&ai_basic_biz->thread, NULL, NULL, __ai_biz_thread_cb, NULL, &thrd_param);
     if (OPRT_OK != rt) {

@@ -33,7 +33,7 @@ menuconfig ENABLE_LOCAL_STORE
 			help
 			  Frames wait here while the writer is blocked on the card. Size it
 			  for the longest write stall you expect at the encoder bitrate;
-			  1 Mbps for 2 s is 256 KB. Allocated from PSRAM when ENABLE_EXT_RAM.
+			  1 Mbps for 2 s is 256 KB. Allocated from the heap.
 
 		config LOCAL_STORE_WRITE_KB
 			int "LOCAL_STORE_WRITE_KB: bytes gathered before one fwrite, KB"

@@ -428,9 +428,6 @@ pj_thread_create(pj_pool_t *pool, const char *thread_name, pj_thread_proc *proc,
     cfg.stackDepth = (uint32_t)stack_size;
     cfg.priority = THREAD_PRIO_2;
     cfg.thrdname = rec->obj_name;
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    cfg.psram_mode = 1;
-#endif
 
     ort = tal_thread_create_and_start(&rec->thread, NULL, NULL, __pj_thread_entry, rec, &cfg);
     if (ort != OPRT_OK) {

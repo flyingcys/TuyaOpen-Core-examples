@@ -7,20 +7,20 @@
  * 被分发/调用的接口（OTA 独立成 port/src/tkl_ota.c + 独立卡）：
  * - log output / semaphore / thread / queue 实现为 ops 卡私有（static），
  *   声明已从头文件移除，适配面收敛到一张卡；
- * - memory 只保留 malloc/free 对外符号（tuya_transport 的 mbedtls_* 与 port
- *   的 utilities 直调，声明保留在 tkl_memory.h）；calloc 由 core 的
- *   tal_calloc 用 tal_malloc+memset 实现，卡不再要求适配；
+ * - memory 只保留 malloc/free 对外符号（主卡 .malloc/.free 的实现本体 + port
+ *   内部使用；2026-10 解耦后 core 不再直调，声明保留在 tkl_memory.h）；
+ *   calloc 由 core 的 tal_calloc 用 tal_malloc+memset 实现，卡不再要求适配；
  * - system 的 sleep/reset/get_millisecond/get_random 仅 tal 层经卡分发，转 static；
  *   enter/exit_critical 保持对外符号（tkl_system.h 的 TKL_ENTER/EXIT_CRITICAL
  *   宏 API 引用，声明保留在 tkl_system.h）；
- * - mutex 保持对外符号（port 的 utilities（tuya_queue/tuya_smartpointer）
- *   经宏直调，声明保留在 tkl_mutex.h）；
+ * - mutex 保持对外符号（主卡 .mutex_* 的实现本体 + port 内部（mutex 管理器）
+ *   使用；2026-10 解耦后 core 不再直调，声明保留在 tkl_mutex.h）；
  * - 无调用方的接口已删除（tkl_mutex_trylock、
  *   tkl_system_memset/memcpy、tkl_log_close/open、
  *   tkl_cpu_sleep_mode_set、tkl_system_realloc、tkl_system_get_tick_count、
  *   tkl_system_get_free_heap_size、tkl_system_calloc 等）。
  * - tkl_thread_get_id 为 ops 卡成员（无条件提供；p2p-core 的 pjproject 经
- *   tal_thread_get_id 分发使用）；原 tkl_system_psram_* 家族已删除
+ *   tal_thread_get_id 分发使用）；原外部 RAM 分配家族已删除
  *   （p2p-core 的 tuya_ipc_skill.c 改用 tal_malloc/tal_free）。
  * 移植新平台时在各自 port 中提供同名 ops 卡与实现即可。
  *
@@ -82,8 +82,8 @@ static void tkl_log_output(const char *str, ...)
  * tkl_memory.h）。calloc 不再走卡：core 的 tal_calloc 用 tal_malloc+memset
  * 实现（含乘法溢出检查）。
  * memset/memcpy、无调用方的 realloc/get_free_heap_size 已删；
- * psram 家族（tkl_system_psram_malloc/free）已删除：p2p-core 的
- * tuya_ipc_skill.c 改用 tal_malloc/tal_free（分配/释放成对同源）。
+ * 外部 RAM 分配家族已删除：p2p-core 的 tuya_ipc_skill.c 改用
+ * tal_malloc/tal_free（分配/释放成对同源）。
  * --------------------------------------------------------------------------- */
 #define MAX_HEAP_SIZE (512 * 1024 * 1024)
 

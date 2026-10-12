@@ -88,7 +88,6 @@ typedef struct {
     uint32_t stackDepth; // stack size
     uint8_t priority;    // thread priority
     char *thrdname;      // thread name
-    uint8_t psram_mode : 1; // dead 字段：仅 ENABLE_EXT_RAM（PSRAM 栈）分支消费，本仓库无该宏定义；为对上 API 兼容保留
 } THREAD_CFG_T;
 
 /**

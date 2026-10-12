@@ -239,9 +239,6 @@ OPERATE_RET p2p_rtc_listen_start()
     param.priority = THREAD_PRIO_3;
     param.stackDepth = 128 * 1024;
     param.thrdname = "tuya_p2p_listen_task";
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    param.psram_mode = 1; /* PSRAM stack */
-#endif
     if (g_listen_start) {
         PR_ERR("p2p listen thread already started");
         return OPRT_COM_ERROR;
@@ -2019,9 +2016,6 @@ static int __p2p_session_cmd_parse_server(P2P_SESSION_T *pSession, void *pData)
                 thrd_param.stackDepth = 8192;
                 thrd_param.priority = THREAD_PRIO_3;
                 thrd_param.thrdname = "p2p_audio_dl";
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-                thrd_param.psram_mode = 1;
-#endif
                 tal_thread_create_and_start(&pSession->audio_downlink_thread, NULL, NULL,
                                             __p2p_audio_downlink_recv_proc, NULL, &thrd_param);
             }
@@ -2374,8 +2368,6 @@ static void __p2p_cmd_recv_proc(void *pArg)
         if (0 != ret) {
             PR_ERR("session[%d] read cmd failed [%d]", pSession->session, ret);
             PR_ERR("read data failed ret[%d] session[%d]", ret, sg_p2p_session->session);
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#endif
             __p2p_session_clear(pSession);
             //__p2p_wait_concurr_idle(pSession, WAIT_ALL_BUF);
             __p2p_session_release_va(pSession);
@@ -2676,9 +2668,6 @@ OPERATE_RET p2p_init(const TUYA_IPC_P2P_VAR_T *p_var)
     // Start media-related threads
     THREAD_CFG_T thrd_param = {0};
     thrd_param.priority = THREAD_PRIO_2;
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    thrd_param.psram_mode = 1; /* P2P threads in PSRAM */
-#endif
     thrd_param.stackDepth = STACK_SIZE_P2P_CMD_RECV;
     thrd_param.thrdname = (char *)"p2p_cmd_recv";
     ret = tal_thread_create_and_start(&(sg_p2p_session->cmd_recv_proc_thread), NULL, NULL, __p2p_cmd_recv_proc, NULL,
@@ -2703,7 +2692,7 @@ OPERATE_RET p2p_init(const TUYA_IPC_P2P_VAR_T *p_var)
     // sg_p2p_session->tal_video_frame.buf_size = bufSize;
 
     memset(&sg_p2p_session->media_frame, 0, sizeof(sg_p2p_session->media_frame));
-    /* Use Malloc (PSRAM when ENABLE_EXT_RAM) — 300KB must not hit SRAM */
+    /* Use Malloc — 300KB must not hit SRAM */
     sg_p2p_session->media_frame.data = (uint8_t *)Malloc(bufSize);
     if (sg_p2p_session->media_frame.data == NULL) {
         PR_ERR("Malloc media_frame %d failed", bufSize);

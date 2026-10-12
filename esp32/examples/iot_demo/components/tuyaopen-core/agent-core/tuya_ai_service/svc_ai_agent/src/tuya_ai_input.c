@@ -140,11 +140,7 @@ STATIC TUYA_RINGBUFF_T __ai_crt_ringbuf(CHAR_T *scode)
     }
 
     tal_mutex_lock(ai_input_ctx.mutex);
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    rt = tuya_ring_buff_create(AI_INPUT_RINGBUF_SIZE, OVERFLOW_PSRAM_STOP_TYPE, &sctx->ringbuf);
-#else
     rt = tuya_ring_buff_create(AI_INPUT_RINGBUF_SIZE, OVERFLOW_STOP_TYPE, &sctx->ringbuf);
-#endif
     if (rt != OPRT_OK) {
         PR_ERR("create input ringbuf failed");
         tal_mutex_unlock(ai_input_ctx.mutex);
@@ -579,9 +575,6 @@ OPERATE_RET tuya_ai_input_init(VOID)
     thrd_param.priority = THREAD_PRIO_1;
     thrd_param.thrdname = "ai_agent_input";
     thrd_param.stackDepth = AI_INPUT_STACK_SIZE;
-#if defined(AI_STACK_IN_PSRAM) && (AI_STACK_IN_PSRAM == 1)
-    thrd_param.psram_mode = 1;
-#endif
     rt = tal_thread_create_and_start(&ai_input_ctx.thread, NULL, NULL, __ai_input_thread, NULL, &thrd_param);
     if (OPRT_OK != rt) {
         PR_ERR("ai inpput thread create err, rt:%d", rt);

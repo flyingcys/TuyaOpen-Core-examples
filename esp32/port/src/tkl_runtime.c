@@ -7,13 +7,13 @@
  * 分发/调用的接口（OTA 独立成 port/src/tkl_ota.c + 独立卡）：
  * - log output / semaphore / system / thread / queue 实现为 ops 卡私有
  *   （static），适配面收敛到一张卡；
- * - memory 只保留 malloc/free 对外符号（core 的 tuya_transport mbedtls_*
- *   与 utilities 直调，声明在 tkl_memory.h）；calloc 由 core 的 tal_calloc
- *   用 tal_malloc+memset 实现，卡不再要求适配；
- * - mutex 保持对外符号（core 的 tuya_queue.c 经宏直调，声明在
- *   tkl_mutex.h）；
+ * - memory 只保留 malloc/free 对外符号（主卡 .malloc/.free 的实现本体 + port
+ *   内部使用；2026-10 解耦后 core 不再直调，声明在 tkl_memory.h）；calloc 由
+ *   core 的 tal_calloc 用 tal_malloc+memset 实现，卡不再要求适配；
+ * - mutex 保持对外符号（主卡 .mutex_* 的实现本体 + port 内部（mutex 管理器）
+ *   使用；2026-10 解耦后 core 不再直调，声明在 tkl_mutex.h）；
  * - tkl_thread_get_id 为 ops 卡成员（无条件提供；p2p-core 的 pjproject 经
- *   tal_thread_get_id 分发使用）；原 tkl_system_psram_* 家族已删除
+ *   tal_thread_get_id 分发使用）；原外部 RAM 分配家族已删除
  *   （p2p-core 的 tuya_ipc_skill.c 改用 tal_malloc/tal_free）。
  *
  * 实现平台差异（对照 linux 版）：

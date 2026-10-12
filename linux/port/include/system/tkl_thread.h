@@ -22,7 +22,7 @@ typedef void (*THREAD_FUNC_T)(void*);
 /* thread 接口实现收编于 port/src/tkl_runtime.c（ops 卡私有，经
  * TAL_API_OPS_T 分发），本文件仅保留类型定义与 get_id 声明。
  * 原无实现亦无调用方的 tkl_thread_get_priority/tkl_thread_set_priority、
- * ENABLE_EXT_RAM 未定义的 tkl_thread_create_in_psram 已一并删除。 */
+ * 平台专属的线程创建变体（外部 RAM 栈版）已一并删除。 */
 
 /**
 * @brief Get the handle of the calling thread

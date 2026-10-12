@@ -105,6 +105,15 @@ for a in $(find <build> -name 'lib*.a' -path '*tuyaopen-core*'); do nm -u "$a" |
 | `tkl_system_psram_malloc/free`（p2p） | **删除**（口径：psram 全部去掉）；`tuya_ipc_skill.c` 改 `tal_malloc`/`tal_free`；两 port 的 tkl psram 符号与声明一并清理。**等价性（实测）**：当前 esp32 sdkconfig 未开 SPIRAM（`# CONFIG_SPIRAM is not set`），改造前该实现经 `#if CONFIG_SPIRAM` 直接落到普通 `tkl_system_malloc` → **当前配置下改造前后落点完全相同**；仅将来启用 SPIRAM 时，显式 `MALLOC_CAP_SPIRAM` 能力位才退化为 malloc 默认策略（落点不再显式钉外部 RAM；常驻增量仅 2×512B） |
 | `tkl_thread_get_id`（p2p pjlib） | 主卡新增 `thread_get_id` 成员 + 新 TAL API `tal_thread_get_id`；两 port 原有实现解门控、接线到卡（**函数体逐字未变**——值域/语义与改造前相同；任务退出后 TCB 复用导致 pjlib TLS 旧行失配属 pjlib 既有属性，与本次解耦无关） |
 
+**2026-10 二次清理（口径：core 不允许 psram 类配置）**：`ENABLE_EXT_RAM` 死块
+（~18 处，含 `tuya_tls.c` 5 处、p2p/agent-core 多处）、`AI_HEAP_IN_PSRAM`/
+`AI_STACK_IN_PSRAM` 守卫块与其 Kconfig 两项、`THREAD_CFG_T.psram_mode` 死字段
+（无任何读取方）、`tuya_ringbuf.h` 的 `OVERFLOW_PSRAM_*` 枚举别名——全部删除；
+保留的正是"宏未定义时"编译选择的分支，**行为零变化**（实测：iot_demo 前后运行
+日志内容集合一致）。门禁：`grep -rni 'psram\|ext_ram' core` 零命中（两树同）。
+port 侧仅剩 `tuya_cloud_types.h` 的两个类型枚举（`TUYA_QSPI_TYPE_PSRAM`/
+`TYPE_PSRAM`，芯片/内存类型分类、无使用者，删除会移动枚举数值，暂留）。
+
 **为什么 tuya_queue / tuya_ringbuf 要上移**：它们在 `tuya_utilities`（最底层，被
 `tal_system` PUBLIC 依赖，`tal_workqueue` 就在 tal_system 内用它），不能反向依赖
 `tal_system` 去调 `tal_mutex_*`；上移到 `tal_system` 目标后即普通 TAL 层文件

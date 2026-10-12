@@ -7,15 +7,9 @@
 #include "tal_ipc.h"
 #include "tkl_memory.h"
 
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define OS_Malloc(req_size) tal_psram_malloc(req_size)
-#define OS_Calloc(req_count, req_size) tal_psram_calloc(req_count, req_size)
-#define OS_Free(ptr) tal_psram_free(ptr)
-#else
 #define OS_Malloc(req_size) tal_malloc(req_size)
 #define OS_Calloc(req_count, req_size) tal_calloc(req_count, req_size)
 #define OS_Free(ptr) tal_free(ptr)
-#endif
 
 extern OPERATE_RET tkl_audio_enc_request(VOID *enc_para);
 

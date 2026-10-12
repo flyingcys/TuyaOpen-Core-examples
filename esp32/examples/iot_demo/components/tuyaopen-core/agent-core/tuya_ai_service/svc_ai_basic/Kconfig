@@ -64,16 +64,6 @@ menu "AI Protocol Config"
         range 1024 40960
         default 6144
 
-    config AI_HEAP_IN_PSRAM
-        bool "AI_HEAP_IN_PSRAM: use psram for heap"
-        default y if ENABLE_EXT_RAM
-        default n
-
-    config AI_STACK_IN_PSRAM
-        bool "AI_STACK_IN_PSRAM: use psram for stack"
-        default y if ENABLE_EXT_RAM
-        default n
-
     config AI_SEND_PKT_TIMEOUT
         int "AI_SEND_PKT_TIMEOUT: ai send packet timeout, unit(s)"
         range 1 10

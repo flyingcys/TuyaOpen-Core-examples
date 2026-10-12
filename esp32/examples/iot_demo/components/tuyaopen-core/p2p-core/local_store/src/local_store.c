@@ -1639,9 +1639,6 @@ OPERATE_RET local_store_rec_start(const char *leaf_prefix, uint32_t seg_sec)
     cfg.stackDepth = LS_THREAD_STACK;
     cfg.priority = THREAD_PRIO_3;
     cfg.thrdname = "local_store_wr";
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    cfg.psram_mode = 1;
-#endif
     s_run = TRUE;
     s_alive = FALSE;
     if (tal_thread_create_and_start(&s_worker, NULL, NULL, __rec_worker, NULL, &cfg) != OPRT_OK) {

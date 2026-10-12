@@ -29,17 +29,10 @@
 #include "tal_thread.h"
 #include <string.h>
 
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define OS_MALLOC(size)       tal_psram_malloc(size)
-#define OS_FREE(ptr)          tal_psram_free(ptr)
-#define OS_CALLOC(num, size)  tal_psram_calloc(num, size)
-#define OS_REALLOC(ptr, size) tal_psram_realloc(ptr, size)
-#else
 #define OS_MALLOC(size)       tal_malloc(size)
 #define OS_FREE(ptr)          tal_free(ptr)
 #define OS_CALLOC(num, size)  tal_calloc(num, size)
 #define OS_REALLOC(ptr, size) tal_realloc(ptr, size)
-#endif
 
 #define AI_MONITOR_MAX_CLIENTS_MIN 1
 #define AI_MONITOR_MAX_CLIENTS_MAX 3
@@ -1271,9 +1264,6 @@ STATIC OPERATE_RET __start_log_server(VOID)
     thrd_param.priority = THREAD_PRIO_1;
     thrd_param.thrdname = "ai_mon_log";
     thrd_param.stackDepth = 4096;
-#if defined(AI_STACK_IN_PSRAM) && (AI_STACK_IN_PSRAM == 1)
-    thrd_param.psram_mode = 1;
-#endif
 
     rt = tal_thread_create_and_start(&g_ai_monitor_server.log_thread,
                                      NULL, NULL,

@@ -5,7 +5,6 @@
  * @date 2026-08-04
  * @copyright Copyright (c) Tuya Inc.
  *
- * - Buffer memory comes from PSRAM when ENABLE_EXT_RAM
  * - Each alloc charges a fixed TUYA_MBUF_HUGE_SIZE (1600) against the queue budget
  * - Payload lives in a 1600-byte block
  */
@@ -24,16 +23,9 @@
 #define TUYA_MBUF_HUGE_SIZE 1600
 #endif
 
-/* Prefer PSRAM when ENABLE_EXT_RAM */
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define TUYA_MBUF_MALLOC(s) tal_psram_malloc(s)
-#define TUYA_MBUF_CALLOC(n, s) tal_psram_calloc(n, s)
-#define TUYA_MBUF_FREE(p) tal_psram_free(p)
-#else
 #define TUYA_MBUF_MALLOC(s) tal_malloc(s)
 #define TUYA_MBUF_CALLOC(n, s) tal_calloc(n, s)
 #define TUYA_MBUF_FREE(p) tal_free(p)
-#endif
 
 /* ---------------------------------------------------------------------------
  * Type definitions

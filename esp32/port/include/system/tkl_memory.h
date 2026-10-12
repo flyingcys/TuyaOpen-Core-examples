@@ -44,8 +44,8 @@ void tkl_system_free(void* ptr);
  * 原无调用方的 tkl_system_memset/memcpy、
  * tkl_system_realloc、tkl_system_get_free_heap_size、tkl_system_calloc
  * （calloc 改由 core 的 tal_calloc 用 tal_malloc+memset 实现）已删除；
- * psram 家族（tkl_system_psram_malloc/free）亦已删除（p2p-core 的
- * tuya_ipc_skill.c 改用 tal_malloc/tal_free）。 */
+ * 外部 RAM 分配家族亦已删除（p2p-core 的 tuya_ipc_skill.c 改用
+ * tal_malloc/tal_free）。 */
 
 #ifdef __cplusplus
 }

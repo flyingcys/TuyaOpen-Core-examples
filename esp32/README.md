@@ -70,7 +70,10 @@ rsync -a --exclude='.git' --exclude='.gitmodules' --exclude='third_party/mbedtls
   `tuya_ringbuf` 上移 `iot-core/tal_system/` 并改走 `tal_mutex_*`/`tal_malloc`/`tal_free`；
   crypto 透传层合并（`mbedtls_hash.c`/`mbedtls_symmetry.c` 即 `tal_*` 实现本体，句柄类型改
   `TAL_HASH_HANDLE`/`TAL_SYMMETRY_HANDLE`）；p2p 清 psram、`thread_get_id` 走主卡新成员
-  （新 TAL API `tal_thread_get_id`）。两 port 同步接线。详见 `porting-study.md` §2.3。
+  （新 TAL API `tal_thread_get_id`）。**2026-10 二次清理**：`ENABLE_EXT_RAM` 死块、
+  `AI_HEAP/AI_STACK_IN_PSRAM` 守卫与 Kconfig、`THREAD_CFG_T.psram_mode` 死字段、
+  ringbuf 的 `OVERFLOW_PSRAM_*` 枚举全部删除（core 内零 psram/EXT_RAM 字样）。
+  两 port 同步接线。详见 `porting-study.md` §2.3。
 
 ## 构建（需要 esp-idf 环境）
 
