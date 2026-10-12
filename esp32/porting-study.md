@@ -445,10 +445,9 @@ ROM 里的 mbedtls 在跑，它把 mutex/calloc/free 及 SHA 的 update 等回�
   port 引 tal API 是卡机制的固有双向依赖。**实测（2026-10 解耦后）**：
   - esp32：去掉链接组后链接失败，报的正是**卡实例未定义**
     （`tal_api_ops_platform`/`tal_ota_ops_platform`/…）→ 组必需；
-  - linux：链接行由 CMake 按依赖闭包生成、库列表本身就含重复（`libtuyaopen-port.a`
-    在组内/组外各出现一次，是 app 的 CMakeLists 显式列了两处；`libtal_system.a`
-    出现三次是 CMake 的闭包展开），去掉显式组后仍链接成功 → 显式组在 linux 侧
-    是冗余保险。
+  - linux：链接行的库列表本身就含重复（实测：`libtuyaopen-port.a` 在组内/组外
+    各出现一次——app 的 CMakeLists 显式列了两处；`libtal_system.a` 出现 3 次），
+    去掉显式组后仍链接成功 → 显式组在 linux 侧是冗余保险。
 
 ### 5.2 两个平台的解法（同一个机制）
 
