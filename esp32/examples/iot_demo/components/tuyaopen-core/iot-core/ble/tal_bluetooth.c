@@ -12,17 +12,56 @@
  * also includes conditional support for specific BLE characteristics related to
  * the Matter over Tuya project.
  *
+ * 2026-10 解耦：BLE 平台接口不再直调上游 TKL，统一经 port 组装的 ops 卡
+ * （tal_bluetooth_ops_platform，契约见 tal_bluetooth_ops.h）分发；无 BLE
+ * 能力的平台（卡或成员为 NULL）在本文件统一优雅降级。
+ *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
  */
 
 #include <string.h>
 #include "tal_bluetooth_def.h"
-#include "tkl_bluetooth_def.h"
-#include "tkl_bluetooth.h"
+/* 平台 ops 卡契约 + core 自持镜像类型集（TAL_BLE_*，替代原 TKL 蓝牙类型头） */
+#include "tal_bluetooth_ops.h"
 /* 原引 tal_api.h（伞形头）：本文件实际只用到 tal_malloc/tal_free，
  * 在 core 内直连 tal_memory.h，避免无谓聚合依赖。 */
 #include "tal_memory.h"
+#include "tal_log.h"
+
+/* ---------------------------------------------------------------------------
+ * 平台 ops 卡分发：与 tal_vad.c / tal_kv.c / tal_fs.c 同构——卡不可用时
+ * PR_ERR 并返回 OPRT_NOT_SUPPORTED，由调用方（或本文件的降级分支）处理。
+ * --------------------------------------------------------------------------- */
+extern TAL_BLUETOOTH_OPS_T tal_bluetooth_ops_platform;
+
+TAL_BLUETOOTH_OPS_T *tal_bluetooth_get_ops(void)
+{
+    return &tal_bluetooth_ops_platform;
+}
+
+/* 尾位分发：直接以卡调用结果返回 */
+#define TAL_BLUETOOTH_EXEC_OP(op_name, ...)                                                                            \
+    do {                                                                                                               \
+        TAL_BLUETOOTH_OPS_T *ops = tal_bluetooth_get_ops();                                                            \
+        if (NULL != ops && NULL != ops->op_name) {                                                                     \
+            return ops->op_name(__VA_ARGS__);                                                                          \
+        }                                                                                                              \
+        PR_ERR("TAL bluetooth operation %s not available", #op_name);                                                  \
+        return OPRT_NOT_SUPPORTED;                                                                                     \
+    } while (0)
+
+/* 非尾位分发（返回值需参与判断/赋值）：卡不可用时置 OPRT_NOT_SUPPORTED */
+#define TAL_BLUETOOTH_EXEC_OP_VAL(ret, op_name, ...)                                                                   \
+    do {                                                                                                               \
+        TAL_BLUETOOTH_OPS_T *ops = tal_bluetooth_get_ops();                                                            \
+        if (NULL != ops && NULL != ops->op_name) {                                                                     \
+            (ret) = ops->op_name(__VA_ARGS__);                                                                         \
+        } else {                                                                                                       \
+            PR_ERR("TAL bluetooth operation %s not available", #op_name);                                              \
+            (ret) = OPRT_NOT_SUPPORTED;                                                                                \
+        }                                                                                                              \
+    } while (0)
 
 #define TAL_COMMON_SERVICE_INDEX (0)
 
@@ -40,12 +79,12 @@
 #define TAL_BLE_SERVICE_VERSION (2) // Default Service is version 2: Follow the latest service.
 #endif
 
-/**< Use TKL Definitions */
-static TKL_BLE_GATTS_PARAMS_T tkl_ble_gatt_service = {0};
-static TKL_BLE_SERVICE_PARAMS_T *ptkl_ble_service = NULL;
-static TKL_BLE_CHAR_PARAMS_T *ptkl_ble_service_char = NULL;
+/**< 用镜像类型（卡契约，替代原 TKL 类型）缓存 GATTS 参数与特征表 */
+static TAL_BLE_GATTS_PARAMS_T tal_ble_gatt_service = {0};
+static TAL_BLE_SERVICE_PARAMS_T *ptal_ble_service = NULL;
+static TAL_BLE_CHAR_PARAMS_T *ptal_ble_service_char = NULL;
 
-static uint16_t tkl_ble_common_connect_handle = TKL_BLE_GATT_INVALID_HANDLE;
+static uint16_t tal_ble_common_connect_handle = TAL_BLE_GATT_INVALID_HANDLE;
 
 /**< Use TAL Definitions, TAL Only Support One GATT Link at one time, follow
  * Bluetooth Spec. */
@@ -54,16 +93,16 @@ static TAL_BLE_EVT_FUNC_CB tal_ble_event_callback;
 static TAL_BLE_PEER_INFO_T tal_ble_peer = {0};
 #endif
 
-static __attribute__((unused)) uint16_t tal_ble_uuid16_convert(TKL_BLE_UUID_T *p_uuid)
+static __attribute__((unused)) uint16_t tal_ble_uuid16_convert(TAL_BLE_UUID_T *p_uuid)
 {
     uint16_t uuid16 = 0xFFFF;
 
-    if (p_uuid->uuid_type == TKL_BLE_UUID_TYPE_16) {
+    if (p_uuid->uuid_type == TAL_BLE_UUID_TYPE_16) {
         return p_uuid->uuid.uuid16;
-    } else if (p_uuid->uuid_type == TKL_BLE_UUID_TYPE_32) {
+    } else if (p_uuid->uuid_type == TAL_BLE_UUID_TYPE_32) {
         /**< Not Support */
         return 0xFFFF;
-    } else if (p_uuid->uuid_type == TKL_BLE_UUID_TYPE_128) {
+    } else if (p_uuid->uuid_type == TAL_BLE_UUID_TYPE_128) {
         uuid16 = p_uuid->uuid.uuid128[13] << 8 | p_uuid->uuid.uuid128[12];
         return uuid16;
     }
@@ -71,7 +110,7 @@ static __attribute__((unused)) uint16_t tal_ble_uuid16_convert(TKL_BLE_UUID_T *p
     return 0xFFFF;
 }
 
-static void tkl_ble_kernel_gap_event_callback(TKL_BLE_GAP_PARAMS_EVT_T *p_event)
+static void tal_ble_kernel_gap_event_callback(TAL_BLE_GAP_PARAMS_EVT_T *p_event)
 {
     TAL_BLE_EVT_PARAMS_T tal_event;
 
@@ -82,46 +121,50 @@ static void tkl_ble_kernel_gap_event_callback(TKL_BLE_GAP_PARAMS_EVT_T *p_event)
     memset(&tal_event, 0, sizeof(TAL_BLE_EVT_PARAMS_T));
 
     switch (p_event->type) {
-    case TKL_BLE_EVT_STACK_INIT: {
+    case TAL_BLE_EVT_STACK_INIT: {
         tal_event.type = TAL_BLE_STACK_INIT;
         tal_event.ble_event.init = p_event->result;
     } break;
 
-    case TKL_BLE_EVT_STACK_DEINIT: {
+    case TAL_BLE_EVT_STACK_DEINIT: {
         tal_event.type = TAL_BLE_STACK_DEINIT;
         tal_event.ble_event.init = p_event->result;
     } break;
 
-    case TKL_BLE_GAP_EVT_CONNECT: {
+    case TAL_BLE_GAP_EVT_CONNECT: {
         tal_event.ble_event.connect.result = p_event->result;
-        if (p_event->gap_event.connect.role == TKL_BLE_ROLE_SERVER) {
+        if (p_event->gap_event.connect.role == TAL_BLE_ROLE_SERVER) {
             tal_event.type = TAL_BLE_EVT_PERIPHERAL_CONNECT;
 
-            tkl_ble_common_connect_handle = p_event->conn_handle;
+            tal_ble_common_connect_handle = p_event->conn_handle;
             tal_event.ble_event.connect.peer.conn_handle = p_event->conn_handle;
             tal_event.ble_event.connect.peer.peer_addr.type = p_event->gap_event.connect.peer_addr.type;
             memcpy(tal_event.ble_event.connect.peer.peer_addr.addr, p_event->gap_event.connect.peer_addr.addr, 6);
 
             tal_event.ble_event.connect.peer.char_handle[TAL_COMMON_WRITE_CHAR_INDEX] =
-                ptkl_ble_service_char[TAL_COMMON_WRITE_CHAR_INDEX].handle;
+                ptal_ble_service_char[TAL_COMMON_WRITE_CHAR_INDEX].handle;
             tal_event.ble_event.connect.peer.char_handle[TAL_COMMON_NOTIFY_CHAR_INDEX] =
-                ptkl_ble_service_char[TAL_COMMON_NOTIFY_CHAR_INDEX].handle;
+                ptal_ble_service_char[TAL_COMMON_NOTIFY_CHAR_INDEX].handle;
             tal_event.ble_event.connect.peer.char_handle[TAL_COMMON_READ_CHAR_INDEX] =
-                ptkl_ble_service_char[TAL_COMMON_READ_CHAR_INDEX].handle;
+                ptal_ble_service_char[TAL_COMMON_READ_CHAR_INDEX].handle;
 #if (defined(ENABLE_MATTER_TUYA_BLE_CHAR) && (ENABLE_MATTER_TUYA_BLE_CHAR == 1))
             tal_event.ble_event.connect.peer.char_handle[TAL_MATTER_TUYA_T1_CHAR_INDEX] =
-                ptkl_ble_service_char[TAL_MATTER_TUYA_T1_CHAR_INDEX].handle;
+                ptal_ble_service_char[TAL_MATTER_TUYA_T1_CHAR_INDEX].handle;
             tal_event.ble_event.connect.peer.char_handle[TAL_MATTER_TUYA_T2_CHAR_INDEX] =
-                ptkl_ble_service_char[TAL_MATTER_TUYA_T2_CHAR_INDEX].handle;
+                ptal_ble_service_char[TAL_MATTER_TUYA_T2_CHAR_INDEX].handle;
             tal_event.ble_event.connect.peer.char_handle[TAL_MATTER_TUYA_T3_CHAR_INDEX] =
-                ptkl_ble_service_char[TAL_MATTER_TUYA_T3_CHAR_INDEX].handle;
+                ptal_ble_service_char[TAL_MATTER_TUYA_T3_CHAR_INDEX].handle;
 #endif
 
         } else {
 #if (TY_HS_BLE_ROLE_CENTRAL)
+            OPERATE_RET disc_ret = OPRT_OK;
+
             tal_ble_peer.conn_handle = p_event->conn_handle;
-            if (tkl_ble_gattc_all_service_discovery(p_event->conn_handle) != 0) { // Try To Discovery All Service, And
-                                                                                  // Find the correct service
+            /* Try To Discovery All Service, And Find the correct service
+             * （空卡时 disc_ret=OPRT_NOT_SUPPORTED，按发现失败上报） */
+            TAL_BLUETOOTH_EXEC_OP_VAL(disc_ret, gattc_all_service_discovery, p_event->conn_handle);
+            if (disc_ret != 0) {
                 tal_event.type = TAL_BLE_EVT_CENTRAL_CONNECT_DISCOVERY;
                 tal_event.ble_event.connect.result = OPRT_OS_ADAPTER_BLE_SVC_DISC_FAILED;
                 memcpy(&tal_event.ble_event.connect.peer, &tal_ble_peer, sizeof(TAL_BLE_PEER_INFO_T));
@@ -134,10 +177,10 @@ static void tkl_ble_kernel_gap_event_callback(TKL_BLE_GAP_PARAMS_EVT_T *p_event)
         }
     } break;
 
-    case TKL_BLE_GAP_EVT_DISCONNECT: {
-        if (p_event->gap_event.disconnect.role == TKL_BLE_ROLE_SERVER &&
-            p_event->conn_handle == tkl_ble_common_connect_handle) {
-            tkl_ble_common_connect_handle = TKL_BLE_GATT_INVALID_HANDLE;
+    case TAL_BLE_GAP_EVT_DISCONNECT: {
+        if (p_event->gap_event.disconnect.role == TAL_BLE_ROLE_SERVER &&
+            p_event->conn_handle == tal_ble_common_connect_handle) {
+            tal_ble_common_connect_handle = TAL_BLE_GATT_INVALID_HANDLE;
         }
 
         tal_event.type = TAL_BLE_EVT_DISCONNECT;
@@ -145,24 +188,24 @@ static void tkl_ble_kernel_gap_event_callback(TKL_BLE_GAP_PARAMS_EVT_T *p_event)
         tal_event.ble_event.disconnect.reason = p_event->gap_event.disconnect.reason;
     } break;
 
-    case TKL_BLE_GAP_EVT_ADV_REPORT: {
+    case TAL_BLE_GAP_EVT_ADV_REPORT: {
         tal_event.type = TAL_BLE_EVT_ADV_REPORT;
         tal_event.ble_event.adv_report.rssi = p_event->gap_event.adv_report.rssi;
-        tal_event.ble_event.adv_report.data_len = (uint8_t)p_event->gap_event.adv_report.data.length;
+        tal_event.ble_event.adv_report.data_len = (uint8_t)p_event->gap_event.adv_report.data.len;
         tal_event.ble_event.adv_report.p_data = p_event->gap_event.adv_report.data.p_data;
         memcpy(tal_event.ble_event.adv_report.peer_addr.addr, p_event->gap_event.adv_report.peer_addr.addr, 6);
 
-        if (p_event->gap_event.adv_report.adv_type == TKL_BLE_ADV_DATA) {
+        if (p_event->gap_event.adv_report.adv_type == TAL_BLE_GAP_ADV_DATA) {
             tal_event.ble_event.adv_report.adv_type = TAL_BLE_ADV_DATA;
-        } else if (p_event->gap_event.adv_report.adv_type == TKL_BLE_RSP_DATA) {
+        } else if (p_event->gap_event.adv_report.adv_type == TAL_BLE_GAP_RSP_DATA) {
             tal_event.ble_event.adv_report.adv_type = TAL_BLE_RSP_DATA;
-        } else if (p_event->gap_event.adv_report.adv_type == TKL_BLE_ADV_RSP_DATA) {
+        } else if (p_event->gap_event.adv_report.adv_type == TAL_BLE_GAP_ADV_RSP_DATA) {
             tal_event.ble_event.adv_report.adv_type = TAL_BLE_ADV_RSP_DATA;
         }
 
-        if (p_event->gap_event.adv_report.peer_addr.type == TKL_BLE_GAP_ADDR_TYPE_PUBLIC) {
+        if (p_event->gap_event.adv_report.peer_addr.type == TAL_BLE_GAP_ADDR_TYPE_PUBLIC) {
             tal_event.ble_event.adv_report.peer_addr.type = TAL_BLE_ADDR_TYPE_PUBLIC;
-        } else if (p_event->gap_event.adv_report.peer_addr.type == TKL_BLE_GAP_ADDR_TYPE_RANDOM) {
+        } else if (p_event->gap_event.adv_report.peer_addr.type == TAL_BLE_GAP_ADDR_TYPE_RANDOM) {
             tal_event.ble_event.adv_report.peer_addr.type = TAL_BLE_ADDR_TYPE_RANDOM;
         } else {
             /**< Currently, we not support other types. And Tuya Bluetooth
@@ -171,12 +214,12 @@ static void tkl_ble_kernel_gap_event_callback(TKL_BLE_GAP_PARAMS_EVT_T *p_event)
         }
     } break;
 
-    case TKL_BLE_GAP_EVT_CONN_PARAM_REQ: {
+    case TAL_BLE_GAP_EVT_CONN_PARAM_REQ: {
         tal_event.type = TAL_BLE_EVT_CONN_PARAM_REQ;
         tal_event.ble_event.conn_param.conn_handle = p_event->conn_handle;
     } break;
 
-    case TKL_BLE_GAP_EVT_CONN_PARAM_UPDATE: {
+    case TAL_BLE_GAP_EVT_CONN_PARAM_UPDATE: {
         tal_event.type = TAL_BLE_EVT_CONN_PARAM_UPDATE;
         tal_event.ble_event.conn_param.conn_handle = p_event->conn_handle;
 
@@ -186,7 +229,7 @@ static void tkl_ble_kernel_gap_event_callback(TKL_BLE_GAP_PARAMS_EVT_T *p_event)
         tal_event.ble_event.conn_param.conn.latency = p_event->gap_event.conn_param.conn_latency;
     } break;
 
-    case TKL_BLE_GAP_EVT_CONN_RSSI: {
+    case TAL_BLE_GAP_EVT_CONN_RSSI: {
         tal_event.type = TAL_BLE_EVT_CONN_RSSI;
         tal_event.ble_event.link_rssi.conn_handle = p_event->conn_handle;
 
@@ -203,7 +246,7 @@ static void tkl_ble_kernel_gap_event_callback(TKL_BLE_GAP_PARAMS_EVT_T *p_event)
     }
 }
 
-static void tkl_ble_kernel_gatt_event_callback(TKL_BLE_GATT_PARAMS_EVT_T *p_event)
+static void tal_ble_kernel_gatt_event_callback(TAL_BLE_GATT_PARAMS_EVT_T *p_event)
 {
     TAL_BLE_EVT_PARAMS_T tal_event;
 
@@ -214,20 +257,20 @@ static void tkl_ble_kernel_gatt_event_callback(TKL_BLE_GATT_PARAMS_EVT_T *p_even
     memset(&tal_event, 0, sizeof(TAL_BLE_EVT_PARAMS_T));
 
     switch (p_event->type) {
-    case TKL_BLE_GATT_EVT_MTU_REQUEST: {
+    case TAL_BLE_GATT_EVT_MTU_REQUEST: {
         tal_event.type = TAL_BLE_EVT_MTU_REQUEST;
         tal_event.ble_event.exchange_mtu.conn_handle = p_event->conn_handle;
         tal_event.ble_event.exchange_mtu.mtu = p_event->gatt_event.exchange_mtu;
     } break;
 #if (TY_HS_BLE_ROLE_CENTRAL)
-    case TKL_BLE_GATT_EVT_MTU_RSP: {
+    case TAL_BLE_GATT_EVT_MTU_RSP: {
         tal_event.type = TAL_BLE_EVT_MTU_RSP;
         tal_event.ble_event.exchange_mtu.conn_handle = p_event->conn_handle;
         tal_event.ble_event.exchange_mtu.mtu = p_event->gatt_event.exchange_mtu;
     } break;
 
-    case TKL_BLE_GATT_EVT_PRIM_SEV_DISCOVERY: {
-        TKL_BLE_GATT_SVC_DISC_TYPE_T *p_svc_disc = &p_event->gatt_event.svc_disc;
+    case TAL_BLE_GATT_EVT_PRIM_SEV_DISCOVERY: {
+        TAL_BLE_GATT_SVC_DISC_TYPE_T *p_svc_disc = &p_event->gatt_event.svc_disc;
         int svc_result = OPRT_INVALID_PARM;
 
         tal_event.type = TAL_BLE_EVT_CENTRAL_CONNECT_DISCOVERY;
@@ -238,8 +281,9 @@ static void tkl_ble_kernel_gatt_event_callback(TKL_BLE_GATT_PARAMS_EVT_T *p_even
             for (i = 0; i < p_svc_disc->svc_num; i++) {
                 if (tal_ble_uuid16_convert(&p_svc_disc->services[i].uuid) == TAL_BLE_CMD_SERVICE_UUID_V1 ||
                     tal_ble_uuid16_convert(&p_svc_disc->services[i].uuid) == TAL_BLE_CMD_SERVICE_UUID_V2) {
-                    svc_result = tkl_ble_gattc_all_char_discovery(
-                        p_event->conn_handle, p_svc_disc->services[i].start_handle, p_svc_disc->services[i].end_handle);
+                    TAL_BLUETOOTH_EXEC_OP_VAL(svc_result, gattc_all_char_discovery, p_event->conn_handle,
+                                              p_svc_disc->services[i].start_handle,
+                                              p_svc_disc->services[i].end_handle);
                     if (svc_result == 0) {
                         return;
                     }
@@ -254,9 +298,9 @@ static void tkl_ble_kernel_gatt_event_callback(TKL_BLE_GATT_PARAMS_EVT_T *p_even
         }
     } break;
 
-    case TKL_BLE_GATT_EVT_CHAR_DISCOVERY: {
+    case TAL_BLE_GATT_EVT_CHAR_DISCOVERY: {
 
-        TKL_BLE_GATT_CHAR_DISC_TYPE_T *p_char_disc = &p_event->gatt_event.char_disc;
+        TAL_BLE_GATT_CHAR_DISC_TYPE_T *p_char_disc = &p_event->gatt_event.char_disc;
         int char_result = OPRT_INVALID_PARM;
 
         tal_event.type = TAL_BLE_EVT_CENTRAL_CONNECT_DISCOVERY;
@@ -281,9 +325,9 @@ static void tkl_ble_kernel_gatt_event_callback(TKL_BLE_GATT_PARAMS_EVT_T *p_even
             }
 
             /**< Find Characteristic Descriptor */
-            if (tal_ble_peer.char_handle[TAL_COMMON_NOTIFY_CHAR_INDEX] != TKL_BLE_GATT_INVALID_HANDLE) {
-                char_result = tkl_ble_gattc_char_desc_discovery(
-                    p_event->conn_handle, tal_ble_peer.char_handle[TAL_COMMON_NOTIFY_CHAR_INDEX], 0xFFFF);
+            if (tal_ble_peer.char_handle[TAL_COMMON_NOTIFY_CHAR_INDEX] != TAL_BLE_GATT_INVALID_HANDLE) {
+                TAL_BLUETOOTH_EXEC_OP_VAL(char_result, gattc_char_desc_discovery, p_event->conn_handle,
+                                          tal_ble_peer.char_handle[TAL_COMMON_NOTIFY_CHAR_INDEX], 0xFFFF);
                 if (char_result == OPRT_OK) {
                     return;
                 }
@@ -299,15 +343,15 @@ static void tkl_ble_kernel_gatt_event_callback(TKL_BLE_GATT_PARAMS_EVT_T *p_even
 
     } break;
 
-    case TKL_BLE_GATT_EVT_CHAR_DESC_DISCOVERY: {
-        TKL_BLE_GATT_DESC_DISC_TYPE_T *p_desc_disc = &p_event->gatt_event.desc_disc;
+    case TAL_BLE_GATT_EVT_CHAR_DESC_DISCOVERY: {
+        TAL_BLE_GATT_DESC_DISC_TYPE_T *p_desc_disc = &p_event->gatt_event.desc_disc;
         uint8_t cccd_enable[2] = {0x01, 0x00};
         int desc_result;
 
         tal_event.type = TAL_BLE_EVT_CENTRAL_CONNECT_DISCOVERY;
         if (p_event->result == OPRT_OK) {
-            desc_result = tkl_ble_gattc_write_without_rsp(p_event->conn_handle, p_desc_disc->cccd_handle, cccd_enable,
-                                                          sizeof(cccd_enable));
+            TAL_BLUETOOTH_EXEC_OP_VAL(desc_result, gattc_write_without_rsp, p_event->conn_handle,
+                                      p_desc_disc->cccd_handle, cccd_enable, sizeof(cccd_enable));
             if (desc_result != 0) {
                 tal_event.ble_event.connect.result = OPRT_OS_ADAPTER_BLE_DESC_DISC_FAILED;
             } else if (p_event->conn_handle != tal_ble_peer.conn_handle) {
@@ -324,7 +368,7 @@ static void tkl_ble_kernel_gatt_event_callback(TKL_BLE_GATT_PARAMS_EVT_T *p_even
         }
     } break;
 #endif
-    case TKL_BLE_GATT_EVT_NOTIFY_TX: {
+    case TAL_BLE_GATT_EVT_NOTIFY_TX: {
         tal_event.type = TAL_BLE_EVT_NOTIFY_TX;
         tal_event.ble_event.notify_result.conn_handle = p_event->conn_handle;
 
@@ -332,31 +376,31 @@ static void tkl_ble_kernel_gatt_event_callback(TKL_BLE_GATT_PARAMS_EVT_T *p_even
         tal_event.ble_event.notify_result.result = p_event->gatt_event.notify_result.result;
     } break;
 
-    case TKL_BLE_GATT_EVT_WRITE_REQ: {
+    case TAL_BLE_GATT_EVT_WRITE_REQ: {
         tal_event.type = TAL_BLE_EVT_WRITE_REQ;
         tal_event.ble_event.write_report.peer.conn_handle = p_event->conn_handle;
         tal_event.ble_event.write_report.peer.char_handle[0] = p_event->gatt_event.write_report.char_handle;
-        tal_event.ble_event.write_report.report.len = p_event->gatt_event.write_report.report.length;
+        tal_event.ble_event.write_report.report.len = p_event->gatt_event.write_report.report.len;
         tal_event.ble_event.write_report.report.p_data = p_event->gatt_event.write_report.report.p_data;
     } break;
 
-    case TKL_BLE_GATT_EVT_NOTIFY_INDICATE_RX: {
+    case TAL_BLE_GATT_EVT_NOTIFY_INDICATE_RX: {
         tal_event.type = TAL_BLE_EVT_NOTIFY_RX;
         tal_event.ble_event.data_report.peer.conn_handle = p_event->conn_handle;
         tal_event.ble_event.data_report.peer.char_handle[0] = p_event->gatt_event.data_report.char_handle;
-        tal_event.ble_event.data_report.report.len = p_event->gatt_event.data_report.report.length;
+        tal_event.ble_event.data_report.report.len = p_event->gatt_event.data_report.report.len;
         tal_event.ble_event.data_report.report.p_data = p_event->gatt_event.data_report.report.p_data;
     } break;
 #if (TY_HS_BLE_ROLE_CENTRAL)
-    case TKL_BLE_GATT_EVT_READ_RX: {
+    case TAL_BLE_GATT_EVT_READ_RX: {
         tal_event.type = TAL_BLE_EVT_READ_RX;
         tal_event.ble_event.data_read.peer.conn_handle = p_event->conn_handle;
         tal_event.ble_event.data_read.peer.char_handle[0] = p_event->gatt_event.data_read.char_handle;
-        tal_event.ble_event.data_read.report.len = p_event->gatt_event.data_read.report.length;
+        tal_event.ble_event.data_read.report.len = p_event->gatt_event.data_read.report.len;
         tal_event.ble_event.data_read.report.p_data = p_event->gatt_event.data_read.report.p_data;
     } break;
 #endif
-    case TKL_BLE_GATT_EVT_SUBSCRIBE: {
+    case TAL_BLE_GATT_EVT_SUBSCRIBE: {
         if (p_event->result == OPRT_OK) {
             tal_event.type = TAL_BLE_EVT_SUBSCRIBE;
             tal_event.ble_event.subscribe.conn_handle = p_event->conn_handle;
@@ -369,7 +413,7 @@ static void tkl_ble_kernel_gatt_event_callback(TKL_BLE_GATT_PARAMS_EVT_T *p_even
         }
     } break;
 
-    case TKL_BLE_GATT_EVT_READ_CHAR_VALUE: {
+    case TAL_BLE_GATT_EVT_READ_CHAR_VALUE: {
         tal_event.type = TAL_BLE_EVT_READ_CHAR;
         tal_event.ble_event.char_read.conn_handle = p_event->conn_handle;
         tal_event.ble_event.char_read.char_handle = p_event->gatt_event.char_read.char_handle;
@@ -396,142 +440,183 @@ static void tkl_ble_kernel_gatt_event_callback(TKL_BLE_GATT_PARAMS_EVT_T *p_even
  * */
 OPERATE_RET tal_ble_bt_init(TAL_BLE_ROLE_E role, const TAL_BLE_EVT_FUNC_CB ble_event)
 {
-    uint8_t ble_stack_role = 0; // TKL_BLE_ROLE_SERVER;
+    uint8_t ble_stack_role = 0; // TAL_BLE_ROLE_SERVER;
 
     if (ble_event != NULL) {
         /**<  Get the TAL Event Callback. */
         tal_ble_event_callback = ble_event;
 
-        /**< Register GAP And GATT Callback */
-        tkl_ble_gap_callback_register(tkl_ble_kernel_gap_event_callback);
-        tkl_ble_gatt_callback_register(tkl_ble_kernel_gatt_event_callback);
+        /**< Register GAP And GATT Callback
+         * 次序约束：必须先于 stack_init 与 gatts_service_add（bluez 层首次
+         * 调用会锁存回调指针，见 tal_bluetooth_ops.h 契约） */
+        TAL_BLUETOOTH_EXEC_OP(gap_callback_register, tal_ble_kernel_gap_event_callback);
+        TAL_BLUETOOTH_EXEC_OP(gatt_callback_register, tal_ble_kernel_gatt_event_callback);
     }
 
     /**< Init Bluetooth Stack Role For Ble. */
     if ((role & TAL_BLE_ROLE_PERIPERAL) == TAL_BLE_ROLE_PERIPERAL ||
         (role & TAL_BLE_ROLE_BEACON) == TAL_BLE_ROLE_BEACON) {
-        ble_stack_role |= TKL_BLE_ROLE_SERVER;
+        ble_stack_role |= TAL_BLE_ROLE_SERVER;
     }
     if ((role & TAL_BLE_ROLE_CENTRAL) == TAL_BLE_ROLE_CENTRAL) {
-        ble_stack_role |= TKL_BLE_ROLE_CLIENT;
+        ble_stack_role |= TAL_BLE_ROLE_CLIENT;
     }
 
-    if (!ptkl_ble_service) {
-        ptkl_ble_service = tal_malloc(sizeof(TKL_BLE_SERVICE_PARAMS_T) * TKL_BLE_GATT_SERVICE_MAX_NUM);
+    if (!ptal_ble_service) {
+        ptal_ble_service = tal_malloc(sizeof(TAL_BLE_SERVICE_PARAMS_T) * TAL_BLE_GATT_SERVICE_MAX_NUM);
     }
-    if (!ptkl_ble_service_char) {
-        ptkl_ble_service_char = tal_malloc(sizeof(TKL_BLE_CHAR_PARAMS_T) * TKL_BLE_GATT_CHAR_MAX_NUM);
+    if (!ptal_ble_service_char) {
+        ptal_ble_service_char = tal_malloc(sizeof(TAL_BLE_CHAR_PARAMS_T) * TAL_BLE_GATT_CHAR_MAX_NUM);
     }
 
     if ((role & TAL_BLE_ROLE_PERIPERAL) == TAL_BLE_ROLE_PERIPERAL) {
-        TKL_BLE_GATTS_PARAMS_T *p_ble_services = &tkl_ble_gatt_service;
-        *p_ble_services = (TKL_BLE_GATTS_PARAMS_T){
+        TAL_BLE_GATTS_PARAMS_T *p_ble_services = &tal_ble_gatt_service;
+        *p_ble_services = (TAL_BLE_GATTS_PARAMS_T){
             .svc_num = TAL_COMMON_SERVICE_MAX_NUM,
-            .p_service = ptkl_ble_service,
+            .p_service = ptal_ble_service,
         };
 
 #if (defined(TAL_BLE_SERVICE_VERSION) && (TAL_BLE_SERVICE_VERSION == 2))
         /**< Add Tuya Common Service */
-        *(ptkl_ble_service + TAL_COMMON_SERVICE_INDEX) = (TKL_BLE_SERVICE_PARAMS_T){
-            .handle = TKL_BLE_GATT_INVALID_HANDLE,
+        *(ptal_ble_service + TAL_COMMON_SERVICE_INDEX) = (TAL_BLE_SERVICE_PARAMS_T){
+            .handle = TAL_BLE_GATT_INVALID_HANDLE,
             .svc_uuid =
                 {
-                    .uuid_type = TKL_BLE_UUID_TYPE_16,
+                    .uuid_type = TAL_BLE_UUID_TYPE_16,
                     .uuid.uuid16 = TAL_BLE_CMD_SERVICE_UUID_V2,
                 },
-            .type = TKL_BLE_UUID_SERVICE_PRIMARY,
+            .type = TAL_BLE_UUID_SERVICE_PRIMARY,
             .char_num = TAL_COMMON_CHAR_MAX_NUM,
-            .p_char = ptkl_ble_service_char,
+            .p_char = ptal_ble_service_char,
         };
 
         /**< Add Write Characteristic */
-        *(ptkl_ble_service_char + TAL_COMMON_WRITE_CHAR_INDEX) = (TKL_BLE_CHAR_PARAMS_T){
-            .handle = TKL_BLE_GATT_INVALID_HANDLE,
+        *(ptal_ble_service_char + TAL_COMMON_WRITE_CHAR_INDEX) = (TAL_BLE_CHAR_PARAMS_T){
+            .handle = TAL_BLE_GATT_INVALID_HANDLE,
             .char_uuid =
                 {
-                    .uuid_type = TKL_BLE_UUID_TYPE_128,
+                    .uuid_type = TAL_BLE_UUID_TYPE_128,
                     .uuid.uuid128 = TAL_BLE_CMD_WRITE_CHAR_UUID128_V2,
                 },
-            .property = TKL_BLE_GATT_CHAR_PROP_WRITE | TKL_BLE_GATT_CHAR_PROP_WRITE_NO_RSP,
-            .permission = TKL_BLE_GATT_PERM_READ | TKL_BLE_GATT_PERM_WRITE,
+            .property = TAL_BLE_GATT_CHAR_PROP_WRITE | TAL_BLE_GATT_CHAR_PROP_WRITE_NO_RSP,
+            .permission = TAL_BLE_GATT_PERM_READ | TAL_BLE_GATT_PERM_WRITE,
             .value_len = 244,
         };
 
         /**< Add Notify Characteristic */
-        *(ptkl_ble_service_char + TAL_COMMON_NOTIFY_CHAR_INDEX) = (TKL_BLE_CHAR_PARAMS_T){
-            .handle = TKL_BLE_GATT_INVALID_HANDLE,
+        *(ptal_ble_service_char + TAL_COMMON_NOTIFY_CHAR_INDEX) = (TAL_BLE_CHAR_PARAMS_T){
+            .handle = TAL_BLE_GATT_INVALID_HANDLE,
             .char_uuid =
                 {
-                    .uuid_type = TKL_BLE_UUID_TYPE_128,
+                    .uuid_type = TAL_BLE_UUID_TYPE_128,
                     .uuid.uuid128 = TAL_BLE_CMD_NOTIFY_CHAR_UUID128_V2,
                 },
-            .property = TKL_BLE_GATT_CHAR_PROP_NOTIFY,
-            .permission = TKL_BLE_GATT_PERM_READ | TKL_BLE_GATT_PERM_WRITE,
+            .property = TAL_BLE_GATT_CHAR_PROP_NOTIFY,
+            .permission = TAL_BLE_GATT_PERM_READ | TAL_BLE_GATT_PERM_WRITE,
             .value_len = 244,
         };
 
         /**< Add Read Characteristic */
-        *(ptkl_ble_service_char + TAL_COMMON_READ_CHAR_INDEX) = (TKL_BLE_CHAR_PARAMS_T){
-            .handle = TKL_BLE_GATT_INVALID_HANDLE,
+        *(ptal_ble_service_char + TAL_COMMON_READ_CHAR_INDEX) = (TAL_BLE_CHAR_PARAMS_T){
+            .handle = TAL_BLE_GATT_INVALID_HANDLE,
             .char_uuid =
                 {
-                    .uuid_type = TKL_BLE_UUID_TYPE_128,
+                    .uuid_type = TAL_BLE_UUID_TYPE_128,
                     .uuid.uuid128 = TAL_BLE_CMD_READ_CHAR_UUID128_V2,
                 },
-            .property = TKL_BLE_GATT_CHAR_PROP_READ,
-            .permission = TKL_BLE_GATT_PERM_READ,
+            .property = TAL_BLE_GATT_CHAR_PROP_READ,
+            .permission = TAL_BLE_GATT_PERM_READ,
             .value_len = 244,
         };
 #else
         /**< Add Tuya Common Service */
-        *(ptkl_ble_service + TAL_COMMON_SERVICE_INDEX) = (TKL_BLE_SERVICE_PARAMS_T){
-            .handle = TKL_BLE_GATT_INVALID_HANDLE,
+        *(ptal_ble_service + TAL_COMMON_SERVICE_INDEX) = (TAL_BLE_SERVICE_PARAMS_T){
+            .handle = TAL_BLE_GATT_INVALID_HANDLE,
             .svc_uuid =
                 {
-                    .uuid_type = TKL_BLE_UUID_TYPE_16,
+                    .uuid_type = TAL_BLE_UUID_TYPE_16,
                     .uuid.uuid16 = TAL_BLE_CMD_SERVICE_UUID_V1,
                 },
-            .type = TKL_BLE_UUID_SERVICE_PRIMARY,
+            .type = TAL_BLE_UUID_SERVICE_PRIMARY,
             .char_num = 2,
-            .p_char = ptkl_ble_service_char,
+            .p_char = ptal_ble_service_char,
         };
 
         /**< Add Write Characteristic */
 
-        *(ptkl_ble_service_char + TAL_COMMON_WRITE_CHAR_INDEX) = (TKL_BLE_CHAR_PARAMS_T){
-            .handle = TKL_BLE_GATT_INVALID_HANDLE,
+        *(ptal_ble_service_char + TAL_COMMON_WRITE_CHAR_INDEX) = (TAL_BLE_CHAR_PARAMS_T){
+            .handle = TAL_BLE_GATT_INVALID_HANDLE,
             .char_uuid =
                 {
-                    .uuid_type = TKL_BLE_UUID_TYPE_16,
+                    .uuid_type = TAL_BLE_UUID_TYPE_16,
                     .uuid.uuid16 = TAL_BLE_CMD_WRITE_CHAR_UUID_V1,
                 },
-            .property = TKL_BLE_GATT_CHAR_PROP_WRITE | TKL_BLE_GATT_CHAR_PROP_WRITE_NO_RSP,
-            .permission = TKL_BLE_GATT_PERM_READ | TKL_BLE_GATT_PERM_WRITE,
+            .property = TAL_BLE_GATT_CHAR_PROP_WRITE | TAL_BLE_GATT_CHAR_PROP_WRITE_NO_RSP,
+            .permission = TAL_BLE_GATT_PERM_READ | TAL_BLE_GATT_PERM_WRITE,
             .value_len = 244,
         };
 
         /**< Add Notify Characteristic */
-        *(ptkl_ble_service_char + TAL_COMMON_NOTIFY_CHAR_INDEX) = (TKL_BLE_CHAR_PARAMS_T){
-            .handle = TKL_BLE_GATT_INVALID_HANDLE,
+        *(ptal_ble_service_char + TAL_COMMON_NOTIFY_CHAR_INDEX) = (TAL_BLE_CHAR_PARAMS_T){
+            .handle = TAL_BLE_GATT_INVALID_HANDLE,
             .char_uuid =
                 {
-                    .uuid_type = TKL_BLE_UUID_TYPE_16,
+                    .uuid_type = TAL_BLE_UUID_TYPE_16,
                     .uuid.uuid16 = TAL_BLE_CMD_NOTIFY_CHAR_UUID_V1,
                 },
-            .property = TKL_BLE_GATT_CHAR_PROP_NOTIFY,
-            .permission = TKL_BLE_GATT_PERM_READ | TKL_BLE_GATT_PERM_WRITE,
+            .property = TAL_BLE_GATT_CHAR_PROP_NOTIFY,
+            .permission = TAL_BLE_GATT_PERM_READ | TAL_BLE_GATT_PERM_WRITE,
             .value_len = 244,
         };
 
 #endif
-        if (tkl_ble_gatts_service_add(p_ble_services) != 0) {
+        OPERATE_RET add_ret = OPRT_OK;
+
+        /* 空卡时 add_ret=OPRT_NOT_SUPPORTED，与原"非 0 即初始化失败"语义一致 */
+        TAL_BLUETOOTH_EXEC_OP_VAL(add_ret, gatts_service_add, p_ble_services);
+        if (add_ret != OPRT_OK) {
             return OPRT_OS_ADAPTER_BLE_INIT_FAILED;
         }
     }
 
-    if (tkl_ble_stack_init(ble_stack_role) != OPRT_OK) {
+    OPERATE_RET init_ret = OPRT_OK;
+
+    TAL_BLUETOOTH_EXEC_OP_VAL(init_ret, stack_init, ble_stack_role);
+    if (init_ret != OPRT_OK) {
         return OPRT_OS_ADAPTER_BLE_INIT_FAILED;
     }
+    return OPRT_OK;
+}
+
+/**
+ * @brief 公开 TAL 角色位掩码 → 镜像（卡）角色位掩码
+ *
+ * 原实现把 TAL 角色值直接透传给上游 TKL 的 stack_deinit（TAL_BLE_ROLE_PERIPERAL
+ * =0x01→SERVER、TAL_BLE_ROLE_CENTRAL=0x02→CLIENT 只是数值巧合）；卡化后显式
+ * 映射，不再依赖数值一致。
+ *
+ * 镜像角色集只有 SERVER/CLIENT：TAL_BLE_ROLE_BEACON(0x04) 及 Mesh 角色
+ * （0x0100 起）无对应值，含此类位即按"不支持"处理（返回 OPRT_NOT_SUPPORTED），
+ * 不做静默丢弃。
+ */
+static OPERATE_RET tal_ble_role_to_stack_role(TAL_BLE_ROLE_E role, uint8_t *p_stack_role)
+{
+    if (p_stack_role == NULL) {
+        return OPRT_INVALID_PARM;
+    }
+
+    if ((role & ~(TAL_BLE_ROLE_PERIPERAL | TAL_BLE_ROLE_CENTRAL)) != 0) {
+        return OPRT_NOT_SUPPORTED;
+    }
+
+    *p_stack_role = 0;
+    if ((role & TAL_BLE_ROLE_PERIPERAL) == TAL_BLE_ROLE_PERIPERAL) {
+        *p_stack_role |= TAL_BLE_ROLE_SERVER;
+    }
+    if ((role & TAL_BLE_ROLE_CENTRAL) == TAL_BLE_ROLE_CENTRAL) {
+        *p_stack_role |= TAL_BLE_ROLE_CLIENT;
+    }
+
     return OPRT_OK;
 }
 
@@ -543,14 +628,22 @@ OPERATE_RET tal_ble_bt_init(TAL_BLE_ROLE_E role, const TAL_BLE_EVT_FUNC_CB ble_e
  * */
 OPERATE_RET tal_ble_bt_deinit(TAL_BLE_ROLE_E role)
 {
-    if (ptkl_ble_service_char) {
-        tal_free(ptkl_ble_service_char);
-    }
-    if (ptkl_ble_service) {
-        tal_free(ptkl_ble_service);
+    uint8_t ble_stack_role = 0;
+
+    /* 角色显式映射；BEACON/Mesh 等镜像无对应值的角色按不支持处理 */
+    if (tal_ble_role_to_stack_role(role, &ble_stack_role) != OPRT_OK) {
+        return OPRT_NOT_SUPPORTED;
     }
 
-    return tkl_ble_stack_deinit(role);
+    if (ptal_ble_service_char) {
+        tal_free(ptal_ble_service_char);
+    }
+    if (ptal_ble_service) {
+        tal_free(ptal_ble_service);
+    }
+
+    /* 空卡（卡或成员为 NULL）时返回 OPRT_NOT_SUPPORTED */
+    TAL_BLUETOOTH_EXEC_OP(stack_deinit, ble_stack_role);
 }
 
 /**
@@ -561,7 +654,7 @@ OPERATE_RET tal_ble_bt_deinit(TAL_BLE_ROLE_E role)
  * */
 OPERATE_RET tal_ble_address_set(TAL_BLE_ADDR_T const *p_addr)
 {
-    TKL_BLE_GAP_ADDR_T ble_addr = {0};
+    TAL_BLE_GAP_ADDR_T ble_addr = {0};
 
     if (p_addr == NULL) {
         return OPRT_INVALID_PARM;
@@ -569,7 +662,7 @@ OPERATE_RET tal_ble_address_set(TAL_BLE_ADDR_T const *p_addr)
 
     ble_addr.type = p_addr->type;
     memcpy(ble_addr.addr, p_addr->addr, 6);
-    return tkl_ble_gap_addr_set(&ble_addr);
+    TAL_BLUETOOTH_EXEC_OP(gap_addr_set, &ble_addr);
 }
 
 /**
@@ -580,13 +673,20 @@ OPERATE_RET tal_ble_address_set(TAL_BLE_ADDR_T const *p_addr)
  * */
 OPERATE_RET tal_ble_address_get(TAL_BLE_ADDR_T *p_addr)
 {
-    TKL_BLE_GAP_ADDR_T tal_addr = {0};
+    TAL_BLE_GAP_ADDR_T tal_addr = {0};
+    OPERATE_RET rt = OPRT_OK;
 
     if (p_addr == NULL) {
         return OPRT_INVALID_PARM;
     }
 
-    tkl_ble_gap_address_get(&tal_addr);
+    /* 空卡降级：先给中性值（清零），取址不可用时保持中性值并返回错误码 */
+    memset(p_addr, 0, sizeof(TAL_BLE_ADDR_T));
+
+    TAL_BLUETOOTH_EXEC_OP_VAL(rt, gap_address_get, &tal_addr);
+    if (rt != OPRT_OK) {
+        return rt;
+    }
 
     p_addr->type = tal_addr.type;
     memcpy(p_addr->addr, tal_addr.addr, 6);
@@ -602,13 +702,18 @@ OPERATE_RET tal_ble_address_get(TAL_BLE_ADDR_T *p_addr)
  * */
 OPERATE_RET tal_ble_bt_link_max(uint16_t *p_maxlink)
 {
+    OPERATE_RET rt = OPRT_OK;
+
     if (p_maxlink == NULL) {
         return OPRT_INVALID_PARM;
     }
 
-    tkl_ble_stack_gatt_link(p_maxlink);
+    /* 空卡降级：先给中性值 0，卡不可用时保持中性值并返回错误码 */
+    *p_maxlink = 0;
 
-    return OPRT_OK;
+    TAL_BLUETOOTH_EXEC_OP_VAL(rt, stack_gatt_link, p_maxlink);
+
+    return rt;
 }
 
 /**
@@ -620,7 +725,7 @@ OPERATE_RET tal_ble_bt_link_max(uint16_t *p_maxlink)
  * */
 OPERATE_RET tal_ble_advertising_start(TAL_BLE_ADV_PARAMS_T const *p_adv_param)
 {
-    TKL_BLE_GAP_ADV_PARAMS_T tal_adv_params = {0};
+    TAL_BLE_GAP_ADV_PARAMS_T tal_adv_params = {0};
 
     if (p_adv_param == NULL) {
         return OPRT_INVALID_PARM;
@@ -634,7 +739,7 @@ OPERATE_RET tal_ble_advertising_start(TAL_BLE_ADV_PARAMS_T const *p_adv_param)
 
     memcpy(tal_adv_params.direct_addr.addr, p_adv_param->direct_addr.addr, 6);
 
-    return tkl_ble_gap_adv_start(&tal_adv_params);
+    TAL_BLUETOOTH_EXEC_OP(gap_adv_start, &tal_adv_params);
 }
 
 /**
@@ -646,26 +751,26 @@ OPERATE_RET tal_ble_advertising_start(TAL_BLE_ADV_PARAMS_T const *p_adv_param)
  * */
 OPERATE_RET tal_ble_advertising_data_set(TAL_BLE_DATA_T *p_adv, TAL_BLE_DATA_T *p_scan_rsp)
 {
-    TKL_BLE_DATA_T adv_data = {0};
-    TKL_BLE_DATA_T scan_rsp_data = {0};
+    TAL_BLE_DATA_T adv_data = {0};
+    TAL_BLE_DATA_T scan_rsp_data = {0};
 
     if (p_adv != NULL) {
-        adv_data.length = p_adv->len;
+        adv_data.len = p_adv->len;
         adv_data.p_data = p_adv->p_data;
     } else {
-        adv_data.length = 0;
+        adv_data.len = 0;
         adv_data.p_data = NULL;
     }
 
     if (p_scan_rsp != NULL) {
-        scan_rsp_data.length = p_scan_rsp->len;
+        scan_rsp_data.len = p_scan_rsp->len;
         scan_rsp_data.p_data = p_scan_rsp->p_data;
     } else {
-        scan_rsp_data.length = 0;
+        scan_rsp_data.len = 0;
         scan_rsp_data.p_data = NULL;
     }
 
-    return tkl_ble_gap_adv_rsp_data_set(&adv_data, &scan_rsp_data);
+    TAL_BLUETOOTH_EXEC_OP(gap_adv_rsp_data_set, &adv_data, &scan_rsp_data);
 }
 
 /**
@@ -676,7 +781,7 @@ OPERATE_RET tal_ble_advertising_data_set(TAL_BLE_DATA_T *p_adv, TAL_BLE_DATA_T *
  * */
 OPERATE_RET tal_ble_advertising_stop(void)
 {
-    return tkl_ble_gap_adv_stop();
+    TAL_BLUETOOTH_EXEC_OP(gap_adv_stop);
 }
 
 /**
@@ -690,26 +795,26 @@ OPERATE_RET tal_ble_advertising_stop(void)
  * */
 OPERATE_RET tal_ble_advertising_data_update(TAL_BLE_DATA_T *p_adv, TAL_BLE_DATA_T *p_scan_rsp)
 {
-    TKL_BLE_DATA_T adv_data = {0};
-    TKL_BLE_DATA_T scan_rsp_data = {0};
+    TAL_BLE_DATA_T adv_data = {0};
+    TAL_BLE_DATA_T scan_rsp_data = {0};
 
     if (p_adv != NULL) {
-        adv_data.length = p_adv->len;
+        adv_data.len = p_adv->len;
         adv_data.p_data = p_adv->p_data;
     } else {
-        adv_data.length = 0;
+        adv_data.len = 0;
         adv_data.p_data = NULL;
     }
 
     if (p_scan_rsp != NULL) {
-        scan_rsp_data.length = p_scan_rsp->len;
+        scan_rsp_data.len = p_scan_rsp->len;
         scan_rsp_data.p_data = p_scan_rsp->p_data;
     } else {
-        scan_rsp_data.length = 0;
+        scan_rsp_data.len = 0;
         scan_rsp_data.p_data = NULL;
     }
 
-    return tkl_ble_gap_adv_rsp_data_update(&adv_data, &scan_rsp_data);
+    TAL_BLUETOOTH_EXEC_OP(gap_adv_rsp_data_update, &adv_data, &scan_rsp_data);
 }
 
 /**
@@ -726,17 +831,17 @@ OPERATE_RET tal_ble_advertising_data_update(TAL_BLE_DATA_T *p_adv, TAL_BLE_DATA_
  */
 OPERATE_RET tal_ble_scan_start(TAL_BLE_SCAN_PARAMS_T const *p_scan_param)
 {
-    TKL_BLE_GAP_SCAN_PARAMS_T tal_scan_params = {0};
+    TAL_BLE_GAP_SCAN_PARAMS_T tal_scan_params = {0};
 
     tal_scan_params.extended = 0;
     tal_scan_params.active = ((p_scan_param->type == TAL_BLE_SCAN_TYPE_ACTIVE) ? 1 : 0);
-    tal_scan_params.scan_phys = TKL_BLE_GAP_PHY_1MBPS;
+    tal_scan_params.scan_phys = TAL_BLE_GAP_PHY_1MBPS;
     tal_scan_params.interval = p_scan_param->scan_interval;
     tal_scan_params.window = p_scan_param->scan_window;
     tal_scan_params.timeout = p_scan_param->timeout;
     tal_scan_params.scan_channel_map = 0x01 | 0x02 | 0x04;
 
-    return tkl_ble_gap_scan_start(&tal_scan_params);
+    TAL_BLUETOOTH_EXEC_OP(gap_scan_start, &tal_scan_params);
 }
 
 /**
@@ -747,7 +852,7 @@ OPERATE_RET tal_ble_scan_start(TAL_BLE_SCAN_PARAMS_T const *p_scan_param)
  * */
 OPERATE_RET tal_ble_scan_stop(void)
 {
-    return tkl_ble_gap_scan_stop();
+    TAL_BLUETOOTH_EXEC_OP(gap_scan_stop);
 }
 
 /**
@@ -755,13 +860,13 @@ OPERATE_RET tal_ble_scan_stop(void)
  * @param   [in]peer:       conn_handle Connection handle.
  * @return  SUCCESS         Successfully read the RSSI.
  *          ERROR           No sample is available.
- *          The rssi reading is given through TAL_BLE_EVT_LINK_RSSI event !!!!!!
+ *          The rssi reading is given through TAL_BLE_EVT_CONN_RSSI event !!!!!!
  * */
 OPERATE_RET tal_ble_rssi_get(const TAL_BLE_PEER_INFO_T peer)
 {
     uint16_t conn_handle = peer.conn_handle;
 
-    return tkl_ble_gap_rssi_get(conn_handle);
+    TAL_BLUETOOTH_EXEC_OP(gap_rssi_get, conn_handle);
 }
 
 /**
@@ -781,7 +886,7 @@ OPERATE_RET
 tal_ble_conn_param_update(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_CONN_PARAMS_T const *p_conn_params)
 {
     uint16_t conn_handle = peer.conn_handle;
-    TKL_BLE_GAP_CONN_PARAMS_T param = {0};
+    TAL_BLE_GAP_CONN_PARAMS_T param = {0};
 
     if (p_conn_params == NULL) {
         return OPRT_INVALID_PARM;
@@ -793,7 +898,7 @@ tal_ble_conn_param_update(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_CONN_PARAMS_T 
     param.conn_sup_timeout = p_conn_params->conn_sup_timeout;
     param.connection_timeout = p_conn_params->connection_timeout;
 
-    return tkl_ble_gap_conn_param_update(conn_handle, &param);
+    TAL_BLUETOOTH_EXEC_OP(gap_conn_param_update, conn_handle, &param);
 }
 
 /**
@@ -803,16 +908,16 @@ tal_ble_conn_param_update(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_CONN_PARAMS_T 
  * \
  * @return  SUCCESS             Successfully initiated connecting procedure.
  *
- *          The connection event is given through TAL_BLE_EVT_CENTRAL_CONNECT
+ *          The connection event is given through TAL_BLE_EVT_CENTRAL_CONNECT_DISCOVERY
  * event !!!!!!
  */
 #if (TY_HS_BLE_ROLE_CENTRAL)
 OPERATE_RET
 tal_ble_connect_and_discovery(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_CONN_PARAMS_T const *p_conn_params)
 {
-    TKL_BLE_GAP_ADDR_T tal_conn_addr = {0};
-    TKL_BLE_GAP_SCAN_PARAMS_T tal_scan_params = {0};
-    TKL_BLE_GAP_CONN_PARAMS_T tal_conn_params = {0};
+    TAL_BLE_GAP_ADDR_T tal_conn_addr = {0};
+    TAL_BLE_GAP_SCAN_PARAMS_T tal_scan_params = {0};
+    TAL_BLE_GAP_CONN_PARAMS_T tal_conn_params = {0};
 
     if (p_conn_params == NULL) {
         tal_conn_params.conn_interval_max = 0x12;
@@ -830,24 +935,24 @@ tal_ble_connect_and_discovery(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_CONN_PARAM
     tal_scan_params.window = 0x0010;
 
     if (peer.peer_addr.type == TAL_BLE_ADDR_TYPE_RANDOM) {
-        tal_conn_addr.type = TKL_BLE_GAP_ADDR_TYPE_RANDOM;
+        tal_conn_addr.type = TAL_BLE_GAP_ADDR_TYPE_RANDOM;
     } else {
-        tal_conn_addr.type = TKL_BLE_GAP_ADDR_TYPE_PUBLIC;
+        tal_conn_addr.type = TAL_BLE_GAP_ADDR_TYPE_PUBLIC;
     }
     memcpy(tal_conn_addr.addr, peer.peer_addr.addr, 6);
 
     memset(&tal_ble_peer, 0, sizeof(TAL_BLE_PEER_INFO_T));
 
-    tal_ble_peer.char_handle[TAL_COMMON_WRITE_CHAR_INDEX] = TKL_BLE_GATT_INVALID_HANDLE;
-    tal_ble_peer.char_handle[TAL_COMMON_NOTIFY_CHAR_INDEX] = TKL_BLE_GATT_INVALID_HANDLE;
-    tal_ble_peer.char_handle[TAL_COMMON_READ_CHAR_INDEX] = TKL_BLE_GATT_INVALID_HANDLE;
+    tal_ble_peer.char_handle[TAL_COMMON_WRITE_CHAR_INDEX] = TAL_BLE_GATT_INVALID_HANDLE;
+    tal_ble_peer.char_handle[TAL_COMMON_NOTIFY_CHAR_INDEX] = TAL_BLE_GATT_INVALID_HANDLE;
+    tal_ble_peer.char_handle[TAL_COMMON_READ_CHAR_INDEX] = TAL_BLE_GATT_INVALID_HANDLE;
 
     /**Assign Peer Info Into TAL Peer Info*/
     memcpy(&tal_ble_peer, &peer, sizeof(TAL_BLE_PEER_INFO_T));
 
     /**< After do connecting one device, we will discovery all service and char.
      */
-    return tkl_ble_gap_connect(&tal_conn_addr, &tal_scan_params, &tal_conn_params);
+    TAL_BLUETOOTH_EXEC_OP(gap_connect, &tal_conn_addr, &tal_scan_params, &tal_conn_params);
 }
 #endif
 /**
@@ -863,7 +968,7 @@ tal_ble_connect_and_discovery(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_CONN_PARAM
 OPERATE_RET tal_ble_disconnect(const TAL_BLE_PEER_INFO_T peer)
 {
     uint16_t conn_handle = peer.conn_handle;
-    return tkl_ble_gap_disconnect(conn_handle, TKL_BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+    TAL_BLUETOOTH_EXEC_OP(gap_disconnect, conn_handle, TAL_BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
 }
 
 /**
@@ -879,10 +984,16 @@ OPERATE_RET tal_ble_server_common_notify(uint16_t index, TAL_BLE_DATA_T *p_data)
         return OPRT_INVALID_PARM;
     }
 
-    if (tkl_ble_common_connect_handle != TKL_BLE_GATT_INVALID_HANDLE &&
-        ptkl_ble_service_char[index].handle != TKL_BLE_GATT_INVALID_HANDLE) {
-        return tkl_ble_gatts_value_notify(tkl_ble_common_connect_handle, ptkl_ble_service_char[index].handle,
-                                          p_data->p_data, p_data->len);
+    if (NULL == ptal_ble_service_char) {
+        /* init 未完成（平台无 BLE 能力时卡不可用会早退；或 init 未调用）：
+         * 服务特征表不存在，避免解引用空指针（空卡路径新增可达状态，2026-10） */
+        return OPRT_RESOURCE_NOT_READY;
+    }
+
+    if (tal_ble_common_connect_handle != TAL_BLE_GATT_INVALID_HANDLE &&
+        ptal_ble_service_char[index].handle != TAL_BLE_GATT_INVALID_HANDLE) {
+        TAL_BLUETOOTH_EXEC_OP(gatts_value_notify, tal_ble_common_connect_handle,
+                              ptal_ble_service_char[index].handle, p_data->p_data, p_data->len);
     }
 
     return OPRT_OS_ADAPTER_BLE_NOTIFY_FAILED;
@@ -900,12 +1011,17 @@ OPERATE_RET tal_ble_server_common_send(TAL_BLE_DATA_T *p_data)
         return OPRT_INVALID_PARM;
     }
 
-    if (tkl_ble_common_connect_handle != TKL_BLE_GATT_INVALID_HANDLE &&
-        ptkl_ble_service_char[TAL_COMMON_NOTIFY_CHAR_INDEX].handle != TKL_BLE_GATT_INVALID_HANDLE) {
+    if (NULL == ptal_ble_service_char) {
+        /* init 未完成（平台无 BLE 能力时卡不可用会早退；或 init 未调用）：
+         * 服务特征表不存在，避免解引用空指针（空卡路径新增可达状态，2026-10） */
+        return OPRT_RESOURCE_NOT_READY;
+    }
 
-        return tkl_ble_gatts_value_notify(tkl_ble_common_connect_handle,
-                                          ptkl_ble_service_char[TAL_COMMON_NOTIFY_CHAR_INDEX].handle, p_data->p_data,
-                                          p_data->len);
+    if (tal_ble_common_connect_handle != TAL_BLE_GATT_INVALID_HANDLE &&
+        ptal_ble_service_char[TAL_COMMON_NOTIFY_CHAR_INDEX].handle != TAL_BLE_GATT_INVALID_HANDLE) {
+
+        TAL_BLUETOOTH_EXEC_OP(gatts_value_notify, tal_ble_common_connect_handle,
+                              ptal_ble_service_char[TAL_COMMON_NOTIFY_CHAR_INDEX].handle, p_data->p_data, p_data->len);
     }
 
     return OPRT_OS_ADAPTER_BLE_NOTIFY_FAILED;
@@ -925,11 +1041,17 @@ OPERATE_RET tal_ble_server_common_read_update_ext(uint16_t index, TAL_BLE_DATA_T
         return OPRT_INVALID_PARM;
     }
 
-    if (tkl_ble_common_connect_handle != TKL_BLE_GATT_INVALID_HANDLE &&
-        ptkl_ble_service_char[index].handle != TKL_BLE_GATT_INVALID_HANDLE) {
+    if (NULL == ptal_ble_service_char) {
+        /* init 未完成（平台无 BLE 能力时卡不可用会早退；或 init 未调用）：
+         * 服务特征表不存在，避免解引用空指针（空卡路径新增可达状态，2026-10） */
+        return OPRT_RESOURCE_NOT_READY;
+    }
 
-        return tkl_ble_gatts_value_set(tkl_ble_common_connect_handle, ptkl_ble_service_char[index].handle,
-                                       p_data->p_data, p_data->len);
+    if (tal_ble_common_connect_handle != TAL_BLE_GATT_INVALID_HANDLE &&
+        ptal_ble_service_char[index].handle != TAL_BLE_GATT_INVALID_HANDLE) {
+
+        TAL_BLUETOOTH_EXEC_OP(gatts_value_set, tal_ble_common_connect_handle,
+                              ptal_ble_service_char[index].handle, p_data->p_data, p_data->len);
     }
 
     return OPRT_INVALID_PARM;
@@ -947,12 +1069,17 @@ OPERATE_RET tal_ble_server_common_read_update(TAL_BLE_DATA_T *p_data)
         return OPRT_INVALID_PARM;
     }
 
-    if (tkl_ble_common_connect_handle != TKL_BLE_GATT_INVALID_HANDLE &&
-        ptkl_ble_service_char[TAL_COMMON_READ_CHAR_INDEX].handle != TKL_BLE_GATT_INVALID_HANDLE) {
+    if (NULL == ptal_ble_service_char) {
+        /* init 未完成（平台无 BLE 能力时卡不可用会早退；或 init 未调用）：
+         * 服务特征表不存在，避免解引用空指针（空卡路径新增可达状态，2026-10） */
+        return OPRT_RESOURCE_NOT_READY;
+    }
 
-        return tkl_ble_gatts_value_set(tkl_ble_common_connect_handle,
-                                       ptkl_ble_service_char[TAL_COMMON_READ_CHAR_INDEX].handle, p_data->p_data,
-                                       p_data->len);
+    if (tal_ble_common_connect_handle != TAL_BLE_GATT_INVALID_HANDLE &&
+        ptal_ble_service_char[TAL_COMMON_READ_CHAR_INDEX].handle != TAL_BLE_GATT_INVALID_HANDLE) {
+
+        TAL_BLUETOOTH_EXEC_OP(gatts_value_set, tal_ble_common_connect_handle,
+                              ptal_ble_service_char[TAL_COMMON_READ_CHAR_INDEX].handle, p_data->p_data, p_data->len);
     }
 
     return OPRT_INVALID_PARM;
@@ -970,10 +1097,10 @@ OPERATE_RET tal_ble_client_common_send(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_D
         return OPRT_INVALID_PARM;
     }
 
-    if (peer.conn_handle != TKL_BLE_GATT_INVALID_HANDLE &&
-        peer.char_handle[TAL_COMMON_WRITE_CHAR_INDEX] != TKL_BLE_GATT_INVALID_HANDLE) {
-        return tkl_ble_gattc_write_without_rsp(peer.conn_handle, peer.char_handle[TAL_COMMON_WRITE_CHAR_INDEX],
-                                               p_data->p_data, p_data->len);
+    if (peer.conn_handle != TAL_BLE_GATT_INVALID_HANDLE &&
+        peer.char_handle[TAL_COMMON_WRITE_CHAR_INDEX] != TAL_BLE_GATT_INVALID_HANDLE) {
+        TAL_BLUETOOTH_EXEC_OP(gattc_write_without_rsp, peer.conn_handle,
+                              peer.char_handle[TAL_COMMON_WRITE_CHAR_INDEX], p_data->p_data, p_data->len);
     }
 
     return OPRT_OS_ADAPTER_BLE_WRITE_FAILED;
@@ -987,9 +1114,9 @@ OPERATE_RET tal_ble_client_common_send(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_D
  * */
 OPERATE_RET tal_ble_client_common_read(const TAL_BLE_PEER_INFO_T peer)
 {
-    if (peer.conn_handle != TKL_BLE_GATT_INVALID_HANDLE &&
-        peer.char_handle[TAL_COMMON_READ_CHAR_INDEX] != TKL_BLE_GATT_INVALID_HANDLE) {
-        return tkl_ble_gattc_read(peer.conn_handle, peer.char_handle[TAL_COMMON_READ_CHAR_INDEX]);
+    if (peer.conn_handle != TAL_BLE_GATT_INVALID_HANDLE &&
+        peer.char_handle[TAL_COMMON_READ_CHAR_INDEX] != TAL_BLE_GATT_INVALID_HANDLE) {
+        TAL_BLUETOOTH_EXEC_OP(gattc_read, peer.conn_handle, peer.char_handle[TAL_COMMON_READ_CHAR_INDEX]);
     }
 
     return OPRT_OS_ADAPTER_BLE_READ_FAILED;
@@ -1012,7 +1139,7 @@ OPERATE_RET tal_ble_server_exchange_mtu_reply(const TAL_BLE_PEER_INFO_T peer, ui
         return OPRT_INVALID_PARM;
     }
 
-    return tkl_ble_gatts_exchange_mtu_reply(conn_handle, server_mtu);
+    TAL_BLUETOOTH_EXEC_OP(gatts_exchange_mtu_reply, conn_handle, server_mtu);
 }
 
 #if (TY_HS_BLE_ROLE_CENTRAL)
@@ -1034,7 +1161,7 @@ OPERATE_RET tal_ble_client_exchange_mtu_request(const TAL_BLE_PEER_INFO_T peer, 
         return OPRT_INVALID_PARM;
     }
 
-    return tkl_ble_gattc_exchange_mtu_request(conn_handle, client_mtu);
+    TAL_BLUETOOTH_EXEC_OP(gattc_exchange_mtu_request, conn_handle, client_mtu);
 }
 
 #endif

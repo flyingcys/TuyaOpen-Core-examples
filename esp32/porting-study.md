@@ -57,7 +57,7 @@ port（平台适配层，每个平台一份：linux/port、esp32/port）
   契约集中在头文件（`tal_*_ops.h`）、单点组装、按需挂载（门控能力可让成员为
   NULL，core 侧有 "not available" 兜底）、类型检查（成员签名与实现必须一致）。
 
-### 2.2 六张卡与分发路径
+### 2.2 九张卡与分发路径
 
 | 卡（core 定义） | 契约头 | port 组装点 | 谁在用 |
 |---|---|---|---|
@@ -67,6 +67,9 @@ port（平台适配层，每个平台一份：linux/port、esp32/port）
 | `TAL_NETIF_OPS_T`（2 成员：get_ip/set_link_cb） | `tal_netif_ops.h` | `port/src/tkl_netif.c` | `tal_netif.c` |
 | `TAL_NETWORK_CARD_T`（35 成员，含 ops 结构 + 卡信息） | `tal_network.h` 尾部 | `port/src/tkl_network.c` 文件尾 | `tal_network.c`（`tal_network_get_active_ops()`） |
 | `TAL_FS_OPS_T`（18 成员，仅 p2p 用） | `tal_fs_ops.h` | （esp32 暂未适配） | p2p-core/local_store |
+| `TAL_AUDIO_ENC_OPS_T`（1 成员：request，AI 音频 IPC 编码） | `tal_audio_enc_ops.h` | `port/src/tkl_ai_codec.c`（空卡） | AI 服务 svc_ai_codec 的 opus/speex IPC 编码器 |
+| `TAL_VAD_OPS_T`（4 成员：init/start/stop/get_status） | `tal_vad_ops.h` | `port/src/tkl_ai_vad.c`（空卡） | agent-core/ai_audio 的 ai_audio_input |
+| `TAL_BLUETOOTH_OPS_T`（27 成员，签名用 core 自持镜像类型 `TAL_BLE_*`） | `tal_bluetooth_ops.h` | linux：`port/src/tkl_bt/tal_bluetooth_ops.c`（镜像布局强转 + 编译期断言）；esp32：`port/src/tkl_bluetooth_ops.c`（空卡） | iot-core/ble 的 tal_bluetooth.c |
 
 分发路径示例（一次 `tal_system_sleep()` 的完整旅程）：
 
@@ -82,8 +85,8 @@ demo: tal_system_sleep(500)
 
 ```bash
 /usr/bin/grep -rn '\btkl_[a-z_]*(' linux/tuyaopen-core --include='*.c' --include='*.h'
-# 期望（2026-10 基线，esp32 快照同数）：48 行命中 = 46 行门控代码
-# （ble 32 + agent-core AI 14）+ 2 行注释（tal_system.c 的 doxygen）；在编代码 0 行
+# 期望（2026-10-12 终态，esp32 快照同数）：**零命中**（调用/类型/include 三口径
+# 在编+门控代码全零；仅剩注释里的溯源提及，如 tal_system.c 的 doxygen 2 行）
 
 # 对象级补充门禁（更强，需构建产物）：core 全部归档的 tkl_ 未定义符号应为 0
 # （二进制级 nm -u 为 0 是必要不充分——被 port 解析后就隐形了，对象级才是真门禁）
@@ -135,10 +138,21 @@ port 侧 `tuya_cloud_types.h` 的两个类型枚举（`TUYA_QSPI_TYPE_PSRAM`/`TY
 `tal_system` 去调 `tal_mutex_*`；上移到 `tal_system` 目标后即普通 TAL 层文件
 （消费方本就全链 tal_system，include 裸名不变）。
 
-**仅剩的门控代码直调**（当前构建不编译，记录在案）：`iot-core/ble/tal_bluetooth.c`
-（32 处 `tkl_ble_*` + 112 处 `TKL_BLE_*` 类型，`CONFIG_ENABLE_BLUETOOTH` 门控）、
-`agent-core/ai_audio/src/ai_audio_input.c`（`tkl_vad_*`，`CONFIG_ENABLE_COMP_AI_AUDIO`
-门控）。要清这两处需分别建 BLE 卡（约 34 成员）与 VAD 卡（4 接口），工作量另计。
+**仅剩的门控代码直调**：**已无**——2026-10 二轮把最后两处也收编了：
+- `ble/tal_bluetooth.c`（原 32 调用 + 112 类型）→ 经 `TAL_BLUETOOTH_OPS_T`（27 成员）
+  分发；core 新增自持镜像类型集 `TAL_BLE_*`（逐字段镜像 port 的
+  `tkl_bluetooth_def.h`），linux port 适配层以"镜像布局强转 + 编译期
+  sizeof/offsetof 断言"接线（断言经变异验证：尺寸漂移与纯偏移漂移均编译失败）、
+  esp32 空卡；
+- `ai_audio/src/ai_audio_input.c`（原 `tkl_vad_*` 6 调用）→ 经 `TAL_VAD_OPS_T`
+  （4 接口）分发，两 port 空卡。
+
+**至此 core 全仓（含门控代码）零 tkl 调用 / 零 tkl include / 零 TKL_ 类型**——
+门禁三项全绿，只剩注释里的溯源提及（如 `tal_system.c` 的 doxygen、镜像头的
+"镜像上游 TKL 版"说明）。门控交叉构建实证：linux `CONFIG_ENABLE_BLUETOOTH=ON`
+构建 exit=0（链接后卡实例 27 个指针全非空且唯一）；**esp32 打开 BLE 也从
+"必挂在缺 tkl_bluetooth_def.h"变为可编译可链接**（core 的 ble/ 目标编入、
+`tal_bluetooth_get_ops` 入 ELF）。
 
 **AI 音频编码已建卡收编（2026-10 二轮）**：`svc_ai_codec` 的 opus/speex IPC 编码器
 变体原直调 `tkl_audio_enc_request`（上游 TKL 平台接口；文件还带着全树不存在的

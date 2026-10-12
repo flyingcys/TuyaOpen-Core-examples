@@ -114,6 +114,11 @@ if(_port_srcs)
         if(TARGET tal_system)
             target_link_libraries(tuyaopen-port PRIVATE tal_system)
         endif()
+        # tal_bluetooth_ops.c（TAL BLE 卡适配层）include core 的
+        # tal_bluetooth_ops.h（tal_system/include），该头内嵌 include
+        # "tal_bluetooth_def.h"（在 core 的 ble/ 下），需把 ble/ 补进包含路径
+        target_include_directories(tuyaopen-port PRIVATE
+            "${PORT_ROOT}/../tuyaopen-core/iot-core/ble")
         find_package(PkgConfig QUIET)
         if(PkgConfig_FOUND)
             pkg_check_modules(GIO gio-2.0 QUIET)

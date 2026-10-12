@@ -135,7 +135,7 @@ OPERATE_RET tal_ble_scan_stop(void);
  * @param   [in]peer:       conn_handle Connection handle.
  * @return  SUCCESS         Successfully read the RSSI.
  *          ERROR           No sample is available.
- *          The rssi reading is given through TAL_BLE_EVT_LINK_RSSI event !!!!!!
+ *          The rssi reading is given through TAL_BLE_EVT_CONN_RSSI event !!!!!!
  * */
 OPERATE_RET tal_ble_rssi_get(const TAL_BLE_PEER_INFO_T peer);
 
@@ -162,8 +162,12 @@ tal_ble_conn_param_update(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_CONN_PARAMS_T 
  * \
  * @return  SUCCESS             Successfully initiated connecting procedure.
  *
- *          The connection event is given through TAL_BLE_EVT_CENTRAL_CONNECT
+ *          The connection event is given through TAL_BLE_EVT_CENTRAL_CONNECT_DISCOVERY
  * event !!!!!!
+ *
+ * @note    仅 central 角色（编译宏 TY_HS_BLE_ROLE_CENTRAL 开启）时提供：
+ *          实现定义在 tal_bluetooth.c 的 #if (TY_HS_BLE_ROLE_CENTRAL) 内，
+ *          该宏默认未定义（全仓无定义）。
  */
 OPERATE_RET
 tal_ble_connect_and_discovery(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_CONN_PARAMS_T const *p_conn_params);

@@ -162,7 +162,7 @@ typedef struct {
 typedef struct {
     uint16_t conn_handle;
     uint16_t char_handle[6]; /**< Tuya Char Handle, It can reflect any characteristic, Max Characteristic refer to
-                                @TKL_BLE_GATT_CHAR_MAX_NUM*/
+                                @TAL_BLE_GATT_CHAR_MAX_NUM*/
 
     TAL_BLE_ADDR_T peer_addr; /**< Reserved, Only Connecetion Handle can stand for one specific device
                                   For Some Reason on Bluetooth Gateway, we need device's address.*/

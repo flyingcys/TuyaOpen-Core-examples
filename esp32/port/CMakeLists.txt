@@ -49,6 +49,15 @@ if(_port_srcs)
         target_link_libraries(tuyaopen-port PRIVATE tal_system)
     endif()
 
+    # tkl_bluetooth_ops.c（TAL BLE 空卡）include core 的 tal_bluetooth_ops.h
+    # （tal_system/include），该头内嵌 include "tal_bluetooth_def.h"（core 的
+    # ble/ 下）；esp32 侧 core 为 vendored 快照（相对路径不固定），经
+    # tal_system 目标的源目录定位 core 的 ble/ 补进包含路径
+    if(TARGET tal_system)
+        get_target_property(_tal_system_src_dir tal_system SOURCE_DIR)
+        target_include_directories(tuyaopen-port PRIVATE "${_tal_system_src_dir}/../ble")
+    endif()
+
     # 模块级隔离（对齐 linux port）：仅 p2p 使用的适配由 ENABLE_TUYA_P2P 门控。
     # core 的开关宏（TuyaOpenOptions → tuyaopen-headers）只作用于 core 模块，
     # port 目标须注入同一宏名，否则开了 P2P 也挂不上卡成员。
