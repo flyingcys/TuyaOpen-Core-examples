@@ -12,9 +12,9 @@
  *   用 tal_malloc+memset 实现，卡不再要求适配；
  * - mutex 保持对外符号（core 的 tuya_queue.c 经宏直调，声明在
  *   tkl_mutex.h）；
- * - p2p-core 实际引用的 tkl_thread_get_id 与 tkl_system_psram_* 保留在
- *   ENABLE_TUYA_P2P 门控下（不用 p2p 的平台无需适配；iot_demo 不编译，
- *   未做编译验证）。
+ * - tkl_thread_get_id 为 ops 卡成员（无条件提供；p2p-core 的 pjproject 经
+ *   tal_thread_get_id 分发使用）；原 tkl_system_psram_* 家族已删除
+ *   （p2p-core 的 tuya_ipc_skill.c 改用 tal_malloc/tal_free）。
  *
  * 实现平台差异（对照 linux 版）：
  * - memory：直接映射 esp-idf 系统堆（多区域堆，不用 linux 的
@@ -51,7 +51,6 @@
 #include "esp_random.h"
 #include "esp_system.h"
 #include "esp_timer.h"
-#include "esp_heap_caps.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -110,31 +109,6 @@ void tkl_system_free(void *ptr)
         free(ptr);
     }
 }
-
-#if defined(ENABLE_TUYA_P2P)
-/* p2p-core 的 tuya_ipc_skill.c 以局部 extern 引用 psram 家族（skill JSON
- * 缓冲，在带 PSRAM 的平台上刻意放外部 RAM）。优先 SPIRAM 堆；无 PSRAM 或
- * 分配失败时回退内部堆（保证调用方拿到可用内存）。门控与 tkl_fs 一致，
- * P2P=OFF 时不编译（iot_demo 未做编译验证）。 */
-void *tkl_system_psram_malloc(const size_t size)
-{
-    void *p = NULL;
-
-#if CONFIG_SPIRAM
-    p = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-#endif
-    if (NULL == p) {
-        p = tkl_system_malloc(size);
-    }
-
-    return p;
-}
-
-void tkl_system_psram_free(void *ptr)
-{
-    tkl_system_free(ptr);
-}
-#endif /* ENABLE_TUYA_P2P */
 
 /* ---------------------------------------------------------------------------
  * system 实现：sleep/reset/get_millisecond/get_random 仅 tal 层经卡分发，
@@ -539,15 +513,14 @@ static OPERATE_RET tkl_thread_is_self(const TKL_THREAD_HANDLE thread, BOOL_T *is
     return OPRT_OK;
 }
 
-#if defined(ENABLE_TUYA_P2P)
 /**
 * @brief Get the handle of the calling thread
 *
 * @param[out] thread: thread handle
 *
-* @note p2p-core 的 pjproject（os_core_tuyaos.c）用它做 TLS 行匹配，只要求
-*       "同一线程恒得同一值"的不透明身份。FreeRTOS 下返回当前任务句柄。
-*       门控与 tkl_fs 一致，P2P=OFF 时不编译（iot_demo 未做编译验证）。
+* @note p2p-core 的 pjproject（os_core_tuyaos.c）经 tal_thread_get_id 用它做
+*       TLS 行匹配，只要求 "同一线程恒得同一值"的不透明身份。FreeRTOS 下
+*       返回当前任务句柄。卡成员，无条件提供。
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
@@ -560,7 +533,6 @@ OPERATE_RET tkl_thread_get_id(TKL_THREAD_HANDLE *thread)
     *thread = (TKL_THREAD_HANDLE)xTaskGetCurrentTaskHandle();
     return OPRT_OK;
 }
-#endif /* ENABLE_TUYA_P2P */
 
 /* ---------------------------------------------------------------------------
  * queue 实现（ops 卡私有）：FreeRTOS 消息队列按值拷贝 msgsize 字节/条，
@@ -713,6 +685,7 @@ TAL_API_OPS_T tal_api_ops_platform = {
     .thread_release = tkl_thread_release,
     .thread_set_self_name = tkl_thread_set_self_name,
     .thread_is_self = tkl_thread_is_self,
+    .thread_get_id = tkl_thread_get_id,
     //! queue
     .queue_create_init = tkl_queue_create_init,
     .queue_post = tkl_queue_post,

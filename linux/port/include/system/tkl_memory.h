@@ -38,37 +38,14 @@ void *tkl_system_malloc(SIZE_T size);
 */
 void tkl_system_free(void* ptr);
 
-/* 实现收编于 port/src/tkl_runtime.c：malloc/free 保持对外符号（tuya_transport
- * 的 mbedtls_* 与 port 的 utilities 直调）。
+/* 实现收编于 port/src/tkl_runtime.c：malloc/free 是主卡 TAL_API_OPS_T 的
+ * .malloc/.free 实现本体（core 经 tal_malloc/tal_free 分发），port 内部亦直接使用。
+ * 2026-10 解耦后 core 不再直调本符号（原 tuya_transport 的 mbedtls_* 直调已改 tal_*）。
  * 原无调用方的 tkl_system_memset/memcpy、
  * tkl_system_realloc、tkl_system_get_free_heap_size、tkl_system_calloc
  * （calloc 改由 core 的 tal_calloc 用 tal_malloc+memset 实现）已删除；
- * psram 家族在 ENABLE_TUYA_P2P 下保留（p2p-core 的 tuya_ipc_skill.c 引用）。 */
-
-#if defined(ENABLE_TUYA_P2P)
-/**
-* @brief Alloc memory of psram
-*
-* @param[in] size: memory size
-*
-* @note p2p-core（tuya_ipc_skill.c）专用：Linux 无 PSRAM，实现别名到系统堆。
-*       不用 p2p 的平台无需适配（门控与 tkl_fs.c 一致）。
-*
-* @return the memory address malloced
-*/
-void *tkl_system_psram_malloc(const size_t size);
-
-/**
-* @brief Free memory of psram
-*
-* @param[in] ptr: memory point
-*
-* @note 与 tkl_system_psram_malloc 配套。
-*
-* @return void
-*/
-void tkl_system_psram_free(void *ptr);
-#endif /* ENABLE_TUYA_P2P */
+ * psram 家族（tkl_system_psram_malloc/free）亦已删除（p2p-core 的
+ * tuya_ipc_skill.c 改用 tal_malloc/tal_free）。 */
 
 #ifdef __cplusplus
 }

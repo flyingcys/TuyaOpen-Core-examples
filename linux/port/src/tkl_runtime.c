@@ -19,8 +19,9 @@
  *   tkl_system_memset/memcpy、tkl_log_close/open、
  *   tkl_cpu_sleep_mode_set、tkl_system_realloc、tkl_system_get_tick_count、
  *   tkl_system_get_free_heap_size、tkl_system_calloc 等）。
- * - p2p-core 实际引用的 tkl_thread_get_id 与 tkl_system_psram_* 保留在
- *   ENABLE_TUYA_P2P 门控下（不用 p2p 的平台仍无需适配，见 tkl_fs.c 同款门控）。
+ * - tkl_thread_get_id 为 ops 卡成员（无条件提供；p2p-core 的 pjproject 经
+ *   tal_thread_get_id 分发使用）；原 tkl_system_psram_* 家族已删除
+ *   （p2p-core 的 tuya_ipc_skill.c 改用 tal_malloc/tal_free）。
  * 移植新平台时在各自 port 中提供同名 ops 卡与实现即可。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
@@ -81,8 +82,8 @@ static void tkl_log_output(const char *str, ...)
  * tkl_memory.h）。calloc 不再走卡：core 的 tal_calloc 用 tal_malloc+memset
  * 实现（含乘法溢出检查）。
  * memset/memcpy、无调用方的 realloc/get_free_heap_size 已删；
- * psram 家族在 ENABLE_TUYA_P2P 下保留（p2p-core 的 tuya_ipc_skill.c 引用，
- * 见文件尾部实现）。
+ * psram 家族（tkl_system_psram_malloc/free）已删除：p2p-core 的
+ * tuya_ipc_skill.c 改用 tal_malloc/tal_free（分配/释放成对同源）。
  * --------------------------------------------------------------------------- */
 #define MAX_HEAP_SIZE (512 * 1024 * 1024)
 
@@ -144,21 +145,6 @@ void tkl_system_free(void *ptr)
         tuya_mem_heap_free(s_heap_handle, ptr);
     }
 }
-
-#if defined(ENABLE_TUYA_P2P)
-/* p2p-core 的 tuya_ipc_skill.c 以局部 extern 引用 psram 家族（skill JSON 缓冲，
- * 在带 PSRAM 的平台上刻意放外部 RAM）。Linux 无 PSRAM，别名到系统堆即可；
- * 门控与 tkl_fs.c / tkl_network.c 的 p2p 块一致，P2P=OFF 时不编译。 */
-void *tkl_system_psram_malloc(const size_t size)
-{
-    return tkl_system_malloc(size);
-}
-
-void tkl_system_psram_free(void *ptr)
-{
-    tkl_system_free(ptr);
-}
-#endif /* ENABLE_TUYA_P2P */
 
 /* ---------------------------------------------------------------------------
  * system 实现（原 port/src/tkl_system.c）：enter/exit_critical 保持对外符号
@@ -694,16 +680,15 @@ static OPERATE_RET tkl_thread_is_self(const TKL_THREAD_HANDLE thread, BOOL_T *is
     return OPRT_OK;
 }
 
-#if defined(ENABLE_TUYA_P2P)
 /**
 * @brief Get the handle of the calling thread
 *
 * @param[out] thread: thread handle
 *
-* @note p2p-core 的 pjproject（os_core_tuyaos.c）用它做 TLS 行匹配，只要求
-*       "同一线程恒得同一值"的不透明身份，不要求与 tkl_thread_create 的
-*       handle（本 port 内为 THREAD_DATA*，仅 is_self 消费）同类。
-*       Linux 下直接返回 pthread_self()。
+* @note p2p-core 的 pjproject（os_core_tuyaos.c）经 tal_thread_get_id 用它做
+*       TLS 行匹配，只要求 "同一线程恒得同一值"的不透明身份，不要求与
+*       tkl_thread_create 的 handle（本 port 内为 THREAD_DATA*，仅 is_self
+*       消费）同类。Linux 下直接返回 pthread_self()。卡成员，无条件提供。
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
@@ -716,7 +701,6 @@ OPERATE_RET tkl_thread_get_id(TKL_THREAD_HANDLE *thread)
     *thread = (TKL_THREAD_HANDLE)pthread_self();
     return OPRT_OK;
 }
-#endif /* ENABLE_TUYA_P2P */
 
 /* ---------------------------------------------------------------------------
  * queue 实现（原 port/src/tkl_queue.c，ops 卡私有）
@@ -1184,6 +1168,7 @@ TAL_API_OPS_T tal_api_ops_platform = {
     .thread_release = tkl_thread_release,
     .thread_set_self_name = tkl_thread_set_self_name,
     .thread_is_self = tkl_thread_is_self,
+    .thread_get_id = tkl_thread_get_id,
     //! queue
     .queue_create_init = tkl_queue_create_init,
     .queue_post = tkl_queue_post,
