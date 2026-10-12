@@ -30,6 +30,13 @@ typedef struct {
     OPERATE_RET (*request)(void *enc_para);
 } TAL_AUDIO_ENC_OPS_T;
 
+/**
+ * @brief Get the platform ops of tal_audio_enc
+ *
+ * @return pointer to the platform ops, never NULL (defined in the port)
+ */
+TAL_AUDIO_ENC_OPS_T *tal_audio_enc_get_ops(void);
+
 #ifdef __cplusplus
 }
 #endif

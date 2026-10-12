@@ -12,7 +12,7 @@
 
 #include "tuya_cloud_types.h"
 #include "tuya_ringbuf.h"
-#include "tkl_vad.h"
+#include "tal_vad.h"
 
 #include "tal_api.h"
 
@@ -168,7 +168,7 @@ static void __record_task(void *arg)
 
         /* Manual mode don't need send VAD stat change */
         if (sg_recorder->vad_mode == AI_AUDIO_VAD_AUTO) {
-            AI_AUDIO_VAD_STATE_E stat = (tkl_vad_get_status() == TKL_VAD_STATUS_SPEECH) ?\
+            AI_AUDIO_VAD_STATE_E stat = (tal_vad_get_status() == TAL_VAD_STATUS_SPEECH) ?\
                                         AI_AUDIO_VAD_START : AI_AUDIO_VAD_STOP;
             if (stat != sg_recorder->vad_flag) {
                 PR_DEBUG("audio input -> wakup flag is %d, auto vad set from %d to %d!",\
@@ -276,7 +276,7 @@ OPERATE_RET ai_audio_input_start(void)
 
     if (sg_recorder->vad_mode == AI_AUDIO_VAD_AUTO) {
         PR_DEBUG("need human voice detect, start __record_task");
-        tkl_vad_start();
+        tal_vad_start();
     }
 
     return OPRT_OK;    
@@ -292,7 +292,7 @@ OPERATE_RET ai_audio_input_stop(void)
     sg_recorder->enable = false;
     if (sg_recorder->vad_mode == AI_AUDIO_VAD_AUTO) {
         /* Stop VAD detect */
-        tkl_vad_stop();
+        tal_vad_stop();
     }
 
     if (sg_recorder->vad_task) {
@@ -361,15 +361,15 @@ OPERATE_RET ai_audio_input_init(AI_AUDIO_INPUT_CFG_T *cfg)
 
     TUYA_CALL_ERR_RETURN(tdl_audio_open(sg_audio_hdl, __audio_frame_put));
 
-    TKL_VAD_CONFIG_T vad_cfg = {0};
-    memset(&vad_cfg, 0, sizeof(TKL_VAD_CONFIG_T));
+    TAL_VAD_CONFIG_T vad_cfg = {0};
+    memset(&vad_cfg, 0, sizeof(TAL_VAD_CONFIG_T));
     vad_cfg.sample_rate     = audio_info.sample_rate;
     vad_cfg.channel_num     = audio_info.sample_ch_num;
     vad_cfg.speech_min_ms   = cfg->vad_active_ms;
     vad_cfg.noise_min_ms    = cfg->vad_off_ms;
     vad_cfg.frame_duration_ms = 10;
     vad_cfg.scale           = 1.0f;
-    TUYA_CALL_ERR_RETURN(tkl_vad_init(&vad_cfg));
+    TUYA_CALL_ERR_RETURN(tal_vad_init(&vad_cfg));
 
     TUYA_CALL_ERR_RETURN(ai_audio_input_start());
 
@@ -412,8 +412,8 @@ OPERATE_RET ai_audio_input_reset(void)
 
     if (AI_AUDIO_VAD_AUTO == sg_recorder->vad_mode) {
         PR_NOTICE("audio input -> vad stop!");
-        tkl_vad_stop();
-        tkl_vad_start();
+        tal_vad_stop();
+        tal_vad_start();
         PR_NOTICE("audio input -> vad start!");
     }
 
