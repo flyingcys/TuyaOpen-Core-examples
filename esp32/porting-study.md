@@ -114,6 +114,14 @@ for a in $(find <build> -name 'lib*.a' -path '*tuyaopen-core*'); do nm -u "$a" |
 port 侧仅剩 `tuya_cloud_types.h` 的两个类型枚举（`TUYA_QSPI_TYPE_PSRAM`/
 `TYPE_PSRAM`，芯片/内存类型分类、无使用者，删除会移动枚举数值，暂留）。
 
+**改动文件的验证分档**（供后续评审区分证据强度，勿平铺成"都不被编译"）：24 个
+文件中 20 个经三 demo / esp32 构建编译验证；4 个不被任何构建编译——
+`ai_mcp_server.c`/`local_store.c` 经 `-fsyntax-only`（新基线 include 路径）
+**编译验证通过**（纯删除）；`ai_audio_input.c`/`tuya_ai_encoder_opus_ipc.c` 因
+依赖头整层不在本树（`tkl_vad.h`/`tdl_audio_manage.h`/`tal_ipc.h`，pre-existing：
+44fb790 基线即如此、这些 include 行未被改动触及）**无法编译验证**，仅
+"diff 纯删除 + 字段无读取方（全仓 grep 只有 setter）"佐证。
+
 **为什么 tuya_queue / tuya_ringbuf 要上移**：它们在 `tuya_utilities`（最底层，被
 `tal_system` PUBLIC 依赖，`tal_workqueue` 就在 tal_system 内用它），不能反向依赖
 `tal_system` 去调 `tal_mutex_*`；上移到 `tal_system` 目标后即普通 TAL 层文件
