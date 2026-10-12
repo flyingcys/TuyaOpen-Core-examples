@@ -3,7 +3,7 @@
 > **审计日期**：2026-09-30
 > **审计范围**：linux 树（`tuyaopen-core` 子模块 + `port/` + `examples/iot_demo/`）
 > **状态**：**仅记录，尚未执行删除**（用户决定先归档）
-> **背景**：ops 卡注册制收编（契约头 `tuyaopen-core/iot-core/tal_system/include/tal_api_ops.h`）后，为"最小适配"持续清理死接口。零调用接口已在前几轮清理完毕（`tal_realloc`、psram 全族、tal_hash/tal_symmetry/tal_x509 自测、`tal_thread_dump_watermark`、`tkl_watchdog` 等），本清单是**剩余候选**。
+> **背景**：ops 卡注册制收编（契约头 `tuyaopen-core/iot-core/tal_system/include/tal_api_ops.h`）后，为"最小适配"持续清理死接口。零调用接口已在前几轮清理完毕（`tal_realloc`、外部 RAM 分配族、tal_hash/tal_symmetry/tal_x509 自测、`tal_thread_dump_watermark`、`tkl_watchdog` 等），本清单是**剩余候选**。
 
 ## 计数口径
 

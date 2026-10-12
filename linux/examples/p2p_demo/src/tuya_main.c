@@ -18,7 +18,7 @@
  *   - tuya_authorize_init/read → 编译期凭据（tuya_config.h，iot_demo 模式）；
  *   - 删 tal_cli_init / tuya_app_cli_init（本仓库无 tal_cli）、
  *     board_register_hardware（Linux 无板级注册）、TUYA_LwIP_Init（宿主 socket）、
- *     PSRAM 分支（无 PSRAM）、tal_system_get_free_heap_size 打印（接口已删）；
+ *     平台专属内存分支、tal_system_get_free_heap_size 打印（接口已删）；
  *   - main() 直接跑 user_main()（Linux 主线程栈 8MB，P2P 信令在 tuya_iot_yield 上）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.

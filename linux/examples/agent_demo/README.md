@@ -151,7 +151,7 @@ cd build && ./agent_http_selftest
 | 附加能力 | 低功耗/电池/打印机/MCP/摄像头/图片/APP 角色切换 | 全部不移植 |
 | 联网 | `netmgr_*` / lwip / 蓝牙配网 | `tal_netif` + `mqtt_bind` 直连（同 iot_demo） |
 | 激活与凭据 | `tuya_authorize_init/read`（license 授权） | 编译期凭据 `tuya_config.h`（同 iot_demo） |
-| 板级初始化 | `board_register_hardware()`、PSRAM、CLI | 删除（Linux 无对应实现） |
+| 板级初始化 | `board_register_hardware()`、CLI | 删除（Linux 无对应实现） |
 
 保留：`ai_agent`（应用封装：output 回调注册、text/file/image 上行）、`ai_skills`（下行
 文字解析：ASR/NLG/skill）、`tuya_ai_service`（AI 协议与传输：MQTT 信令 + TCP/TLS 流）、

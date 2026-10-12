@@ -1113,7 +1113,6 @@ typedef enum {
 /****** QSPI LCD Refresh enum *****/
 typedef enum {
     TUYA_QSPI_TYPE_FLASH = 0,   
-    TUYA_QSPI_TYPE_PSRAM,
     TUYA_QSPI_TYPE_LCD
 }TUYA_QSPI_MODULE_TYPE_E;
 
@@ -1731,7 +1730,6 @@ typedef enum {
 
 typedef enum {
     TYPE_SRAM = 0,
-    TYPE_PSRAM,
 } RAM_TYPE_E;
 
 /* tuyaos errorno */

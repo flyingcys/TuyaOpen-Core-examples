@@ -111,8 +111,9 @@ for a in $(find <build> -name 'lib*.a' -path '*tuyaopen-core*'); do nm -u "$a" |
 （无任何读取方）、`tuya_ringbuf.h` 的 `OVERFLOW_PSRAM_*` 枚举别名——全部删除；
 保留的正是"宏未定义时"编译选择的分支，**行为零变化**（实测：iot_demo 前后运行
 日志内容集合一致）。门禁：`grep -rni 'psram\|ext_ram' core` 零命中（两树同）。
-port 侧仅剩 `tuya_cloud_types.h` 的两个类型枚举（`TUYA_QSPI_TYPE_PSRAM`/
-`TYPE_PSRAM`，芯片/内存类型分类、无使用者，删除会移动枚举数值，暂留）。
+port 侧 `tuya_cloud_types.h` 的两个类型枚举（`TUYA_QSPI_TYPE_PSRAM`/`TYPE_PSRAM`，
+无使用者）亦按用户决定删除（`TUYA_QSPI_TYPE_LCD` 数值随之 2→1，全仓无引用、
+无持久化数值依赖，安全）；port/demo 的 psram/EXT_RAM 字样与历史注释一并清零。
 
 **改动文件的验证分档**（供后续评审区分证据强度，勿平铺成"都不被编译"；**分母口径：
 24 个改动文件 = 18 个 .c + 4 个 .h + 2 个 Kconfig**）：

@@ -132,7 +132,7 @@ cmake --build build-ls -j$(nproc)
 | 联网 | `netmgr_*` / lwip | `tal_netif`（同 iot_demo） |
 | 激活与凭据 | `tuya_authorize_init/read`（license 授权） | 编译期凭据 `tuya_config.h`（同 iot_demo） |
 | 录像存储 | 挂载 SD 卡（`tkl_fs_mount("/sdcard")`） | 直接写宿主目录 `./media`，无挂载语义 |
-| 板级初始化 | `board_register_hardware()`、PSRAM、堆打印、CLI | 删除（Linux 无对应实现） |
+| 板级初始化 | `board_register_hardware()`、堆打印、CLI | 删除（Linux 无对应实现） |
 | 录像与回放 | `CAMERA_DEMO_LOCAL_STORE`，默认关 | `P2P_DEMO_LOCAL_STORE`，默认关（保留） |
 | 回放灌样片 | 读板子上的 `/sdcard/pb_seed.h264`（用户自备） | 用本 demo 的直播源文件（内置样片） |
 

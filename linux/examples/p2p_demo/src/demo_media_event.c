@@ -8,7 +8,7 @@
  *   （demo_h264_source_path()，与直播同源）——"无真实录制也能看回放"的 bring-up 手段；
  * - 内存 API 用 tal_malloc/tal_free（上游为 Malloc/Free 宏）；
  * - 删音频相关：不再调用 demo_mic_uplink_pause()（本 demo 无音频）；
- * - 删 ENABLE_EXT_RAM/psram 分支（Linux 无 PSRAM）。
+ * - 删平台专属内存分支。
  *
  * P2P 约定原样保留（上游调查报告 §9.14）：OPRT_RESOURCE_NOT_READY 只对 I 帧重试、
  * OPRT_NOT_EXIST/OPRT_SOCK_CONN_ERR 视为会话结束、seek/换段前 drop_unsent、

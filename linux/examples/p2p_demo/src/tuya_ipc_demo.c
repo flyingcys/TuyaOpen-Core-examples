@@ -9,7 +9,7 @@
  *     并删掉 is_complete/total_frame_len 检查（vcam 的 AU 天然完整）；
  *   - 音频整体不做（与上游 DEMO_HAS_AUDIO=0 分支一致：取音频帧返回 -1，
  *     其余音频回调空实现）；
- *   - PSRAM（ENABLE_EXT_RAM）分支删除：Linux 无 PSRAM，统一 tal_malloc/tal_free；
+ *   - 平台专属内存分支已删除：统一 tal_malloc/tal_free；
  *   - SD 卡挂载（tkl_fs_mount）删除：Linux 无挂载语义，local_store 直接落在
  *     进程 cwd 的 ./media；
  *   - 时间戳照上游在帧回调到达时取 tuya_p2p_misc_get_current_time_ms()（与 P2P

@@ -45,6 +45,11 @@ int mbedtls_cipher_auth_encrypt_wrapper(const cipher_params_t *input, unsigned c
     }
 
     enc_tmpbuf = tal_malloc(input->data_len + tag_len);
+    if (enc_tmpbuf == NULL) {
+        PR_ERR("malloc enc_tmpbuf failed");
+        ret = OPRT_MALLOC_FAILED;
+        goto EXIT;
+    }
 
     /*
      * Encrypt and write the ciphertext.
@@ -52,6 +57,10 @@ int mbedtls_cipher_auth_encrypt_wrapper(const cipher_params_t *input, unsigned c
     ret = mbedtls_cipher_auth_encrypt_ext(&cipher_ctx, input->nonce, input->nonce_len, input->ad, input->ad_len,
                                           input->data, input->data_len, enc_tmpbuf, input->data_len + tag_len, olen,
                                           tag_len);
+    if (ret != 0) {
+        PR_ERR("mbedtls_cipher_auth_encrypt_ext() returned error\n");
+        goto EXIT;
+    }
 
     /* https://github.com/Mbed-TLS/mbedtls/issues/3665 */
     *olen -= tag_len;
