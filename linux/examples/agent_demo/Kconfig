@@ -34,13 +34,12 @@ menu "configure app (agent_demo)"
     # audio_player（ENABLE_AI_PLAYER 及解码器/资源参数子开关）→ ai_audio
     # （ENABLE_COMP_AI_AUDIO + 提示音来源选择，select ENABLE_AI_PLAYER）。
     # 符号名/默认值与原 core 定义一致（.config 与 CMake -D 的既有用法不受
-    # 影响）。可见性门控与 core 侧相同：仅 ENABLE_AI_COMPONENTS 打开时显示
-    # （AGENT_DEMO 已 select 它）。
-    # 注：ENABLE_COMP_AI_MCP 不在此列——MCP server 核心下沉 core 服务层
-    # （tuya_ai_service/svc_ai_mcp/），开关随模块定义在那里。
-    if (ENABLE_AI_COMPONENTS)
-        rsource "components/audio_player/Kconfig"
-        rsource "components/ai_audio/Kconfig"
-    endif
+    # 影响）。此处不加 ENABLE_AI_COMPONENTS 门控：AGENT_DEMO（无 prompt、
+    # default y）select 该符号使其恒为 y（kconfiglib 实测强制关会被 select
+    # 拉回），套 if 是恒真冗余。
+    # 注：ENABLE_COMP_AI_MCP 不在此列——MCP server 核心在 core 服务层
+    # （agent-core/svc_ai_mcp/），开关随模块定义在那里。
+    rsource "components/audio_player/Kconfig"
+    rsource "components/ai_audio/Kconfig"
 
 endmenu
