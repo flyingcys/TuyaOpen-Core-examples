@@ -9,7 +9,7 @@
  * AI 服务的 IPC 编码器变体保持不可用（与门控关闭的现状一致）。
  *
  * 与主卡 TAL_API_OPS_T（tal_api_ops.h）及 OTA/KV 卡解耦，由 port 独立
- * 组装（linux/esp32 本仓均为空卡，见 port/src/tkl_ai_codec.c）。
+ * 组装（linux/esp32 本仓均为空卡，见 port/src/port_ai_codec.c）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  *

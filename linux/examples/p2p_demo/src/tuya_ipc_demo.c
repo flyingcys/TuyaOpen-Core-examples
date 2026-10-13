@@ -10,7 +10,7 @@
  *   - 音频整体不做（与上游 DEMO_HAS_AUDIO=0 分支一致：取音频帧返回 -1，
  *     其余音频回调空实现）；
  *   - 平台专属内存分支已删除：统一 tal_malloc/tal_free；
- *   - SD 卡挂载（tkl_fs_mount）删除：Linux 无挂载语义，local_store 直接落在
+ *   - SD 卡挂载（port_fs_mount）删除：Linux 无挂载语义，local_store 直接落在
  *     进程 cwd 的 ./media；
  *   - 时间戳照上游在帧回调到达时取 tuya_p2p_misc_get_current_time_ms()（与 P2P
  *     栈同一时钟基准），不用 vcam 的 ts_ms。
@@ -554,7 +554,7 @@ void tuya_ipc_demo_start(void)
 #endif
 
 #ifdef P2P_DEMO_LOCAL_STORE
-    /* Linux 无挂载语义：local_store 直接落在进程 cwd 的 ./media，不做 tkl_fs_mount */
+    /* Linux 无挂载语义：local_store 直接落在进程 cwd 的 ./media，不做 port_fs_mount */
     if (local_store_init() != OPRT_OK) {
         PR_ERR("local_store init failed");
     }

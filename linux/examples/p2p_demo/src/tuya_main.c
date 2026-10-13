@@ -245,11 +245,11 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
     }
 }
 
-/* 链路状态：由 port 层（tkl_netif）状态回调维护，core 经 user_network_check 拉取 */
+/* 链路状态：由 port 层（port_netif）状态回调维护，core 经 user_network_check 拉取 */
 static volatile bool s_link_up = false;
 
 /**
- * @brief port 链路状态回调：tkl_netif 注册后立即上报当前状态，
+ * @brief port 链路状态回调：port_netif 注册后立即上报当前状态，
  * 之后周期轮询、状态变化时再次回调
  *
  * @param stat 当前链路状态
@@ -259,7 +259,7 @@ static void __user_link_status_cb(TAL_NETIF_LINK_STAT_E stat)
 {
     s_link_up = (TAL_NETIF_LINK_UP == stat);
 
-    /* 同步活动 IP：link up ≠ IP 就绪（tkl_netif 仅查 IFF_UP，不代表已获地址）。
+    /* 同步活动 IP：link up ≠ IP 就绪（port_netif 仅查 IFF_UP，不代表已获地址）。
      * 出站 socket 的源地址绑定与 LAN 广播包里的本机 IP 均取自此值；取不到置 0 表示不绑定 */
     TUYA_IP_ADDR_T addr = 0;
     if (s_link_up) {
@@ -329,7 +329,7 @@ void user_main(void)
                                 });
     assert(rt == OPRT_OK);
 
-    /* 链路状态接入：port（tkl_netif）立即上报当前状态并轮询变化，
+    /* 链路状态接入：port（port_netif）立即上报当前状态并轮询变化，
      * 替代原 netmgr_init → netconn_wired_open 的状态回调注册 */
     tal_netif_set_link_cb(__user_link_status_cb);
 

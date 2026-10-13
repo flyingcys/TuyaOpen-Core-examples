@@ -1,6 +1,6 @@
-# esp32 port（TKL 适配层）
+# esp32 port
 
-本目录是 ESP32 目标的 TKL（Tuya Kernel Layer）适配，基于 **esp-idf / FreeRTOS**，
+本目录是 ESP32 目标的 port 适配，基于 **esp-idf / FreeRTOS**，
 与 `linux/port` 同构（**ops 卡模式**：core 的 `tal_*.c` 经 extern 引用
 `tal_*_ops_platform` 卡完成分发，port 组装这些卡）。
 
@@ -8,23 +8,28 @@
 
 | 文件 | 内容 | 对应 core 契约 |
 |---|---|---|
-| `src/tkl_runtime.c` | 主卡：log/memory/system/semaphore/mutex/thread/queue（FreeRTOS/esp-idf 原语） | `tal_api_ops.h` |
-| `src/tkl_kv.c` | KV 卡（NVS；超长 key 折叠为 FNV-1a 56bit hex） | `tal_kv_ops.h` |
-| `src/tkl_netif.c` | netif 卡（esp_netif 事件驱动，链路 up = 已获 IP） | `tal_netif_ops.h` |
-| `src/tkl_network.c` | network 卡（lwIP socket；局域网/对端服务成员随开关编译） | `tal_network.h` 的 `TAL_NETWORK_CARD_T` |
+| `src/port_runtime.c` | 主卡：log/memory/system/semaphore/mutex/thread/queue（FreeRTOS/esp-idf 原语） | `tal_api_ops.h` |
+| `src/port_kv.c` | KV 卡（NVS；超长 key 折叠为 FNV-1a 56bit hex） | `tal_kv_ops.h` |
+| `src/port_netif.c` | netif 卡（esp_netif 事件驱动，链路 up = 已获 IP） | `tal_netif_ops.h` |
+| `src/port_network.c` | network 卡（lwIP socket；局域网/对端服务成员随开关编译） | `tal_network.h` 的 `TAL_NETWORK_CARD_T` |
 
 > OTA 已移出 port：core 改为回调注入制（`tal_ota_register_cbs`，见
 > `tal_ota.h`），esp32 实现由应用层提供（`examples/iot_demo/main/ota_app.c`），
 > 不注册的应用即不支持 OTA（`tal_ota_*` 返回 `OPRT_NOT_SUPPORTED`）。
 
-`include/` 为 TKL 域头（common/system/network/security），从 linux port 同步
-（接口定义与各目标共享；security 三件套由 core 的 mbedtls_* 实现，port 只提供头）。
+`include/` 原为核心接口域头（common/system/network/security）。2026-10 port 去 tkl 化后
+只剩 `common/`（4 个跨目标公共类型头）+ `system/port_memory.h`：
+- `security/` 三件套（tkl_hash/tkl_symmetry/tkl_asymmetrical）已删——零 includer，
+  哈希/对称/非对称原语由 core 的 mbedtls_* 实现；
+- `system/` 的 mutex/queue/semaphore/thread/system/memory/fs 与 `network/` 的头均已删除，
+  类型与声明内联进对应 .c（它们各只有单文件 includer）；`tkl_memory.h` 改名保留为
+  `port_memory.h`（port_kv.c 跨文件调用 port_runtime.c 的 malloc/free）。
 
 暂未适配（需要时补，与 linux port 的门控一致）：
 
-- `tkl_fs`（p2p local_store 用；linux 为 POSIX 直包装）；
-- `tkl_bt`（BLE；esp32 需换 NimBLE/Bluedroid 实现）；
-- `media/tkl_ai_demo.h`（agent_demo 的音频输入契约）。
+- `port_fs`（p2p local_store 用；linux 为 POSIX 直包装）；
+- `port_bt`（BLE；esp32 需换 NimBLE/Bluedroid 实现）；
+- `media/port_ai_demo.h`（agent_demo 的音频输入契约）。
 
 ## 构建接入
 

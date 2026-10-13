@@ -3,7 +3,7 @@
 连涂鸦云、扫码激活、DP 收发的 ESP32 示例，与 `linux/examples/iot_demo` 同构
 （demo 代码从 linux 版逐段移植），差异仅在网络接入：core 已无 wifi 抽象，
 WiFi 连接由本 demo 完成（`main/wifi_sta.c`），连上后"当有线网络处理"
-（port 的 `tkl_netif` 监听 IP 事件上报链路，socket 走 lwIP），后续流程与
+（port 的 `port_netif` 监听 IP 事件上报链路，socket 走 lwIP），后续流程与
 linux 完全一致。
 
 ## 结构
@@ -45,7 +45,7 @@ idf.py -p /dev/ttyUSB0 flash monitor
 - **WiFi**：`menuconfig` 的 `iot_demo` 菜单（`CONFIG_DEMO_WIFI_SSID` /
   `CONFIG_DEMO_WIFI_PASSWORD`）。**未配置（空 SSID）时的行为**：
   `wifi_sta_init` 早退并打印 `ssid empty, set it in menuconfig...`；事件循环
-  未建立 → 后续 `tkl_netif` 的链路监听注册失败（再打印一条
+  未建立 → 后续 `port_netif` 的链路监听注册失败（再打印一条
   `netif event handler register failed ... (event loop created?)`）→ 链路恒
   down、不发起云连接。行为安全，串口那两条提示即为原因说明（PK 评审 E1）。
 - **凭据**：`tuya_config.h` 已带与 linux iot_demo 相同的 PID/授权码；
@@ -64,6 +64,6 @@ idf.py -p /dev/ttyUSB0 flash monitor
 ## 已知限制
 
 - OTA 通道已接（`main/ota_app.c` 回调注入 + 双槽分区表），但未做真机升级验证；
-- `tkl_fs`/`tkl_bt`/`tkl_ai_demo`（media）未适配——p2p/agent demo 需要时补；
+- `port_fs`/`port_bt`/`port_ai_demo`（media）未适配——p2p/agent demo 需要时补；
 - 仅 station 模式连接预置 AP；无配网（BLE/AP netcfg 随 netmgr 移除，如需要
   走 BLE 配网需另行接入）。

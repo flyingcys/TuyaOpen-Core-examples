@@ -2,18 +2,18 @@
  * @file tal_fs_ops.h
  * @brief tal_fs 的平台 ops 契约：文件系统 18 接口（9 文件 + 4 路径 + 5 目录）
  *
- * 定义 TAL_FS_OPS_T：port 在 tkl_fs.c 组装 tal_fs_ops_platform（成员绑定本平台
- * tkl_fopen / tkl_fs_* / tkl_dir_* 实现），core 的 tal_fs.c 经 getter 完成
+ * 定义 TAL_FS_OPS_T：port 在 port_fs.c 组装 tal_fs_ops_platform（成员绑定本平台
+ * port_fopen / port_fs_* / port_dir_* 实现），core 的 tal_fs.c 经 getter 完成
  * tal_fs_* 分发，对上签名不变。
  *
  * 与主卡 TAL_API_OPS_T（tal_api_ops.h）解耦：文件系统是 p2p 可选能力
  * （唯一调用方 p2p-core/local_store），不用 p2p 的平台整文件
- * port/src/tkl_fs.c 由 ENABLE_TUYA_P2P 门控，不必适配这套接口。
+ * port/src/port_fs.c 由 ENABLE_TUYA_P2P 门控，不必适配这套接口。
  *
- * 契约只收编 local_store 实际用到的 18 个接口；其余（tkl_fs_mode / tkl_feof /
- * tkl_ftell / tkl_fgetsize / tkl_faccess / tkl_fgetc / tkl_ftruncate /
- * tkl_dir_is_regular）零调用，已从 port 头 tkl_fs.h 删除，实现暂留
- * port/src/tkl_fs.c（未挂卡，待清理）。
+ * 契约只收编 local_store 实际用到的 18 个接口；其余（port_fs_mode / port_feof /
+ * port_ftell / port_fgetsize / port_faccess / port_fgetc / port_ftruncate /
+ * port_dir_is_regular）零调用，已从 port 头 tkl_fs.h 删除，实现暂留
+ * port/src/port_fs.c（未挂卡，待清理）。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 /**
- * @brief tal_fs 平台 ops：成员与 port 的 tkl_fs / tkl_dir 实现一一对应
+ * @brief tal_fs 平台 ops：成员与 port 的 port_fs / port_dir 实现一一对应
  *
  * @note 句柄类型沿用 port 定义（TUYA_FILE / TUYA_DIR / TUYA_FILEINFO 均为
  *       void* 别名），可直接绑定 port 的 tkl_* 实现；返回值语义与 tal_fs.h

@@ -48,7 +48,7 @@ port（平台适配层，每个平台一份：linux/port、esp32/port）
 
 ### 2.1 为什么不是"弱符号"或"直调"
 
-- **弱符号模式**（传统 TKL）：core 直调 `tkl_xxx()`，port 提供强符号覆盖弱声明。
+- **弱符号模式**（传统平台直调）：core 直调 `port_xxx()`，port 提供强符号覆盖弱声明。
   问题：符号是**隐式契约**（没有类型检查）、**全局命名空间污染**（每个平台都要
   实现全量接口，未实现的弱符号运行时才炸）、链接器行为随平台而异。
 - **直调模式**：core 直接调平台函数。问题：core 里出现平台名，无法多平台共存。
@@ -61,14 +61,14 @@ port（平台适配层，每个平台一份：linux/port、esp32/port）
 
 | 卡（core 定义） | 契约头 | port 组装点 | 谁在用 |
 |---|---|---|---|
-| `TAL_API_OPS_T`（主卡：log/memory/system/semaphore/mutex/thread/queue，24 成员；thread 组含 p2p 用的 `thread_get_id`） | `iot-core/tal_system/include/tal_api_ops.h` | `port/src/tkl_runtime.c` 文件尾 | `tal_api.c` / `tal_thread.c` / `tal_system.c` |
-| `TAL_KV_OPS_T`（4 成员） | `tal_kv_ops.h` | `port/src/tkl_kv.c` | `tal_kv.c`（4 接口纯透传） |
-| `TAL_NETIF_OPS_T`（2 成员：get_ip/set_link_cb） | `tal_netif_ops.h` | `port/src/tkl_netif.c` | `tal_netif.c` |
-| `TAL_NETWORK_CARD_T`（35 成员，含 ops 结构 + 卡信息） | `tal_network.h` 尾部 | `port/src/tkl_network.c` 文件尾 | `tal_network.c`（`tal_network_get_active_ops()`） |
+| `TAL_API_OPS_T`（主卡：log/memory/system/semaphore/mutex/thread/queue，24 成员；thread 组含 p2p 用的 `thread_get_id`） | `iot-core/tal_system/include/tal_api_ops.h` | `port/src/port_runtime.c` 文件尾 | `tal_api.c` / `tal_thread.c` / `tal_system.c` |
+| `TAL_KV_OPS_T`（4 成员） | `tal_kv_ops.h` | `port/src/port_kv.c` | `tal_kv.c`（4 接口纯透传） |
+| `TAL_NETIF_OPS_T`（2 成员：get_ip/set_link_cb） | `tal_netif_ops.h` | `port/src/port_netif.c` | `tal_netif.c` |
+| `TAL_NETWORK_CARD_T`（35 成员，含 ops 结构 + 卡信息） | `tal_network.h` 尾部 | `port/src/port_network.c` 文件尾 | `tal_network.c`（`tal_network_get_active_ops()`） |
 | `TAL_FS_OPS_T`（18 成员，仅 p2p 用） | `tal_fs_ops.h` | （esp32 暂未适配） | p2p-core/local_store |
-| `TAL_AUDIO_ENC_OPS_T`（1 成员：request，AI 音频 IPC 编码） | `tal_audio_enc_ops.h` | `port/src/tkl_ai_codec.c`（空卡） | AI 服务 svc_ai_codec 的 opus/speex IPC 编码器 |
-| `TAL_VAD_OPS_T`（4 成员：init/start/stop/get_status） | `tal_vad_ops.h` | `port/src/tkl_ai_vad.c`（空卡） | agent-core/ai_audio 的 ai_audio_input |
-| `TAL_BLUETOOTH_OPS_T`（27 成员，签名用 core 自持镜像类型 `TAL_BLE_*`） | `tal_bluetooth_ops.h` | linux：`port/src/tkl_bt/tal_bluetooth_ops.c`（镜像布局强转 + 编译期断言）；esp32：`port/src/tkl_bluetooth_ops.c`（空卡） | iot-core/ble 的 tal_bluetooth.c |
+| `TAL_AUDIO_ENC_OPS_T`（1 成员：request，AI 音频 IPC 编码） | `tal_audio_enc_ops.h` | `port/src/port_ai_codec.c`（空卡） | AI 服务 svc_ai_codec 的 opus/speex IPC 编码器 |
+| `TAL_VAD_OPS_T`（4 成员：init/start/stop/get_status） | `tal_vad_ops.h` | `port/src/port_ai_vad.c`（空卡） | agent-core/ai_audio 的 ai_audio_input |
+| `TAL_BLUETOOTH_OPS_T`（27 成员，签名用 core 自持镜像类型 `TAL_BLE_*`） | `tal_bluetooth_ops.h` | linux：`port/src/port_bt/port_bluetooth_ops.c`（镜像布局强转 + 编译期断言）；esp32：`port/src/port_bluetooth_ops.c`（空卡） | iot-core/ble 的 tal_bluetooth.c |
 
 > OTA 已不是卡（2026-10 从本表移除）：core 改为回调注入制
 > （`tal_ota_register_cbs`，契约见 `tal_ota.h` 的 `TAL_OTA_CBS_T`），实现由
@@ -80,21 +80,21 @@ port（平台适配层，每个平台一份：linux/port、esp32/port）
 ```
 demo: tal_system_sleep(500)
   → core: tal_system.c → TAL_EXEC_OP 宏 → tal_api_get_ops()（返回 &tal_api_ops_platform）
-  → port: tkl_runtime.c 的 tkl_system_sleep → vTaskDelay(pdMS_TO_TICKS(...))
+  → port: port_runtime.c 的 __system_sleep → vTaskDelay(pdMS_TO_TICKS(...))
 ```
 
 ### 2.3 直调符号：已全部收编（2026-10 解耦）
 
-**现状：core 在编代码零 tkl 符号**（调用 / 类型 / include 三个口径），可直接做门禁：
+**现状：core 在编代码零 port 符号**（调用 / 类型 / include 三个口径），可直接做门禁：
 
 ```bash
-/usr/bin/grep -rn '\btkl_[a-z_]*(' linux/tuyaopen-core --include='*.c' --include='*.h'
+/usr/bin/grep -rn '\bport_[a-z_]*(' linux/tuyaopen-core --include='*.c' --include='*.h'
 # 期望（2026-10-12 终态，esp32 快照同数）：**零命中**（调用/类型/include 三口径
 # 在编+门控代码全零；仅剩注释里的溯源提及，如 tal_system.c 的 doxygen 2 行）
 
-# 对象级补充门禁（更强，需构建产物）：core 全部归档的 tkl_ 未定义符号应为 0
+# 对象级补充门禁（更强，需构建产物）：core 全部归档的 port_ 未定义符号应为 0
 # （二进制级 nm -u 为 0 是必要不充分——被 port 解析后就隐形了，对象级才是真门禁）
-for a in $(find <build> -name 'lib*.a' -path '*tuyaopen-core*'); do nm -u "$a" | grep -c '\btkl_'; done
+for a in $(find <build> -name 'lib*.a' -path '*tuyaopen-core*'); do nm -u "$a" | grep -c '\bport_'; done
 # 2026-10 基线实测：三个 demo 构建树 × 19 个 core 归档 → 全部 0；port 归档定义 92 个
 ```
 
@@ -145,7 +145,7 @@ port 侧 `tuya_cloud_types.h` 的两个类型枚举（`TUYA_QSPI_TYPE_PSRAM`/`TY
 **仅剩的门控代码直调**：**已无**——2026-10 二轮把最后两处也收编了：
 - `ble/tal_bluetooth.c`（原 32 调用 + 112 类型）→ 经 `TAL_BLUETOOTH_OPS_T`（27 成员）
   分发；core 新增自持镜像类型集 `TAL_BLE_*`（逐字段镜像 port 的
-  `tkl_bluetooth_def.h`），linux port 适配层以"镜像布局强转 + 编译期
+  `port_bluetooth_def.h`），linux port 适配层以"镜像布局强转 + 编译期
   sizeof/offsetof 断言"接线（断言经变异验证：尺寸漂移与纯偏移漂移均编译失败）、
   esp32 空卡；
 - `ai_audio/src/ai_audio_input.c`（原 `tkl_vad_*` 6 调用）→ 经 `TAL_VAD_OPS_T`
@@ -162,25 +162,29 @@ port 侧 `tuya_cloud_types.h` 的两个类型枚举（`TUYA_QSPI_TYPE_PSRAM`/`TY
 变体原直调 `tkl_audio_enc_request`（上游 TKL 平台接口；文件还带着全树不存在的
 `tal_ipc.h`/`tkl_ipc.h` 死 include，从基线起就编不了），现经 `tal_audio_enc_request`
 → `TAL_AUDIO_ENC_OPS_T`（`tal_audio_enc_ops.h`）分发；两 port 以空卡组装
-（`port/src/tkl_ai_codec.c`，成员 NULL → 分发返回 OPRT_NOT_SUPPORTED，与门控关闭
+（`port/src/port_ai_codec.c`，成员 NULL → 分发返回 OPRT_NOT_SUPPORTED，与门控关闭
 现状一致）。附带收益：两文件变为可编译——**二级开关（`CONFIG_ENABLE_TUYA_CODEC_*_IPC`）
 打开后整条路径可编译可链接**（实测 agent_demo `-DCONFIG_ENABLE_TUYA_CODEC_OPUS_IPC=ON
 -DCONFIG_ENABLE_TUYA_CODEC_SPEEX_IPC=ON` 构建 exit=0，`tal_audio_enc_request` 与
 `g_tuya_ai_encoder_opus_ipc` 均在二进制符号表）。
 
-### 2.4 TKL 头与 core 的关系
+### 2.4 port 接口头与 core 的关系
 
-- TKL 接口头（`tkl_*.h`）**全部在 port 里**（`port/include/{common,system,network,security}/`），
-  core 内没有任何 `tkl_*.h`。
+- 平台接口头**全部在 port 里**（2026-10 去 tkl 化后：linux 为
+  `port/include/{common,bluetooth,media,system}/`，esp32 为 `common/` + `system/`），
+  core 内没有任何平台接口头。linux port 原 `tkl_*.h` 已全部删除/内联进对应 `.c`
+  （现存 `port_bluetooth*.h` / `port_ai_demo.h` / `port_ai_player_consumer.h` 与
+  `system/lfs_config.h`）；esp32 port 只剩 `system/port_memory.h` 一个 port 私有头
+  （`port_kv.c` 跨文件调用 `port_runtime.c` 的 malloc/free）。
 - **core 在编代码零 TKL 头依赖**（2026-10 解耦后）：曾用于直调声明与 mbedtls 适配的
   `tkl_memory.h`/`tkl_hash.h`/`tkl_symmetry.h`/`tkl_asymmetrical.h`/`tkl_mutex.h` 均已清除
-  （见 §2.3）；仅门控代码（ble / agent-core AI，当前构建不编译）仍 include
-  `tkl_bluetooth*.h`/`tkl_vad.h`/`tkl_ipc.h`/`tkl_memory.h`。
+  （见 §2.3）；仅门控代码（ble / agent-core AI，当前构建不编译）仍 include 平台头。
 - port 头经构建系统**注入 core 的环境基底**（`tuyaopen-headers`），core 编译单元
   才能 include 到（详见 §3.3）。
-- 各平台 port 的 TKL 接口集合**同构**（esp32 port 的 15 个头从 linux port 同步而来，
-  不含平台多余接口）——这是"不新扩"原则的落地。解耦后 `tkl_hash.h`/`tkl_symmetry.h`/
-  `tkl_asymmetrical.h` 已无 includer（crypto 实现归 core），作为 TKL 接口面暂留。
+- 各平台 port 的接口集合**同构**（esp32 port 从头同步 linux port，不含平台多余接口）
+  ——这是"不新扩"原则的落地。解耦后 `tkl_hash.h`/`tkl_symmetry.h`/`tkl_asymmetrical.h`
+  本已零 includer（crypto 实现归 core），最初作为 TKL 接口面暂留；2026-10 去 tkl 化时
+  连同 security 目录一并删除。
 
 ---
 
@@ -229,7 +233,7 @@ INTERFACE 只作用于链接它的目标），port/CMakeLists.txt 必须**自行
 ```
 port/CMakeLists.txt（末尾）: target_include_directories(tuyaopen-headers INTERFACE ${port_incs})
   → core 模块统一 PRIVATE 依赖 tuyaopen-headers（tal_system/CMakeLists 等）
-  → core 全部编译单元都能 include "tuya_cloud_types.h"/"tuya_kconfig.h"/"tkl_*.h"
+  → core 全部编译单元都能 include "tuya_cloud_types.h"/"tuya_kconfig.h"（linux 侧的 `port_*.h` 已内联进 .c，无可 include 的接口头）
 ```
 
 esp32 侧同构：`esp32/port/CMakeLists.txt` 做同样注入；包装组件
@@ -524,9 +528,9 @@ target_link_libraries(${COMPONENT_LIB} INTERFACE
 
 ### 5.3 怎么验证环真的解了
 
-- 构建通过只是第一层；**符号级验证**：`nm iot_demo.elf | grep ' T tkl_'` 等，
-  确认 port 的符号真的进了固件（本次验证了 5 张卡 + `tkl_system_malloc` +
-  `tkl_mutex_create_init`）。
+- 构建通过只是第一层；**符号级验证**：`nm iot_demo.elf | grep ' T port_'` 等，
+  确认 port 的符号真的进了固件（本次验证了 5 张卡 + `port_system_malloc` +
+  `port_mutex_create_init`）。
 
 ---
 
@@ -576,7 +580,7 @@ target_link_libraries(${COMPONENT_LIB} INTERFACE
 demo 层（main/wifi_sta.c）：esp-idf 原生 API 连 AP（SSID 走 menuconfig），
                             断线用 esp_timer one-shot 做退避重连
       ↓ 连接成功（IP_EVENT_STA_GOT_IP）
-port 层（tkl_netif.c）：事件回调 → core 的链路回调 → core 置 link up
+port 层（port_netif.c）：事件回调 → core 的链路回调 → core 置 link up
       ↓
 core：user_network_check() 返回 true → 发起云连接（MQTT/TLS）
       ↓ 之后完全同 linux：socket 走 lwIP，激活/DP/OTA 复用同一套 core
@@ -663,7 +667,7 @@ private 头，core 的 TLS/crypto 层基于 mbedtls 3.x API，编译实证失败
 
 | 想了解 | 看这里 |
 |---|---|
-| port 各卡实现 | `esp32/port/src/tkl_*.c`（每个文件头部注释写了与 linux 的差异） |
+| port 各卡实现 | `esp32/port/src/port_*.c`（每个文件头部注释写了与 linux 的差异） |
 | core 的卡契约 | `components/tuyaopen-core/iot-core/tal_system/include/tal_*_ops.h`、`tal_network.h` 尾部 |
 | esp32 构建接入 | `components/tuyaopen-port/CMakeLists.txt`（mbedtls 接入 + 链接组）、`components/tuyaopen-core/CMakeLists.txt`（组件入口） |
 | 同步与差异清单 | `esp32/README.md`（core 同步命令 + 平台差异文件表 + 通用修复清单） |

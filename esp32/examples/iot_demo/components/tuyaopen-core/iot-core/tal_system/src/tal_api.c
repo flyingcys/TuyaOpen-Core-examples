@@ -37,8 +37,8 @@
 #include "tal_log.h"
 #include "tal_api_ops.h"
 
-/* 标准平台 ops 卡（port 的 tkl_runtime.c 定义，成员指向其 tkl_semaphore、
- * tkl_mutex、tkl_queue 等实现） */
+/* 标准平台 ops 卡（port 的 port_runtime.c 定义，成员指向其 port_semaphore、
+ * port_mutex、port_queue 等实现） */
 extern TAL_API_OPS_T tal_api_ops_platform;
 
 TAL_API_OPS_T *tal_api_get_ops(void)

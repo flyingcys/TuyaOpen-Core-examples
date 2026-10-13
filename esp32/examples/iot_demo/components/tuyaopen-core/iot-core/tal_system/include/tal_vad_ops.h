@@ -9,7 +9,7 @@
  * TAL_VAD_STATUS_NONE（"无语音"，见 tal_vad.c 的说明）。
  *
  * 与主卡 TAL_API_OPS_T（tal_api_ops.h）及 OTA/KV 卡解耦，由 port 独立组装
- * （linux/esp32 本仓均为空卡，见 port/src/tkl_ai_vad.c）。
+ * （linux/esp32 本仓均为空卡，见 port/src/port_ai_vad.c）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  *

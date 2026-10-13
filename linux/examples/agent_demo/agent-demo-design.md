@@ -117,7 +117,7 @@ agent_demo（本方案）                          上游 your_chat_bot（对照
 │  └─ 下行：text_cb 打印文字    │              │  └─ ai_audio_player（TTS）   │
 │       media_data_cb 丢弃      │              │                              │
 ├──────────────────────────────┤              ├──────────────────────────────┤
-│ port: tkl_ai_*（文件回放）    │              │ tdl_audio + tkl_audio(ALSA)  │
+│ port: port_ai_demo_*（文件回放）│              │ tdl_audio + tkl_audio(ALSA)  │
 └──────────────────────────────┘              └──────────────────────────────┘
         ↓ 复用（core 零结构改动）                      ↓
    ai_agent / tuya_ai_service / tuya_iot（iot-core）
@@ -132,7 +132,7 @@ agent_demo（本方案）                          上游 your_chat_bot（对照
   → demo 等就绪（tuya_ai_agent_is_ready()）
   → 触发一次上传：
        tuya_ai_input_start(true)
-       循环：tkl_ai_read(80ms 帧 @16kHz/16bit/mono = 2560 B) 
+       循环：port_ai_demo_read(80ms 帧 @16kHz/16bit/mono = 2560 B) 
              → tuya_ai_audio_input(ts, pts, data, len, len)
        tuya_ai_input_stop()
   → 云端 ASR → agent 处理 → 下行
@@ -164,19 +164,19 @@ agent_demo（本方案）                          上游 your_chat_bot（对照
 官方全栈实现）：
 
 ```
-port/include/media/tkl_ai_demo.h        ← 契约（本 demo 专用，非官方 tkl_audio.h）
-port/src/tkl_ai_demo.c                  ← Linux 实现：从 PCM 文件回放
+port/include/media/port_ai_demo.h        ← 契约（本 demo 专用，非官方 tkl_audio.h）
+port/src/port_ai_demo.c                  ← Linux 实现：从 PCM 文件回放
 ```
 
 接口（最小 3 函数）：
 
 ```c
 /* 打开音频源。Linux: 打开 PCM 文件；真实设备: 启动麦克风（适配点） */
-OPERATE_RET tkl_ai_demo_open(const char *src_path);
+OPERATE_RET port_ai_demo_open(const char *src_path);
 /* 读一帧 PCM 数据，返回实际字节数；0 = 数据结束(EOF)；<0 = 错误 */
-INT_T       tkl_ai_demo_read(UINT8_T *buf, UINT_T len);
+INT_T       port_ai_demo_read(UINT8_T *buf, UINT_T len);
 /* 关闭音频源 */
-OPERATE_RET tkl_ai_demo_close(VOID);
+OPERATE_RET port_ai_demo_close(VOID);
 ```
 
 - **"留空"的含义**：不做真实 Linux 音频适配（不接 ALSA/麦克风）；实现为**文件回放**，
@@ -216,7 +216,7 @@ examples/agent_demo/
     ├── tuya_main.c                # 主流程（§4.2）
     ├── tuya_config.h              # PID/uuid/authkey（#ifndef 默认 + secrets 覆盖，抄 iot_demo）
     ├── tuya_config_secrets.h.example
-    ├── agent_audio.c/.h           # 上行任务：文件→帧→tuya_ai_audio_input（调 port 的 tkl_ai_demo_*）
+    ├── agent_audio.c/.h           # 上行任务：文件→帧→tuya_ai_audio_input（调 port 的 port_ai_demo_*）
     ├── agent_downlink.c/.h        # 下行：ai_user_event_notify_register 回调打印（ASR/NLG）
     └── agent_chain_selftest.c     # 自测（离线：切帧/边界；见 §5）
 ```
@@ -295,7 +295,7 @@ cd build && timeout 60 ./agent_demo
 ## 7. 任务分解（实施顺序）
 
 1. **T1 core 断点修复**（§4.4 第 1-6 项）→ `CONFIG_ENABLE_AI_COMPONENTS=y` 能 configure + 编译；
-2. **T2 port 音频契约**（§4.3）`tkl_ai_demo.c/h` + 素材就位（voice_16k.pcm）；
+2. **T2 port 音频契约**（§4.3）`port_ai_demo.c/h` + 素材就位（voice_16k.pcm）；
 3. **T3 demo 骨架**（CMakeLists/Kconfig/凭据/README/离线自测）；
 4. **T4 链路接线**（tuya_main 主流程 + 上行任务 + 下行打印 + `ai_agent.c` attr 补丁）；
 5. **T5 实跑验证**（§5.2 判据全序列）；
@@ -318,7 +318,7 @@ cd build && timeout 60 ./agent_demo
 
 - 构建：`cmake -B build && cmake --build build -j` 通过（exit 0）；
 - 自测：`./build/agent_chain_selftest` → `AGENT CHAIN SELFTEST PASSED`；
-  **变异验证**：`tkl_ai_demo_read` 读长减半 → `frame count` 断言红（exit 1），还原后绿；
+  **变异验证**：`port_ai_demo_read` 读长减半 → `frame count` 断言红（exit 1），还原后绿；
 - 实跑（PID `alon7qgyjj8yus74`）：扫码激活 → `create session:...success` →
   `upload done: frames=33, bytes=82944, last_frame_bytes=1024` →
   `ASR text: 请问现在是几点钟？` → `[AGENT][ASR] 请问现在是几点钟？` →
@@ -397,7 +397,7 @@ Linux PCM 属性分支与注释）；本 demo 真正没移植的应用侧能力�
 |---|---|---|
 | **UI 全部**（屏幕/表情/LVGL/聊天界面/主题/亮度/波形） | `src/display2/ui_chatbot` + `ui_wechat` 两套 + core `ai_ui` 4 套（10360 行，实测） | Linux 无屏；文字已打 stdout，数据面本就通。上游 `ui_wechat` 才是有气泡的功能套，`ui_chatbot` 的 `ui_set_user_msg/assistant_msg/system_msg` 全是空 `return;` |
 | **按键 / 唤醒词 / VAD** | `ai_mode_hold.c:314` 长按、`ai_mode_wakeup.c:169` `tkl_kws_reg_wakeup_cb`、`ai_audio_input.c:146` `EVENT_AUDIO_VAD` | 依赖 `tdl_button_manage.h`/`tkl_kws.h`/`tkl_vad.h`，Linux 无对应硬件 |
-| **真实麦克风采集** | `ai_audio_input.c:360/367` `tdl_audio_find`+`tdl_audio_open`；平台是 **push 模式**（`tkl_audio.c:75-88` `voice_read_callback` 回调），`tkl_audio.c:655` 的 `tkl_ai_get_frame()` 直接返回 `OPRT_NOT_SUPPORTED` | port 契约 `tkl_ai_demo_*` 已留替换点（`port/include/media/tkl_ai_demo.h` 注明适配点），Linux 只做 PCM 文件回放、且是 **poll 模式**（`agent_audio.c:64` 主动 read） |
+| **真实麦克风采集** | `ai_audio_input.c:360/367` `tdl_audio_find`+`tdl_audio_open`；平台是 **push 模式**（`tkl_audio.c:75-88` `voice_read_callback` 回调），`tkl_audio.c:655` 的 `tkl_ai_get_frame()` 直接返回 `OPRT_NOT_SUPPORTED` | port 契约 `port_ai_demo_*` 已留替换点（`port/include/media/port_ai_demo.h` 注明适配点），Linux 只做 PCM 文件回放、且是 **poll 模式**（`agent_audio.c:64` 主动 read） |
 | **摄像头 / 视频** | `board_com_api.c:283` camera 注册、`ai_agent.c:141` VIDEO `/* TBD */` | 无硬件；且上游该分支本身也是空实现 |
 | **打印机** | `app_printer.c`（206 行，JPEG→单色抖动位图） | 无硬件 |
 | **电池 / 低功耗** | `app_battery.c` 74 行、`app_lowpower.c` 260 行（`tuya_pm` 两级链） | 无硬件；上游 30 个板 config 也仅 2 个开启 |
@@ -433,7 +433,7 @@ Linux PCM 属性分支与注释）；本 demo 真正没移植的应用侧能力�
 
 ### 9.5 接真实麦克风时，"只换 port 实现"补不了的四件事（重要）
 
-常见误解是"把 `tkl_ai_demo.c` 换成麦克风采集就能接真机"。**不够**——上游的上行策略
+常见误解是"把 `port_ai_demo.c` 换成麦克风采集就能接真机"。**不够**——上游的上行策略
 不在可替换的 port 层，而在**未搬运的 `ai_main`/`ai_mode`/`ai_audio` 三块里**：
 
 | 上游行为 | 证据 | 换 port 能补上吗 |

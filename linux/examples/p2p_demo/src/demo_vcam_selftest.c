@@ -72,7 +72,7 @@ static void __selftest_frame_cb(const DEMO_VCAM_FRAME_T *frame)
 }
 
 /**
- * @brief 日志输出回调（与 iot_demo 同款：经 port 的 tkl_log_output 落 stdout）
+ * @brief 日志输出回调（与 iot_demo 同款：经 port 的 port_log_output 落 stdout）
  */
 static void __selftest_log_output_cb(const char *str)
 {

@@ -1,6 +1,6 @@
 /**
  * @file tal_kv.c
- * @brief tal_kv 平台分发：四接口透传到 port 的 tkl_kv（tal_kv_ops_platform）
+ * @brief tal_kv 平台分发：四接口透传到 port 的 port_kv（tal_kv_ops_platform）
  *
  * iot-core 不持有任何 KV 逻辑——存储介质、记录格式、加密、序列化都在 port
  * （见 tal_kv_ops.h 契约）。本文件只做 ops 卡分发，与 tal_api.c 的
@@ -12,7 +12,7 @@
 #include "tal_kv_ops.h"
 #include "tal_log.h"
 
-/* 平台 ops 卡（port 的 tkl_kv.c 定义），core 侧经 getter 分发 */
+/* 平台 ops 卡（port 的 port_kv.c 定义），core 侧经 getter 分发 */
 extern TAL_KV_OPS_T tal_kv_ops_platform;
 
 TAL_KV_OPS_T *tal_kv_get_ops(void)

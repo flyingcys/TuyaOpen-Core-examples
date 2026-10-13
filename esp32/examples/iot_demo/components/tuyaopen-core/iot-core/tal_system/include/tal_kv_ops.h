@@ -2,11 +2,11 @@
  * @file tal_kv_ops.h
  * @brief tal_kv 的平台 ops 契约：KV 四接口（init / set / get / del）
  *
- * 定义 TAL_KV_OPS_T：port 在 tkl_kv.c 组装 tal_kv_ops_platform（成员绑定本平台
- * tkl_kv_* 实现），core 的 tal_kv.c 经 getter 完成 tal_kv_* 分发，对上签名不变。
+ * 定义 TAL_KV_OPS_T：port 在 port_kv.c 组装 tal_kv_ops_platform（成员绑定本平台
+ * port_kv_* 实现），core 的 tal_kv.c 经 getter 完成 tal_kv_* 分发，对上签名不变。
  *
  * 存储介质、记录格式、加密、序列化全部是 port 内部细节：换平台 = 换一个
- * tkl_kv.c（Linux = littlefs + AES；NVS 类平台直接映射芯片 KV），core 零改动。
+ * port_kv.c（Linux = littlefs + AES；NVS 类平台直接映射芯片 KV），core 零改动。
  *
  * key 是平台相关资源：长度上限与字符集由平台决定（见 tal_kv.h 的 key 契约），
  * port 可对 core 传入的 key 做映射（如超长 key 哈希后再落盘）。
@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 /**
- * @brief tal_kv 平台 ops：成员与 port 的 tkl_kv 实现一一对应
+ * @brief tal_kv 平台 ops：成员与 port 的 port_kv 实现一一对应
  */
 typedef struct {
     /* 挂载介质 / 打开芯片 KV；见 tal_kv.h 的 tal_kv_init */

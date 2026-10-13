@@ -3,20 +3,20 @@
  * @brief TAL 文件系统接口：文件 9 + 路径 4 + 目录 5 共 18 接口
  *
  * 只定义文件操作语义，不涉及实现：介质、路径映射、句柄形态全部由平台 port
- * 的 tkl_fs / tkl_dir 决定（Linux = POSIX 包装；RTOS 平台 = SD/flash 上的
+ * 的 port_fs / port_dir 决定（Linux = POSIX 包装；RTOS 平台 = SD/flash 上的
  * FAT/ littlefs），iot-core 不持有任何文件系统逻辑，仅经 tal_fs_ops.h 的
- * ops 卡透传（见 port/src/tkl_fs.c 的 tal_fs_ops_platform）。
+ * ops 卡透传（见 port/src/port_fs.c 的 tal_fs_ops_platform）。
  *
  * 当前唯一调用方是 p2p-core/local_store（本地录像分段存储）：不用 p2p 的平台
- * 无需实现这套适配，port 侧 tkl_fs.c 整文件由 ENABLE_TUYA_P2P 门控。
+ * 无需实现这套适配，port 侧 port_fs.c 整文件由 ENABLE_TUYA_P2P 门控。
  *
- * 返回值约定（与 port 的 tkl_fs 逐条一致，详见各接口注释）：
+ * 返回值约定（与 port 的 port_fs 逐条一致，详见各接口注释）：
  *   - 句柄类：tal_fopen 返回文件句柄，NULL 失败；tal_fgets 返回 buf，
  *     NULL 表示失败或已到文件尾
  *   - 读写类：tal_fread / tal_fwrite 返回实际读/写字节数，<= 0 视为失败或 EOF
  *   - tal_fileno 返回 fd，-1 表示失败
  *   - 其余（close / seek / flush / fsync / 路径 / 目录）：0 成功，非 0 失败
- * 句柄类型 TUYA_FILE / TUYA_DIR / TUYA_FILEINFO 由 port 头 tkl_fs.h 提供。
+ * 句柄类型 TUYA_FILE / TUYA_DIR / TUYA_FILEINFO 由 port 头 port_fs.h 提供。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -113,7 +113,7 @@ int tal_fflush(TUYA_FILE file);
 * @param[in] fd: file fd
 *
 * @note This API is used to write buffer to flash
-* @note 参数是 fd（用 tal_fileno 从文件句柄取），与 tkl_fsync 对齐
+* @note 参数是 fd（用 tal_fileno 从文件句柄取），与 port_fsync 对齐
 *
 * @return 0 on success. others on failed
 */

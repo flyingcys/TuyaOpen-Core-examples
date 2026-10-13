@@ -11,8 +11,8 @@
 | 层 | 内容 |
 |---|---|
 | core | `tal_kv.h`（`init/set/get/del` 4 接口 + `tal_kv_cfg_t`/`TAL_LV_KEY_LEN`）、`tal_kv_ops.h`（`TAL_KV_OPS_T` 四函数指针）、`tal_kv.c`（`TAL_KV_EXEC_OP` 透传，约 60 行） |
-| port（Linux） | `port/src/tkl_kv.c`：旧 littlefs 实现改造（`tkl_kv_init/set/get/del` + `tal_kv_ops_platform`），并**内联 flash 模拟**（原 tkl_flash.c：`./tuyadb/tuyadb` 文件 + UF 分区，标准 C IO，不依赖 tkl_fs）；配套恢复 `port/littlefs/`、`port/include/system/lfs_config.h`（源自子模块 `8fa1d6a^`） |
-| port（其他平台） | 换平台 = 换一个 `tkl_kv.c`（ESP32 可映射 NVS），core 零改动 |
+| port（Linux） | `port/src/port_kv.c`：旧 littlefs 实现改造（`__kv_init/set/get/del` + `tal_kv_ops_platform`），并**内联 flash 模拟**（原 tkl_flash.c：`./tuyadb/tuyadb` 文件 + UF 分区，标准 C IO，不依赖 tkl_fs）；配套恢复 `port/littlefs/`、`port/include/system/lfs_config.h`（源自子模块 `8fa1d6a^`） |
+| port（其他平台） | 换平台 = 换一个 `port_kv.c`（ESP32 可映射 NVS），core 零改动 |
 
 **接口收敛**（旧 7 → 新 4）：
 
@@ -23,7 +23,7 @@
 **分工原则**：存储介质、记录格式、加密、序列化**全部是 port 内部细节**；core 不做任何 KV 逻辑。
 Linux 实现保留旧行为：AES-128-CBC（seed/key 经 SHA256 派生，IV=seed）+ mutex 线程安全 + littlefs（自带磨损均衡与掉电保护）。
 
-**介质契约（port 实现相关）**：Linux 文件实现的 `erase` 为 **no-op**——文件可覆盖写，靠预填 0xFF + littlefs 的 CRC 提交语义维持；**真 flash 平台必须实现块擦除命令**（写 0xFF 对 NOR 是 no-op），并把 `tkl_kv.c` 的 `__flash_*` 替换为实际分区访问。`FLASH_FILE_PATH` 与 `port/src/tkl_wifi/linux_wifi.h` 是协同的可覆盖点（构建可 `-D` 注入统一改目录）。
+**介质契约（port 实现相关）**：Linux 文件实现的 `erase` 为 **no-op**——文件可覆盖写，靠预填 0xFF + littlefs 的 CRC 提交语义维持；**真 flash 平台必须实现块擦除命令**（写 0xFF 对 NOR 是 no-op），并把 `port_kv.c` 的 `__flash_*` 替换为实际分区访问。`FLASH_FILE_PATH` 与原先 `port/src/tkl_wifi/linux_wifi.h` 的覆盖点协同（该文件已随 tkl_wifi 目录删除）；构建可 `-D` 注入统一改目录。
 
 **提交**：子模块 `ba58b24`…`43a79bc`、外层 `9961ff8` 起（2026-10-08；后续增量见 git log）。
 
@@ -109,7 +109,7 @@ typedef struct {
 TAL_KV_OPS_T *tal_kv_get_ops(void);
 ```
 
-与 `tal_api_ops.h` 同构：契约头在 core、实例在 port（`tal_kv_ops_platform`）、强引用（省略 `tkl_kv.c` 会链接失败）。
+与 `tal_api_ops.h` 同构：契约头在 core、实例在 port（`tal_kv_ops_platform`）、强引用（省略 `port_kv.c` 会链接失败）。
 
 **移植契约与实现量**：新平台只需实现 4 个区域原语——
 

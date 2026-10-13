@@ -6,8 +6,8 @@
  *       自动上传一段预置语音（触发）→ 下行打印文字（ASR/NLG）。
  *
  * 无 UI；下行语音在 CONFIG_ENABLE_COMP_AI_AUDIO 开启时经 port 注入的 ALSA
- * 消费端播放（tkl_ai_player_consumer），关闭时媒体包在 core 内丢弃；
- * 上行音频经 port 的 tkl_ai_demo_* 契约取得（Linux：PCM 文件回放）。
+ * 消费端播放（port_ai_player_consumer），关闭时媒体包在 core 内丢弃；
+ * 上行音频经 port 的 port_ai_demo_* 契约取得（Linux：PCM 文件回放）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
@@ -38,7 +38,7 @@
  * 同 MCP：关开关时头与目标都不存在，include 与调用一并由宏守卫 */
 #if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
 #include "ai_audio_player.h"
-#include "tkl_ai_player_consumer.h"
+#include "port_ai_player_consumer.h"
 #endif
 
 #include <assert.h>
@@ -196,7 +196,7 @@ static void __agent_start(void)
     agent_downlink_init();
 
     THREAD_CFG_T thrd = {0};
-    /* 注：stackDepth 在 Linux port 被忽略（tkl_thread 未用 pthread_attr_setstacksize，
+    /* 注：stackDepth 在 Linux port 被忽略（port_thread 未用 pthread_attr_setstacksize，
      * 线程实得系统默认栈 8MB）；真机移植时此值才会生效，勿据此认为栈已按 4.6KB 调过。 */
     thrd.stackDepth   = 4608;
     thrd.priority     = THREAD_PRIO_2;
@@ -258,11 +258,11 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
     }
 }
 
-/* 链路状态：由 port 层（tkl_netif）状态回调维护，core 经 user_network_check 拉取 */
+/* 链路状态：由 port 层（port_netif）状态回调维护，core 经 user_network_check 拉取 */
 static volatile bool s_link_up = false;
 
 /**
- * @brief port 链路状态回调：tkl_netif 注册后立即上报当前状态，
+ * @brief port 链路状态回调：port_netif 注册后立即上报当前状态，
  * 之后周期轮询、状态变化时再次回调
  *
  * @param stat 当前链路状态
@@ -272,7 +272,7 @@ static void __user_link_status_cb(TAL_NETIF_LINK_STAT_E stat)
 {
     s_link_up = (TAL_NETIF_LINK_UP == stat);
 
-    /* 同步活动 IP：link up ≠ IP 就绪（tkl_netif 仅查 IFF_UP，不代表已获地址）。
+    /* 同步活动 IP：link up ≠ IP 就绪（port_netif 仅查 IFF_UP，不代表已获地址）。
      * 出站 socket 的源地址绑定与 LAN 广播包里的本机 IP 均取自此值；取不到置 0 表示不绑定 */
     TUYA_IP_ADDR_T addr = 0;
     if (s_link_up) {
@@ -328,12 +328,12 @@ void user_main(void)
      * - 下行 TTS 在 MQTT_CONNECTED 之后才可能到达，播放服务须先就绪，
      *   否则首个音频包落在默认空消费端上被丢弃；
      * - install 必须在 init 之后：service_init 会装载默认空消费端，
-     *   set_consumer 才是最终替换点（时序见 tkl_ai_player_consumer.h）；
+     *   set_consumer 才是最终替换点（时序见 port_ai_player_consumer.h）；
      * - 失败不阻断主流程：打印错误继续，下行降级为无声（默认空消费端行为） */
     rt = ai_audio_player_init();
     if (rt == OPRT_OK) {
         PR_NOTICE("[AGENT] ai_audio_player initialized, ALSA consumer install rt=%d",
-                  tkl_ai_player_consumer_install());
+                  port_ai_player_consumer_install());
     } else {
         PR_ERR("[AGENT] ai_audio_player_init failed: %d (downlink audio disabled)", rt);
     }
@@ -356,7 +356,7 @@ void user_main(void)
                                 });
     assert(rt == OPRT_OK);
 
-    /* 链路状态接入：port（tkl_netif）立即上报当前状态并轮询变化 */
+    /* 链路状态接入：port（port_netif）立即上报当前状态并轮询变化 */
     tal_netif_set_link_cb(__user_link_status_cb);
 
     /* token 获取 port：mqtt_bind 直连绑定（未激活时出二维码） */

@@ -11,7 +11,7 @@
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
 
-#include "tkl_ai_demo.h"
+#include "port_ai_demo.h"
 
 #include <stdio.h>
 
@@ -51,18 +51,18 @@ int main(void)
     /* 0) 素材预检：由 CMake 复制到构建目录，从 build/ 运行；
      *    从别处运行给出明确指引（学 p2p_demo 的 "run from build/" 惯例），
      *    避免后续断言成片失败、看不出根因。 */
-    if (tkl_ai_demo_open(SELFTEST_AUDIO_SRC) != OPRT_OK) {
+    if (port_ai_demo_open(SELFTEST_AUDIO_SRC) != OPRT_OK) {
         printf("FAIL: audio sample '%s' not found: run from build/ \n", SELFTEST_AUDIO_SRC);
         return 1;
     }
-    tkl_ai_demo_close();
+    port_ai_demo_close();
 
     /* 1) 打开内置素材 */
-    CHECK(tkl_ai_demo_open(SELFTEST_AUDIO_SRC) == OPRT_OK, "open bundled pcm");
+    CHECK(port_ai_demo_open(SELFTEST_AUDIO_SRC) == OPRT_OK, "open bundled pcm");
 
     /* 2) 按 80ms 帧读取，统计帧数/总字节/末帧长度 */
     for (;;) {
-        n = tkl_ai_demo_read(buf, FRAME_BYTES);
+        n = port_ai_demo_read(buf, FRAME_BYTES);
         CHECK(n >= 0, "read returns no error");
         if (n <= 0) {
             break;
@@ -78,24 +78,24 @@ int main(void)
     CHECK(last == EXPECTED_LAST_FRAME, "last frame bytes");
 
     /* 3) EOF 后继续读仍为 0 */
-    CHECK(tkl_ai_demo_read(buf, FRAME_BYTES) == 0, "eof stays eof");
+    CHECK(port_ai_demo_read(buf, FRAME_BYTES) == 0, "eof stays eof");
 
     /* 4) 关闭后可重开 */
-    CHECK(tkl_ai_demo_close() == OPRT_OK, "close");
-    CHECK(tkl_ai_demo_open(SELFTEST_AUDIO_SRC) == OPRT_OK, "reopen");
-    CHECK(tkl_ai_demo_close() == OPRT_OK, "close again");
+    CHECK(port_ai_demo_close() == OPRT_OK, "close");
+    CHECK(port_ai_demo_open(SELFTEST_AUDIO_SRC) == OPRT_OK, "reopen");
+    CHECK(port_ai_demo_close() == OPRT_OK, "close again");
 
     /* 5) 坏路径被拒且不影响后续使用 */
-    CHECK(tkl_ai_demo_open("/nonexistent/agent_demo_selftest.pcm") != OPRT_OK, "bad path rejected");
-    CHECK(tkl_ai_demo_open(SELFTEST_AUDIO_SRC) == OPRT_OK, "usable after bad path");
-    CHECK(tkl_ai_demo_close() == OPRT_OK, "final close");
+    CHECK(port_ai_demo_open("/nonexistent/agent_demo_selftest.pcm") != OPRT_OK, "bad path rejected");
+    CHECK(port_ai_demo_open(SELFTEST_AUDIO_SRC) == OPRT_OK, "usable after bad path");
+    CHECK(port_ai_demo_close() == OPRT_OK, "final close");
 
     /* 6) I/O 错误与 EOF 必须区分（契约：>0 字节 / 0 EOF / <0 错误）：
      *    目录路径 fopen 可成功但 fread 必失败（ferror）——若把 ferror 吞成 0(EOF)，
      *    调用方会把"读盘错误"当"读完"，0 字节却报成功（静默假绿）。 */
-    CHECK(tkl_ai_demo_open(".") == OPRT_OK, "open dir path (fopen succeeds)");
-    CHECK(tkl_ai_demo_read(buf, FRAME_BYTES) < 0, "read on dir returns error, not EOF");
-    CHECK(tkl_ai_demo_close() == OPRT_OK, "close after dir probe");
+    CHECK(port_ai_demo_open(".") == OPRT_OK, "open dir path (fopen succeeds)");
+    CHECK(port_ai_demo_read(buf, FRAME_BYTES) < 0, "read on dir returns error, not EOF");
+    CHECK(port_ai_demo_close() == OPRT_OK, "close after dir probe");
 
     if (s_fail) {
         printf("AGENT CHAIN SELFTEST FAILED: %d check(s)\n", s_fail);

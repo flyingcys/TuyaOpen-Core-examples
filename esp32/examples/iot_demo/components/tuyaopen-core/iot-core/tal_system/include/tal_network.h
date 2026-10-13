@@ -532,7 +532,7 @@ OPERATE_RET tal_net_getsockopt(const int fd, const TUYA_OPT_LEVEL level, const T
 
 /* ---------------------------------------------------------------------------
  * 标准网络适配接入（原 tal_network_register 的类型定义）
- * 平台在 port 中实现 tkl_net_*（见 tkl_network.h）并在同文件组装标准网卡
+ * 平台在 port 中实现 port_net_*（见 port_network.h）并在同文件组装标准网卡
  * tal_network_card_platform；多卡场景（如 AT 蜂窝）由平台额外定义卡并切换。
  * --------------------------------------------------------------------------- */
 typedef struct {

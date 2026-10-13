@@ -128,7 +128,7 @@ void tal_system_sleep(uint32_t time_ms)
 /**
  * @brief Resets the TAL system.
  *
- * This function calls the `tkl_system_reset()` function to reset the TAL
+ * This function calls the `port_system_reset()` function to reset the TAL
  * system.
  *
  * @note This function should be called when a system reset is required.
@@ -146,7 +146,7 @@ SYS_TIME_T g_sys_time_offset = 0; // used for debug
  * @brief Get the current system time in milliseconds.
  *
  * This function returns the current system time in milliseconds by calling the
- * `tkl_system_get_millisecond()` function and adding the system time offset.
+ * `port_system_get_millisecond()` function and adding the system time offset.
  *
  * @return The current system time in milliseconds.
  */

@@ -3,7 +3,7 @@
  * @brief TAL 键值存储接口：init / set / get / del 四接口
  *
  * 只定义存储语义，不涉及实现：key 为 C 字符串，value 为任意二进制数据。
- * 存储介质、记录格式、加密、序列化全部由平台 port 的 tkl_kv 决定
+ * 存储介质、记录格式、加密、序列化全部由平台 port 的 port_kv 决定
  * （Linux = littlefs + AES；NVS 类平台直接映射芯片 KV），iot-core 不持有
  * 任何 KV 逻辑，仅经 tal_kv_ops.h 的 ops 卡透传。
  *

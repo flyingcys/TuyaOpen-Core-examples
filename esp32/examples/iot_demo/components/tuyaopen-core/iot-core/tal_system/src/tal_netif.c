@@ -1,6 +1,6 @@
 /**
  * @file tal_netif.c
- * @brief tal_netif 平台分发：两接口透传到 port 的 tkl_netif（tal_netif_ops_platform）
+ * @brief tal_netif 平台分发：两接口透传到 port 的 port_netif（tal_netif_ops_platform）
  *
  * core 不持有网络接口实现——遍历接口/ioctl 取值/轮询线程都在 port（见
  * tal_netif_ops.h 契约）。本文件只做 ops 卡分发，与 tal_kv.c / tal_ota 同构。
@@ -13,7 +13,7 @@
 #include "tal_netif_ops.h"
 #include "tal_log.h"
 
-/* 平台 ops 卡（port 的 tkl_netif.c 定义），core 侧经 getter 分发 */
+/* 平台 ops 卡（port 的 port_netif.c 定义），core 侧经 getter 分发 */
 extern TAL_NETIF_OPS_T tal_netif_ops_platform;
 
 TAL_NETIF_OPS_T *tal_netif_get_ops(void)

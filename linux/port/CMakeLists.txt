@@ -7,7 +7,7 @@ endif()
 
 set(PORT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 
-# adapter 布局：include/（头）+ src/（TKL 实现，含 tkl_bt）；
+# adapter 布局：include/（头）+ src/（TKL 实现，含 port_bt）；
 # 通用工具（tuya_list/queue/mem_heap/ringbuf/slist/tools）已迁至
 # tuyaopen-core/iot-core/tuya_transport/src/utilities（core 共用，平台无关）
 set(_port_srcs)
@@ -23,7 +23,7 @@ if(_port_srcs)
     list(REMOVE_DUPLICATES _port_srcs)
 endif()
 
-# littlefs（tal_kv 的存储引擎，tkl_kv.c 直接用）：不在 include/ 或 src/ 下，
+# littlefs（tal_kv 的存储引擎，port_kv.c 直接用）：不在 include/ 或 src/ 下，
 # GLOB 收不到，显式收集
 if(EXISTS "${PORT_ROOT}/littlefs/lfs.c")
     list(APPEND _port_srcs
@@ -35,8 +35,10 @@ if(EXISTS "${PORT_ROOT}/littlefs/lfs.c")
     set(_port_lfs_defs LFS_CONFIG=lfs_config.h)
 endif()
 
+# 路径与 src 下目录名耦合：port 去 tkl 化改名（tkl_bt→port_bt）后须同步，
+# 否则 BLE=OFF 时该目录不会被排除而被误编入
 if(NOT CONFIG_ENABLE_BLUETOOTH AND _port_srcs)
-    list(FILTER _port_srcs EXCLUDE REGEX "/tkl_bt/")
+    list(FILTER _port_srcs EXCLUDE REGEX "/port_bt/")
 endif()
 
 set(_port_incs)
@@ -55,7 +57,7 @@ endif()
 if(IS_DIRECTORY "${PORT_ROOT}")
     list(APPEND _port_incs "${PORT_ROOT}")
 endif()
-# littlefs 头（lfs.h/lfs_util.h）：tkl_kv.c 直接 include "lfs.h"
+# littlefs 头（lfs.h/lfs_util.h）：port_kv.c 直接 include "lfs.h"
 if(IS_DIRECTORY "${PORT_ROOT}/littlefs")
     list(APPEND _port_incs "${PORT_ROOT}/littlefs")
 endif()
@@ -72,8 +74,10 @@ if(_port_srcs)
         target_link_libraries(tuyaopen-port PUBLIC pthread m)
     endif()
 
-    if(EXISTS "${PORT_ROOT}/src/tkl_network.c" OR EXISTS "${PORT_ROOT}/src/tkl_runtime.c")
-        # tkl_network（POSIX 实现）/tkl_runtime（tal_api ops 卡）：include tal_api.h（tal_system 公共头）与
+    # 路径与 src 下文件名耦合：port 去 tkl 化改名后须同步，否则条件为假会
+    # 静默丢掉 tal_system 链接与 core transport 头注入（表面能过增量构建）
+    if(EXISTS "${PORT_ROOT}/src/port_network.c" OR EXISTS "${PORT_ROOT}/src/port_runtime.c")
+        # port_network（POSIX 实现）/port_runtime（tal_api ops 卡）：include tal_api.h（tal_system 公共头）与
         # core 的 tal_network.h/tal_api_ops.h（卡与 ops 类型），符号在最终链接组解析
         if(TARGET tal_system)
             target_link_libraries(tuyaopen-port PRIVATE tal_system)
@@ -83,14 +87,14 @@ if(_port_srcs)
     endif()
 
     # 模块级隔离（独立于上面的条件块）：仅 p2p 使用的适配由 ENABLE_TUYA_P2P 门控
-    # ——tkl_network 的 5 个 p2p 成员 + tkl_fs 整文件。core 的开关宏
+    # ——port_network 的 5 个 p2p 成员 + port_fs 整文件。core 的开关宏
     # （TuyaOpenOptions → tuyaopen-headers）只作用于 core 模块，port 目标须注入
-    # 同一宏名，否则开了 P2P 也挂不上卡成员/编不出 tkl_fs。
+    # 同一宏名，否则开了 P2P 也挂不上卡成员/编不出 port_fs。
     if(CONFIG_ENABLE_TUYA_P2P)
         target_compile_definitions(tuyaopen-port PRIVATE ENABLE_TUYA_P2P=1)
     endif()
 
-    # 局域网/对端服务 ops（tkl_network 的 listen/accept/send_to/recvfrom/recv_nd_size）
+    # 局域网/对端服务 ops（port_network 的 listen/accept/send_to/recvfrom/recv_nd_size）
     # 的挂载条件：listen/accept 局域网协议、p2p、AI monitor 任一开启即需要；
     # send_to/recvfrom 局域网协议或 p2p；recv_nd_size 仅局域网协议。三者全关时
     # port 无需适配这 5 个。同 P2P，逐个注入（core 的宏不传播到 port 目标）。
@@ -101,11 +105,11 @@ if(_port_srcs)
         target_compile_definitions(tuyaopen-port PRIVATE ENABLE_AI_COMPONENTS=1)
     endif()
 
-    # AI 播放器消费端（tkl_ai_player_consumer.c）：把 svc_ai_player 解码后的 PCM
+    # AI 播放器消费端（port_ai_player_consumer.c）：把 svc_ai_player 解码后的 PCM
     # 写进 ALSA（16k/16bit/mono）。core 的契约头 svc_ai_player.h 在
     # agent-core/audio_player/include，需补进包含路径；libasound 经 pkg-config
     # 探测（写法同 BT 的 GIO/DBUS）。
-    # 同一宏还放行 tkl_fs.c 的门控（见文件头：P2P || AI_PLAYER）——AI 播放器的
+    # 同一宏还放行 port_fs.c 的门控（见文件头：P2P || AI_PLAYER）——AI 播放器的
     # 文件源（datasink_file.c → tal_fopen）会把 core 的 tal_fs.o 拉进链接，
     # 没有 P2P 也必须提供 tal_fs_ops 卡。
     if(CONFIG_ENABLE_AI_PLAYER)
@@ -125,16 +129,17 @@ if(_port_srcs)
         endif()
     endif()
 
-    if(EXISTS "${PORT_ROOT}/src/tkl_kv.c")
-        # tkl_kv（littlefs + AES）：include tal_log/tal_memory/tal_mutex（tal_system）
+    # 路径与 src 下文件名/目录名耦合：port 去 tkl 化改名后须同步
+    if(EXISTS "${PORT_ROOT}/src/port_kv.c")
+        # port_kv（littlefs + AES）：include tal_log/tal_memory/tal_mutex（tal_system）
         # 与 tal_security（tuya_transport，随 tal_system 的 PUBLIC 依赖传播）
         if(TARGET tal_system)
             target_link_libraries(tuyaopen-port PRIVATE tal_system)
         endif()
     endif()
 
-    if(EXISTS "${PORT_ROOT}/src/tkl_bt" AND CONFIG_ENABLE_BLUETOOTH)
-        # tkl_bt sources include tal_log.h（tal_system 公共头），符号在最终链接组解析
+    if(EXISTS "${PORT_ROOT}/src/port_bt" AND CONFIG_ENABLE_BLUETOOTH)
+        # port_bt sources include tal_log.h（tal_system 公共头），符号在最终链接组解析
         if(TARGET tal_system)
             target_link_libraries(tuyaopen-port PRIVATE tal_system)
         endif()

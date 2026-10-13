@@ -36,7 +36,7 @@
 | 文件 | 职责 |
 |---|---|
 | `tuyaopen-core/iot-core/tal_system/include/tal_kv_ops.h`（新） | 区域契约：`TAL_KV_REGION_T` / `TAL_KV_OPS_T` / `tal_kv_get_ops()` |
-| `port/src/tkl_kv.c`（新） | Linux 区域实现（区域文件）+ `tal_kv_ops_platform` 实例 |
+| `port/src/port_kv.c`（新） | Linux 区域实现（区域文件）+ `tal_kv_ops_platform` 实例 |
 | `tuyaopen-core/iot-core/tal_system/include/tal_kv.h`（新） | 公开 API：`tal_kv_init/read/write/erase` |
 | `tuyaopen-core/iot-core/tal_system/src/tal_kv.c`（新） | 日志式 K-V 引擎 + AES + ops 分发 |
 | `examples/iot_demo/tal_kv_selftest.c`（新） | 自测程序（区域级 + API 级 + 撕裂写/压缩/重启用例） |
@@ -120,7 +120,7 @@ static int      s_inited;
 
 **Files:**
 - Create: `tuyaopen-core/iot-core/tal_system/include/tal_kv_ops.h`
-- Create: `port/src/tkl_kv.c`
+- Create: `port/src/port_kv.c`
 - Create: `examples/iot_demo/tal_kv_selftest.c`
 - Modify: `examples/iot_demo/CMakeLists.txt`（在 `add_executable(iot_demo ...)` 之后加自测目标）
 
@@ -176,11 +176,11 @@ TAL_KV_OPS_T *tal_kv_get_ops(void);
 
 - [ ] **Step 2: 写 port 区域实现**
 
-`port/src/tkl_kv.c`：
+`port/src/port_kv.c`：
 
 ```c
 /**
- * @file tkl_kv.c
+ * @file port_kv.c
  * @brief tal_kv 平台 ops 卡：Linux 用"区域文件"模拟一块可读写擦的数据区
  *
  * 区域 = ./tuyadb/data.bin（默认 256KB）；擦除 = 该范围写 0xFF（模拟 flash 擦除态）。
@@ -212,7 +212,7 @@ static OPERATE_RET __region_prefill(FILE *fp)
     return OPRT_OK;
 }
 
-static OPERATE_RET tkl_kv_init(TAL_KV_REGION_T *region)
+static OPERATE_RET __kv_init(TAL_KV_REGION_T *region)
 {
     if (NULL == region) {
         return OPRT_INVALID_PARM;
@@ -238,7 +238,7 @@ static OPERATE_RET tkl_kv_init(TAL_KV_REGION_T *region)
     return OPRT_OK;
 }
 
-static OPERATE_RET tkl_kv_read(uint32_t offset, uint8_t *buf, uint32_t len)
+static OPERATE_RET __kv_read(uint32_t offset, uint8_t *buf, uint32_t len)
 {
     if (NULL == s_region_fp || NULL == buf || offset + len > DATA_REGION_SIZE) {
         return OPRT_INVALID_PARM;
@@ -249,7 +249,7 @@ static OPERATE_RET tkl_kv_read(uint32_t offset, uint8_t *buf, uint32_t len)
     return (len == fread(buf, 1, len, s_region_fp)) ? OPRT_OK : OPRT_COM_ERROR;
 }
 
-static OPERATE_RET tkl_kv_write(uint32_t offset, const uint8_t *buf, uint32_t len)
+static OPERATE_RET __kv_write(uint32_t offset, const uint8_t *buf, uint32_t len)
 {
     if (NULL == s_region_fp || NULL == buf || offset + len > DATA_REGION_SIZE) {
         return OPRT_INVALID_PARM;
@@ -264,7 +264,7 @@ static OPERATE_RET tkl_kv_write(uint32_t offset, const uint8_t *buf, uint32_t le
     return OPRT_OK;
 }
 
-static OPERATE_RET tkl_kv_erase(uint32_t offset, uint32_t len)
+static OPERATE_RET __kv_erase(uint32_t offset, uint32_t len)
 {
     static uint8_t s_ff[256];
     memset(s_ff, 0xFF, sizeof(s_ff));
@@ -291,10 +291,10 @@ static OPERATE_RET tkl_kv_erase(uint32_t offset, uint32_t len)
  * 移植新平台时提供同名卡与 4 个区域原语即可。
  * --------------------------------------------------------------------------- */
 TAL_KV_OPS_T tal_kv_ops_platform = {
-    .init = tkl_kv_init,
-    .read = tkl_kv_read,
-    .write = tkl_kv_write,
-    .erase = tkl_kv_erase,
+    .init = __kv_init,
+    .read = __kv_read,
+    .write = __kv_write,
+    .erase = __kv_erase,
 };
 ```
 
@@ -387,8 +387,8 @@ git -C tuyaopen-core add iot-core/tal_system/include/tal_kv_ops.h
 git -C tuyaopen-core commit -m "tal_system: 新增 tal_kv 区域 ops 契约头
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
-git add port/src/tkl_kv.c examples/iot_demo/tal_kv_selftest.c examples/iot_demo/CMakeLists.txt
-git commit -m "port: 新增 tkl_kv 区域实现（区域文件）+ tal_kv 自测骨架
+git add port/src/port_kv.c examples/iot_demo/tal_kv_selftest.c examples/iot_demo/CMakeLists.txt
+git commit -m "port: 新增 port_kv 区域实现（区域文件）+ tal_kv 自测骨架
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -473,7 +473,7 @@ OPERATE_RET tal_kv_erase(const char *name);
 
 #include <string.h>
 
-/* 平台 ops 卡（port 的 tkl_kv.c 定义），core 侧经 getter 分发 */
+/* 平台 ops 卡（port 的 port_kv.c 定义），core 侧经 getter 分发 */
 extern TAL_KV_OPS_T tal_kv_ops_platform;
 
 TAL_KV_OPS_T *tal_kv_get_ops(void)

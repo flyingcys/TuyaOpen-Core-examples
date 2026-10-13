@@ -10,7 +10,7 @@
   "请问，现在是几点钟？"，2.592s），启动后自动上传一次（模拟"用户说了一句话"）；
 - **下行**：`[AGENT][ASR]` 打印识别结果、`[AGENT][NLG]` 打印 agent 回复文字；
   云端下发的语音包直接丢弃（AI 音频模块整体关闭，不解码不播放）；
-- **音频适配**：麦克风采集收进 port 层的最小契约（`tkl_ai_demo_*`），Linux 实现为
+- **音频适配**：麦克风采集收进 port 层的最小契约（`port_ai_demo_*`），Linux 实现为
   **PCM 文件回放**——不做真实音频硬件适配，只为链路能跑通；真实设备接入时替换该实现。
 
 ## 构建与运行
@@ -161,7 +161,7 @@ cd build && ./agent_http_selftest
 均不移植）。
 
 **硬件相关**：全部不做——按键、唤醒词、VAD、摄像头、打印机、电池、低功耗，以及
-**真实麦克风**（音频源经 port 契约 `tkl_ai_demo_*` 从 PCM 文件回放；真实设备接入时
+**真实麦克风**（音频源经 port 契约 `port_ai_demo_*` 从 PCM 文件回放；真实设备接入时
 替换 port 实现，契约头已注明适配点）。**注意"只换 port 实现"补不了四件事**——半双工
 门控（播放中不上传）、AEC、本地 VAD 定界、push 采集语义，这些决策都在未搬运的
 `ai_main`/`ai_mode`/`ai_audio` 里；接入的正确顺序与逐条证据见
@@ -183,7 +183,7 @@ cd build && ./agent_http_selftest
 | 项 | 上游（T5AI/ESP32 板） | 本 demo（Linux） |
 |---|---|---|
 | 交互 | 按键/唤醒词/VAD 触发，回合制对话 | 启动后自动上传一段预置语音（一次性） |
-| 上行音频 | TDL/TKL 麦克风采集（`ai_audio_input`）；编码默认 PCM（`ai_audio/Kconfig` choice 默认 PCM，28 个板 config 仅 8 个显式开 Opus） | port 契约 `tkl_ai_demo_*` 文件回放 + **PCM 直传**（不开编码器） |
+| 上行音频 | TDL/TKL 麦克风采集（`ai_audio_input`）；编码默认 PCM（`ai_audio/Kconfig` choice 默认 PCM，28 个板 config 仅 8 个显式开 Opus） | port 契约 `port_ai_demo_*` 文件回放 + **PCM 直传**（不开编码器） |
 | 下行音频 | 解码播放（`ai_audio_player` + `svc_ai_player`，MP3/Opus） | **整体关闭**（`ENABLE_COMP_AI_AUDIO=n`），语音包丢弃 |
 | UI | LVGL 聊天界面 + 表情 + 通知音 | 无（仅日志/stdio 打印文字） |
 | 对话主控 | `ai_main`（`ai_chat_main`）+ `ai_mode`（四种对话模式） | 不移植；demo 自己组织主流程（直接复用 `ai_agent` 应用封装） |
@@ -255,6 +255,6 @@ cd build && ./agent_http_selftest
 
 ```sh
 +- port
-    +- include/media/tkl_ai_demo.h  # 音频输入最小契约（open/read/close）
-    +- src/tkl_ai_demo.c            # Linux 实现：PCM 文件回放（真实设备替换点）
+    +- include/media/port_ai_demo.h  # 音频输入最小契约（open/read/close）
+    +- src/port_ai_demo.c            # Linux 实现：PCM 文件回放（真实设备替换点）
 ```

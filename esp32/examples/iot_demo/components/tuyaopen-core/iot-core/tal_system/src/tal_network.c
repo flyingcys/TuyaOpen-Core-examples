@@ -35,7 +35,7 @@
 #include "tal_network.h"
 #include "dev_evt.h"
 
-/* 标准平台卡（port 的 tkl_network.c 定义，ops 指向其 tkl_net_* 实现） */
+/* 标准平台卡（port 的 port_network.c 定义，ops 指向其 port_net_* 实现） */
 extern TAL_NETWORK_CARD_T tal_network_card_platform;
 
 /* 活动链路源地址：由链路管理方（应用/port 层）在链路事件时推送 */

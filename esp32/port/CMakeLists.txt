@@ -42,14 +42,14 @@ if(_port_srcs)
     target_sources(tuyaopen-port PRIVATE ${_port_srcs})
     target_include_directories(tuyaopen-port PUBLIC ${_port_incs})
 
-    # tkl_runtime/tkl_network/tkl_kv/tkl_netif：include core 的
+    # port_runtime/port_network/port_kv/port_netif：include core 的
     # tal_api_ops.h / tal_network.h / tal_kv_ops.h /
     # tal_netif_ops.h / tal_log.h（tal_system 公共头），符号在最终链接组解析
     if(TARGET tal_system)
         target_link_libraries(tuyaopen-port PRIVATE tal_system)
     endif()
 
-    # tkl_bluetooth_ops.c（TAL BLE 空卡）include core 的 tal_bluetooth_ops.h
+    # port_bluetooth_ops.c（TAL BLE 空卡）include core 的 tal_bluetooth_ops.h
     # （tal_system/include），该头内嵌 include "tal_bluetooth_def.h"（core 的
     # ble/ 下）；esp32 侧 core 为 vendored 快照（相对路径不固定），经
     # tal_system 目标的源目录定位 core 的 ble/ 补进包含路径
@@ -65,7 +65,7 @@ if(_port_srcs)
         target_compile_definitions(tuyaopen-port PRIVATE ENABLE_TUYA_P2P=1)
     endif()
 
-    # 局域网/对端服务 ops（tkl_network 的 listen/accept/send_to/recvfrom/
+    # 局域网/对端服务 ops（port_network 的 listen/accept/send_to/recvfrom/
     # recv_nd_size）的挂载条件：listen/accept 局域网协议、p2p、AI monitor 任一
     # 开启即需要；send_to/recvfrom 局域网协议或 p2p；recv_nd_size 仅局域网协议。
     # 三者全关时 port 无需适配这 5 个。同 P2P，逐个注入（core 的宏不传播到 port 目标）。

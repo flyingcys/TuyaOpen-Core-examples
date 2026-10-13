@@ -51,7 +51,7 @@
 static uint8_t s_frame_buf[SELFTEST_FRAME_CAP];
 
 /**
- * @brief 日志输出回调（与 iot_demo/vcam 自测同款：经 port 的 tkl_log_output 落 stdout）
+ * @brief 日志输出回调（与 iot_demo/vcam 自测同款：经 port 的 port_log_output 落 stdout）
  */
 static void __selftest_log_output_cb(const char *str)
 {

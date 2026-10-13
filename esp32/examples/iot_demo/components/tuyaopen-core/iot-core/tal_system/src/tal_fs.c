@@ -1,6 +1,6 @@
 /**
  * @file tal_fs.c
- * @brief tal_fs 平台分发：18 接口透传到 port 的 tkl_fs / tkl_dir（tal_fs_ops_platform）
+ * @brief tal_fs 平台分发：18 接口透传到 port 的 port_fs / port_dir（tal_fs_ops_platform）
  *
  * iot-core 不持有任何文件系统逻辑——介质、路径映射、句柄形态都在 port
  * （见 tal_fs_ops.h 契约）。本文件只做 ops 卡分发，与 tal_kv.c 的
@@ -8,7 +8,7 @@
  *
  * 唯一调用方是 p2p-core/local_store：不用 p2p 时无人引用本文件任何符号，
  * 静态库不拉入 tal_fs.o，port 侧的 tal_fs_ops_platform 也就不需要存在
- * （tkl_fs.c 整文件由 ENABLE_TUYA_P2P 门控）。
+ * （port_fs.c 整文件由 ENABLE_TUYA_P2P 门控）。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  */
@@ -16,7 +16,7 @@
 #include "tal_fs_ops.h"
 #include "tal_log.h"
 
-/* 平台 ops 卡（port 的 tkl_fs.c 定义），core 侧经 getter 分发 */
+/* 平台 ops 卡（port 的 port_fs.c 定义），core 侧经 getter 分发 */
 extern TAL_FS_OPS_T tal_fs_ops_platform;
 
 TAL_FS_OPS_T *tal_fs_get_ops(void)

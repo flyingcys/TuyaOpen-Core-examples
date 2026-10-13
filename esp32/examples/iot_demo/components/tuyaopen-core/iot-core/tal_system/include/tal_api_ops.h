@@ -4,8 +4,8 @@
  *        mutex / thread / queue 七组（OTA 为回调注入，见 tal_ota.h）
  *
  * 定义 TAL_API_OPS_T：port 据此组装平台 ops 实例 tal_api_ops_platform
- * （成员绑定到 port 的 tkl_output、tkl_memory、tkl_system、tkl_semaphore、
- * tkl_mutex、tkl_thread、tkl_queue 实现），core 侧经 extern 引用完成各族
+ * （成员绑定到 port 的 port_output、port_memory、port_system、port_semaphore、
+ * port_mutex、port_thread、port_queue 实现），core 侧经 extern 引用完成各族
  * tal_* 分发，对上 tal_* API 签名不变。移植新平台时在各自 port 中提供同名
  * 实例即可。
  *
@@ -30,8 +30,8 @@ extern "C" {
 #endif
 
 /**
- * @brief tal_api 平台 ops：成员与 port 的 tkl_output、tkl_memory、
- *        tkl_system、tkl_semaphore、tkl_mutex、tkl_thread、tkl_queue
+ * @brief tal_api 平台 ops：成员与 port 的 port_output、port_memory、
+ *        port_system、port_semaphore、port_mutex、port_thread、port_queue
  *        实现一一对应，只收编实际被 tal 层分发的接口（OTA 为回调注入，见 tal_ota.h）
  *
  * @note 句柄/回调类型沿用 tal 层定义（SEM_HANDLE/MUTEX_HANDLE/

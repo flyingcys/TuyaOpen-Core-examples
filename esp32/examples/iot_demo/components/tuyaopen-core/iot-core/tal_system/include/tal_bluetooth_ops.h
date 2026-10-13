@@ -4,12 +4,12 @@
  *
  * 背景：core 的 iot-core/ble/tal_bluetooth.c 原直调 tkl_ble_*（上游 TKL
  * 平台接口）并在内部用 TKL_BLE_* 类型搭值对象。2026-10 解耦为经卡分发：
- * 本文件定义 TAL_BLUETOOTH_OPS_T（27 成员，与 port 的 tkl_bluetooth.h 接口
+ * 本文件定义 TAL_BLUETOOTH_OPS_T（27 成员，与 port 的 port_bluetooth.h 接口
  * 面一一对应）与**镜像类型集**（TAL_BLE_* 前缀，逐字段镜像 port 的
- * tkl_bluetooth_def.h）。
+ * port_bluetooth_def.h）。
  *
  * 约定：
- * - port 侧适配层（linux: port/src/tkl_bt/tal_bluetooth_ops.c）以
+ * - port 侧适配层（linux: port/src/port_bt/port_bluetooth_ops.c）以
  *   "布局逐字节一致 + 指针强转"接线，并用编译期 sizeof/offsetof 断言兜底
  *   （镜像一旦漂移即编译失败）；
  * - **注册次序约束**：gap/gatt 回调注册必须先于 stack_init 与
@@ -383,8 +383,8 @@ typedef void(*TAL_BLE_GATT_EVT_FUNC_CB)(TAL_BLE_GATT_PARAMS_EVT_T *p_event);
 
 
 /* ---------------------------------------------------------------------------
- * BLE 平台 ops 卡：port 组装（linux 为 tkl_bt 适配层；无 BLE 能力的平台
- * 全成员 NULL）。成员签名用上面的镜像类型；与 port 的 tkl_bluetooth.h
+ * BLE 平台 ops 卡：port 组装（linux 为 port_bt 适配层；无 BLE 能力的平台
+ * 全成员 NULL）。成员签名用上面的镜像类型；与 port 的 port_bluetooth.h
  * 27 个接口一一对应。
  * --------------------------------------------------------------------------- */
 typedef struct {

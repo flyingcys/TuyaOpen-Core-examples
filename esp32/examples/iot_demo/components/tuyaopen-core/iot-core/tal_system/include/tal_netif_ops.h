@@ -2,7 +2,7 @@
  * @file tal_netif_ops.h
  * @brief tal_netif 的平台 ops 契约：本机网络接口两接口（get_ip / set_link_cb）
  *
- * port 在 tkl_netif.c 组装 tal_netif_ops_platform（成员绑定本平台 tkl_netif_*），
+ * port 在 port_netif.c 组装 tal_netif_ops_platform（成员绑定本平台 port_netif_*），
  * core 的 tal_netif.c 经 getter 分发，对上 tal_netif_* 签名不变。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 /**
- * @brief tal_netif 平台 ops：成员与 port 的 tkl_netif 实现一一对应
+ * @brief tal_netif 平台 ops：成员与 port 的 port_netif 实现一一对应
  */
 typedef struct {
     /* 取本机网络接口 IP；见 tal_netif.h 的 tal_netif_get_ip */

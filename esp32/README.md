@@ -8,12 +8,12 @@ DP 收发。与 linux 侧同构（`linux/examples/iot_demo`），demo 代码从 
 
 ```
 esp32/
-  port/                       # ESP32 TKL 适配（ops 卡模式，与 linux port 同构）
-    include/                  #   TKL 域头（从 linux port 同步）
-    src/tkl_runtime.c         #   主卡：log/memory/system/sem/mutex/thread/queue（FreeRTOS）
-    src/tkl_kv.c              #   KV 卡（NVS + 超长 key 映射）
-    src/tkl_netif.c           #   netif 卡（esp_netif 事件驱动）
-    src/tkl_network.c         #   network 卡（lwIP socket）
+  port/                       # ESP32 port 适配（ops 卡模式，与 linux port 同构）
+    include/                  #   平台接口域头（从 linux port 同步）
+    src/port_runtime.c         #   主卡：log/memory/system/sem/mutex/thread/queue（FreeRTOS）
+    src/port_kv.c              #   KV 卡（NVS + 超长 key 映射）
+    src/port_netif.c           #   netif 卡（esp_netif 事件驱动）
+    src/port_network.c         #   network 卡（lwIP socket）
   examples/iot_demo/
     components/
       tuyaopen-core/          #   core 快照（从 linux/tuyaopen-core 同步，vendored）
@@ -26,9 +26,9 @@ esp32/
 core 已无 wifi 抽象（`tal_wifi`/`tkl_wifi` 随 netmgr 整体移除）：
 
 - **demo 层**（`main/wifi_sta.c`）用 esp-idf 原生 API 连 AP（SSID/密码走 menuconfig）；
-- **port 层**（`tkl_netif.c`）监听 `IP_EVENT_STA_GOT_IP` / `WIFI_EVENT_STA_DISCONNECTED`，
+- **port 层**（`port_netif.c`）监听 `IP_EVENT_STA_GOT_IP` / `WIFI_EVENT_STA_DISCONNECTED`，
   把链路状态报给 core（`tal_netif_set_link_cb`，链路 up = 已获 IP）；
-- 之后流程与 linux 完全一致：socket 走 `tkl_network`（lwIP），云连接/激活/DP 复用
+- 之后流程与 linux 完全一致：socket 走 `port_network`（lwIP），云连接/激活/DP 复用
   同一套 core。
 
 ## core 同步
@@ -65,7 +65,7 @@ rsync -a --exclude='.git' --exclude='.gitmodules' --exclude='third_party/mbedtls
 - `iot-core/tuya_transport/CMakeLists.txt`：mbedtls 配置头注入加
   `NOT CONFIG_ENABLE_PLATFORM_MBEDTLS` 条件——平台 mbedtls 模式下原会误把 core 的
   config 目录注入宿主 mbedtls 目标、污染宿主组件。
-- **core 与 tkl 层解耦（2026-10）**：core 在编代码不再直调任何 `tkl_*`——`tuya_queue`/
+- **core 与 port 层解耦（2026-10）**：core 在编代码不再直调任何平台函数——`tuya_queue`/
   `tuya_ringbuf` 上移 `iot-core/tal_system/` 并改走 `tal_mutex_*`/`tal_malloc`/`tal_free`；
   crypto 透传层合并（`mbedtls_hash.c`/`mbedtls_symmetry.c` 即 `tal_*` 实现本体，句柄类型改
   `TAL_HASH_HANDLE`/`TAL_SYMMETRY_HANDLE`）；p2p 清 psram、`thread_get_id` 走主卡新成员
@@ -100,9 +100,9 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 | 能力 | linux port | esp32 port |
 |---|---|---|
-| 主卡（OS 原语） | tkl_runtime.c（pthread/POSIX） | tkl_runtime.c（FreeRTOS/esp-idf） |
-| KV | tkl_kv.c（littlefs+AES，文件模拟 flash） | tkl_kv.c（NVS + 超长 key 映射） |
-| netif | tkl_netif.c（ioctl 3s 轮询） | tkl_netif.c（esp_netif 事件） |
-| network | tkl_network.c（POSIX socket） | tkl_network.c（lwIP socket） |
+| 主卡（OS 原语） | port_runtime.c（pthread/POSIX） | port_runtime.c（FreeRTOS/esp-idf） |
+| KV | port_kv.c（littlefs+AES，文件模拟 flash） | port_kv.c（NVS + 超长 key 映射） |
+| netif | port_netif.c（ioctl 3s 轮询） | port_netif.c（esp_netif 事件） |
+| network | port_network.c（POSIX socket） | port_network.c（lwIP socket） |
 | OTA | 无（未注册） | main/ota_app.c（esp_ota，双槽分区；回调注入） |
-| fs/bt/media | tkl_fs/tkl_bt/tkl_ai_demo | 暂未适配（p2p/agent demo 需要时补） |
+| fs/bt/media | port_fs/port_bt/port_ai_demo | 暂未适配（p2p/agent demo 需要时补） |
