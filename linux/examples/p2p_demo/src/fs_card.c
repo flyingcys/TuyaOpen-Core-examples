@@ -592,7 +592,7 @@ TUYA_WEAK_ATTRIBUTE int fs_card_fileno(TUYA_FILE file)
 /* ---------------------------------------------------------------------------
  * 文件系统平台 ops 卡：由本文件组装，core 的 tal_fs.c 经 extern 引用并完成
  * tal_fs_* / tal_dir_* 分发。文件系统为可选能力（p2p-core/local_store 与
- * agent_demo/components/audio_player 的文件源），与主卡（port_runtime.c）解耦；整文件随
+ * agent_demo/src/audio_player 的文件源），与主卡（port_runtime.c）解耦；整文件随
  * ENABLE_TUYA_P2P || ENABLE_AI_PLAYER 门控，两者全关的平台无需适配。
  * --------------------------------------------------------------------------- */
 TAL_FS_OPS_T tal_fs_ops_platform = {
