@@ -27,8 +27,9 @@
  *
  * 2026-10 port 去 tkl 化：tkl_runtime.c → port_runtime.c，tkl_* 函数去
  * tkl_ 前缀（static 者改 __ 前缀，对外符号改 port_ 前缀）；原
- * tkl_semaphore/mutex/thread/queue/memory/system 六个头文件删除——它们只有
- * 本文件一个 includer，其类型/宏/声明随之内联到下面"原 tkl_*.h 内联区"。
+ * tkl_semaphore/mutex/thread/queue/system 五个头文件删除（只有本文件一个
+ * includer），其有效声明（类型/超时宏）随之内联到下面"原 tkl_*.h 内联区"；
+ * tkl_memory.h 另改名保留为 port_memory.h（port_kv.c 也要 include 它）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  *
@@ -110,8 +111,7 @@ static void __log_output(const char *str, ...)
 
 /* ---------------------------------------------------------------------------
  * memory 实现：只保留 malloc/free 对外符号（core 的 tuya_transport mbedtls_*
- * 与 utilities 直调，声明见上方"原 tkl_memory.h 内联区"）。直接映射 esp-idf
- * 系统堆
+ * 与 utilities 直调，声明见 port_memory.h）。直接映射 esp-idf 系统堆
  * （malloc/free 线程安全；esp32 的堆为多区域分块管理，不适用 linux 的
  * tuya_mem_heap 大块自管堆方案）。
  * --------------------------------------------------------------------------- */
@@ -340,8 +340,9 @@ static OPERATE_RET __semaphore_release(const TKL_SEM_HANDLE handle)
 }
 
 /* ---------------------------------------------------------------------------
- * mutex 实现：保持对外符号（core 的 tuya_queue.c 经宏直调，声明见上方"原
- * tkl_mutex.h 内联区"）。递归互斥（对齐 linux 版的 PTHREAD_MUTEX_RECURSIVE）。
+ * mutex 实现：保持对外符号（core 的 tuya_queue.c 经宏直调，原 tkl_mutex.h 的
+ * 声明已删除、函数体随实现保留在本文件）。递归互斥（对齐 linux 版的
+ * PTHREAD_MUTEX_RECURSIVE）。
  * --------------------------------------------------------------------------- */
 /**
 * @brief Create mutex
