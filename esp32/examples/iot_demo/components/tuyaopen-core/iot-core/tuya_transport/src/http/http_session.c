@@ -22,6 +22,9 @@
 #define DEFAULT_TIMEOUT_MS   (5000)
 #define MAX_URL_LEN          (1024)
 #define HEADER_BUFFER_LENGTH (2048)
+/* response header 接收缓冲（HTTPClient_Send 要求调用方提供；取 coreHTTP 惯例
+ * 的 response header 尺寸量级——上游 libhttp 用 HTTP_MAX_RESPONSE_HEADERS_SIZE_BYTES+1） */
+#define HTTP_SESSION_RESP_HEADER_BUF_SIZE (4096)
 
 
 #define HTTP
@@ -477,6 +480,21 @@ OPERATE_RET http_send_request(http_session_t session, const http_req_t *req, uin
 
     PR_DEBUG("Sending HTTP %s request to %s", method_str, ctx->host);
 
+    /* coreHTTP 的 HTTPClient_Send 要求调用方提供 response header 缓冲（pBuffer
+     * 为 NULL 时直接判参失败 HTTPInvalidParameter；上游 libhttp 走
+     * HTTPClient_Request/RecvInit 模式由 coreHTTP 内部分配，本仓 Send 模式须自行
+     * 分配——2026-10-12 音乐 URL 播放（datasink_url 流式拉流）接通时补上，
+     * 连带激活本文件下方"预收 body 片段"分支，见释放处注释） */
+    if (ctx->response.pBuffer == NULL) {
+        ctx->response.bufferLen = HTTP_SESSION_RESP_HEADER_BUF_SIZE;
+        ctx->response.pBuffer = HTTP_MALLOC(ctx->response.bufferLen);
+        if (!ctx->response.pBuffer) {
+            PR_ERR("Alloc response header buffer failed");
+            HTTP_FREE(requestHeaders.pBuffer);
+            return OPRT_MALLOC_FAILED;
+        }
+    }
+
     // Send request
     // Streaming mode: only receive headers (body read on-demand via http_read_content)
     ctx->response.respOptionFlags = HTTP_RESPONSE_DO_NOT_PARSE_BODY_FLAG;
@@ -594,21 +612,26 @@ OPERATE_RET http_close_session(http_session_t *session)
     ctx->total_body_length = 0;
     ctx->bytes_read = 0;
 
-    // Free response body (allocated by coreHTTP)
-    // Note: pBody is always separately allocated in HTTPClient_Request
-    // (for chunked: HTTP_MALLOC(HTTP_MAX_RESPONSE_CHUNK_SIZE_BYTES + 1)
-    //  for non-chunked: HTTP_MALLOC(contentLength + 1)
-    //  for disabled body: HTTP_MALLOC(bodyLen + 1))
+    /* Free response body。注意（2026-10-12 修复）：pBody 的归属取决于调用模式——
+     * HTTPClient_Request 模式下 coreHTTP 独立分配（上游 libhttp 走此模式）；
+     * 本仓走 HTTPClient_Send + DO_NOT_PARSE_BODY，此时 pBody 指向 pBuffer 内部
+     * （coreHTTP 契约：pBody = parsingContext.pBufferCur），随 pBuffer 一并释放，
+     * 单独 free 即非法释放堆内指针（音乐 URL 播放接通时实测 SIGSEGV 于此）。
+     * 故仅在 pBody 不落在 pBuffer 范围内时才独立释放。 */
     if (ctx->response.pBody) {
-        HTTP_FREE((void *)ctx->response.pBody);
+        const uint8_t *p_body  = (const uint8_t *)ctx->response.pBody;
+        bool           in_buf  = (ctx->response.pBuffer != NULL) &&
+                                 (p_body >= ctx->response.pBuffer) &&
+                                 (p_body < ctx->response.pBuffer + ctx->response.bufferLen);
+        if (!in_buf) {
+            HTTP_FREE((void *)ctx->response.pBody);
+        }
         ctx->response.pBody = NULL;
     }
     
-    /* 释放 response 缓冲。注意（已核实）：本模块当前**不分配**
-     * ctx->response.pBuffer——coreHTTP 要求调用方提供（core_http_client.c 对
-     * pResponse->pBuffer == NULL 直接判参失败），故此处恒为 NULL；连带
-     * http_send_request 的"预收 body 片段"分支（本文件下方 :672 起）当前不可达，
-     * 流式 HTTP 尚未接入。将来补上分配后该分支即生效。 */
+    /* 释放 response 缓冲。注意：pBuffer 由 http_send_request 在 Send 前分配
+     * （HTTP_SESSION_RESP_HEADER_BUF_SIZE；coreHTTP 的 Send 要求调用方提供，
+     * 2026-10-12 音乐 URL 播放接通时补上——此前恒 NULL 导致流式 HTTP 未接入） */
     if (ctx->response.pBuffer) {
         HTTP_FREE(ctx->response.pBuffer);
         ctx->response.pBuffer = NULL;
@@ -672,7 +695,7 @@ int http_read_content(http_session_t session, void *buf, unsigned int max_len)
 
     /* 先吐 Send(DO_NOT_PARSE_BODY) 时预收进 pBuffer 的 body 片段（若有），
      * 之后直接经 transport recv 裸读 body（头已收完，body 为纯数据流）。
-     * 注：该分支当前不可达——response.pBuffer 尚未分配，见本文件释放处注释 */
+     * （pBuffer 自 2026-10-12 起由 http_send_request 分配，本分支已可达） */
     if (ctx->response.bodyLen > 0 && ctx->response.pBody != NULL) {
         size_t copy_len = (ctx->response.bodyLen < (size_t)max_len) ? ctx->response.bodyLen : (size_t)max_len;
         memcpy(buf, ctx->response.pBody, copy_len);

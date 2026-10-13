@@ -4,7 +4,7 @@
  *
  * 原分散于 tkl_semaphore.c / tkl_mutex.c / tkl_thread.c / tkl_queue.c /
  * tkl_memory.c / tkl_output.c / tkl_system.c 的实现收编到本文件，只保留实际
- * 被分发/调用的接口（OTA 独立成 port/src/tkl_ota.c + 独立卡）：
+ * 被分发/调用的接口（OTA 为 core 回调注入，不经 port）：
  * - log output / semaphore / thread / queue 实现为 ops 卡私有（static），
  *   声明已从头文件移除，适配面收敛到一张卡；
  * - memory 只保留 malloc/free 对外符号（主卡 .malloc/.free 的实现本体 + port
@@ -1139,7 +1139,7 @@ static void tkl_queue_free(const TKL_QUEUE_HANDLE handle)
  * 标准平台 ops 卡：由本文件收编的 TKL 实现组装，core 的 tal_api.c /
  * tal_thread.c / tal_system.c 经 extern 引用并完成 memory/system/semaphore/
  * mutex/thread/queue 六组 tal_* 分发（log output 由应用回调经卡直取；
- * OTA 见 port/src/tkl_ota.c 的独立卡）。
+ * OTA 为回调注入，不经本卡）。
  * 移植新平台时在各自 port 中提供同名卡即可。
  * --------------------------------------------------------------------------- */
 TAL_API_OPS_T tal_api_ops_platform = {

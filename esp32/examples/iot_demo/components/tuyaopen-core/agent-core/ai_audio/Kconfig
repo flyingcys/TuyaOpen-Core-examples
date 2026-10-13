@@ -1,0 +1,39 @@
+menuconfig ENABLE_COMP_AI_AUDIO
+    bool "enable ai audio playback orchestration"
+    default n
+    select ENABLE_AI_PLAYER
+    help
+        Enable the AI audio orchestration module (agent-core/ai_audio):
+        TTS stream playback and music playlist playback on top of the
+        audio_player component (svc_ai_player interface). Selects
+        ENABLE_AI_PLAYER automatically.
+
+        Note: the upstream input side (ai_audio_input, tdl_audio based) is
+        NOT ported in this tree; the uplink audio path goes through the
+        port contract instead (see examples/agent_demo). The upstream
+        input-codec choice (PCM/OPUS/SPEEX) is therefore not restored
+        either -- it only served the removed input side.
+
+if (ENABLE_COMP_AI_AUDIO)
+    choice
+        prompt "select player alert source"
+        default AI_PLAYER_ALERT_SOURCE_LOCAL
+
+    config AI_PLAYER_ALERT_SOURCE_LOCAL
+        bool "use local alert source"
+        help
+            Phase 1 does not port the local alert assets (media_src.h
+            LOCAL_ALERT_SRC_*, ~2MB); alerts are skipped with a warning.
+            Phase 2 restores the assets.
+
+    config AI_PLAYER_ALERT_SOURCE_CUSTOM
+        bool "use custom alert source"
+        help
+            The application registers its own alert callback via
+            ai_audio_player_reg_alert_cb().
+
+    # 上游第三个选项 AI_PLAYER_ALERT_SOURCE_CLOUD 依赖已删除的
+    # ai_agent_cloud_alert（③层公开面无消费者删除），故不恢复。
+
+    endchoice
+endif

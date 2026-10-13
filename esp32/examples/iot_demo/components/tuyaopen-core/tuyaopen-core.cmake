@@ -44,9 +44,13 @@ foreach(_tuyaopen_opt IN ITEMS
     ENABLE_TUYA_CODEC_SPEEX
     ENABLE_AI_COMPONENTS
     ENABLE_AI_MONITOR
-    ENABLE_COMP_AI_AUDIO
     ENABLE_COMP_AI_MCP
-    ENABLE_COMP_AI_VIDEO
+    ENABLE_COMP_AI_AUDIO
+    ENABLE_AI_PLAYER
+    AI_PLAYER_ALERT_SOURCE_LOCAL
+    AI_PLAYER_ALERT_SOURCE_CUSTOM
+    ENABLE_AI_PLAYER_DECODER_OPUS
+    ENABLE_AI_PLAYER_DECODER_OGGOPUS
     ENABLE_QRCODE
     LITTLE_END
 )
@@ -81,9 +85,9 @@ foreach(_tuyaopen_mod IN ITEMS
     ai_agent
     ai_main
     ai_skills
-    ai_audio
     ai_mcp
-    ai_video
+    audio_player
+    ai_audio
     base_ice
     lib_rtp
     pjproject

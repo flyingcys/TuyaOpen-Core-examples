@@ -4,6 +4,7 @@ set(_demo_srcs
     "tuya_main.c"
     "wifi_sta.c"
     "reset_netcfg.c"
+    "ota_app.c"
 )
 if(CONFIG_ENABLE_QRCODE)
     list(APPEND _demo_srcs

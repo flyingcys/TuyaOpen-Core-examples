@@ -8,7 +8,7 @@
 
 **Goal:** 用新的 `tal_kv`（4 个 K-V 接口 + 日志式布局引擎 + AES）替换 `tal_kv`，port 侧只需提供"一块数据区 + 4 个区域原语"（Linux 约 40 行）。
 
-**Architecture:** 三层——上层（iot-core/应用）调**旧 `tal_kv_*` API（逐字兼容，零改动）**；TAL 层（core）实现 K-V 引擎（**线性追加日志 + 墓碑 + seq + CRC**，不压缩）与 AES 加解密；port 层只实现区域原语（`init/read/write/erase @offset`），Linux 用一个区域文件模拟。契约头在 core（`tal_kv_ops.h`），实例在 port（`tal_kv_ops_platform`），与 `tal_api_ops.h`/`tal_ota_ops.h` 同构。
+**Architecture:** 三层——上层（iot-core/应用）调**旧 `tal_kv_*` API（逐字兼容，零改动）**；TAL 层（core）实现 K-V 引擎（**线性追加日志 + 墓碑 + seq + CRC**，不压缩）与 AES 加解密；port 层只实现区域原语（`init/read/write/erase @offset`），Linux 用一个区域文件模拟。契约头在 core（`tal_kv_ops.h`），实例在 port（`tal_kv_ops_platform`），与 `tal_api_ops.h` 同构。
 
 > ⚠️ **本计划为历史记录**：Task 4-8 已被"公开 API 落地为旧 tal_kv 全套"取代（见设计文档第二/八节），实际实施以 git 提交与设计文档为准。
 

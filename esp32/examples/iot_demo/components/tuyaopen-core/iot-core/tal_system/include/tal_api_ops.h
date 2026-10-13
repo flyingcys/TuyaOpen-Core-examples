@@ -1,7 +1,7 @@
 /**
  * @file tal_api_ops.h
  * @brief tal_api 的平台 ops 契约：log output / memory / system / semaphore /
- *        mutex / thread / queue 七组（OTA 见 tal_ota_ops.h，独立卡）
+ *        mutex / thread / queue 七组（OTA 为回调注入，见 tal_ota.h）
  *
  * 定义 TAL_API_OPS_T：port 据此组装平台 ops 实例 tal_api_ops_platform
  * （成员绑定到 port 的 tkl_output、tkl_memory、tkl_system、tkl_semaphore、
@@ -32,7 +32,7 @@ extern "C" {
 /**
  * @brief tal_api 平台 ops：成员与 port 的 tkl_output、tkl_memory、
  *        tkl_system、tkl_semaphore、tkl_mutex、tkl_thread、tkl_queue
- *        实现一一对应，只收编实际被 tal 层分发的接口（OTA 见 tal_ota_ops.h）
+ *        实现一一对应，只收编实际被 tal 层分发的接口（OTA 为回调注入，见 tal_ota.h）
  *
  * @note 句柄/回调类型沿用 tal 层定义（SEM_HANDLE/MUTEX_HANDLE/
  *       THREAD_HANDLE/QUEUE_HANDLE 与 TKL 层的 TKL_SEM_HANDLE 等同为

@@ -23,5 +23,10 @@ menu "configure ai components"
     endchoice
 
     rsource "ai_mcp/Kconfig"
+    # 音频播放器（ENABLE_AI_PLAYER 及其解码器/资源参数子开关）；
+    # 随本组件层门控：ENABLE_AI_PLAYER 仅在 ENABLE_AI_COMPONENTS 打开时可见
+    rsource "audio_player/Kconfig"
+    # 音频播放编排（ENABLE_COMP_AI_AUDIO + 提示音来源选择；select ENABLE_AI_PLAYER）
+    rsource "ai_audio/Kconfig"
 endmenu
 endif

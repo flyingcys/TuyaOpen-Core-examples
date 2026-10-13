@@ -17,6 +17,11 @@
  * linking against tkl_* symbols directly. The tal_* API signatures are
  * unchanged for callers.
  *
+ * OTA is an optional capability dispatched through callbacks injected at
+ * runtime (tal_ota_register_cbs, see tal_ota.h): platforms/applications
+ * without OTA simply don't register, and tal_ota_* then returns
+ * OPRT_NOT_SUPPORTED (no stub card is required).
+ *
  * @note This file is part of the Tuya IoT Development Platform and is intended
  * for use in Tuya-based applications. It is subject to the platform's license
  * and copyright terms.
@@ -31,7 +36,6 @@
 #include "tal_ota.h"
 #include "tal_log.h"
 #include "tal_api_ops.h"
-#include "tal_ota_ops.h"
 
 /* 标准平台 ops 卡（port 的 tkl_runtime.c 定义，成员指向其 tkl_semaphore、
  * tkl_mutex、tkl_queue 等实现） */
@@ -42,12 +46,13 @@ TAL_API_OPS_T *tal_api_get_ops(void)
     return &tal_api_ops_platform;
 }
 
-/* OTA 平台 ops 卡（port 的 tkl_ota.c 定义；OTA 为平台可选能力，独立于主卡） */
-extern TAL_OTA_OPS_T tal_ota_ops_platform;
+/* OTA 回调注入（平台可选能力，见 tal_ota.h）：未注册时 tal_ota_* 返回
+ * OPRT_NOT_SUPPORTED；注册方保证回调结构生命周期覆盖整个 OTA 流程 */
+static const TAL_OTA_CBS_T *s_ota_cbs = NULL;
 
-TAL_OTA_OPS_T *tal_ota_get_ops(void)
+void tal_ota_register_cbs(const TAL_OTA_CBS_T *cbs)
 {
-    return &tal_ota_ops_platform;
+    s_ota_cbs = cbs;
 }
 
 /***********************************************************
@@ -92,8 +97,8 @@ TAL_OTA_OPS_T *tal_ota_get_ops(void)
 #define TAL_API_EXEC_OP(op_name, default_ret, ...) TAL_EXEC_OP(tal_api_get_ops(), op_name, default_ret, __VA_ARGS__)
 #define TAL_API_EXEC_OP_VOID(op_name, ...)         TAL_EXEC_OP_VOID(tal_api_get_ops(), op_name, __VA_ARGS__)
 
-/* OTA 卡（tal_ota_ops_platform，平台可选）便捷宏 */
-#define TAL_OTA_EXEC_OP(op_name, default_ret, ...) TAL_EXEC_OP(tal_ota_get_ops(), op_name, default_ret, __VA_ARGS__)
+/* OTA 回调分发（s_ota_cbs，平台可选，未注册返回 OPRT_NOT_SUPPORTED）便捷宏 */
+#define TAL_OTA_EXEC_OP(op_name, default_ret, ...) TAL_EXEC_OP(s_ota_cbs, op_name, default_ret, __VA_ARGS__)
 
 //! sem
 OPERATE_RET tal_semaphore_create_init(SEM_HANDLE *handle, uint32_t sem_cnt, uint32_t sem_max)
@@ -141,17 +146,17 @@ OPERATE_RET tal_mutex_release(const MUTEX_HANDLE handle)
 
 OPERATE_RET tal_ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path)
 {
-    TAL_OTA_EXEC_OP(start_notify, OPRT_COM_ERROR, image_size, type, path);
+    TAL_OTA_EXEC_OP(start_notify, OPRT_NOT_SUPPORTED, image_size, type, path);
 }
 
 OPERATE_RET tal_ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_len)
 {
-    TAL_OTA_EXEC_OP(data_process, OPRT_COM_ERROR, pack, remain_len);
+    TAL_OTA_EXEC_OP(data_process, OPRT_NOT_SUPPORTED, pack, remain_len);
 }
 
 OPERATE_RET tal_ota_end_notify(BOOL_T reset)
 {
-    TAL_OTA_EXEC_OP(end_notify, OPRT_COM_ERROR, reset);
+    TAL_OTA_EXEC_OP(end_notify, OPRT_NOT_SUPPORTED, reset);
 }
 
 //! queue

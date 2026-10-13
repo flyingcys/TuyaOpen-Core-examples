@@ -19,9 +19,18 @@ option(CONFIG_ENABLE_TUYA_CODEC_OPUS "Build OPUS encoder" OFF)
 option(CONFIG_ENABLE_TUYA_CODEC_OPUS_IPC "Build OPUS IPC encoder" OFF)
 option(CONFIG_ENABLE_TUYA_CODEC_SPEEX "Build SPEEX encoder" OFF)
 option(CONFIG_ENABLE_AI_COMPONENTS "Build the agent-core component layer on top of tuya_ai_service" OFF)
-option(CONFIG_ENABLE_COMP_AI_AUDIO "Build the ai_audio component (needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
 option(CONFIG_ENABLE_COMP_AI_MCP "Build the ai_mcp component (needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
-option(CONFIG_ENABLE_COMP_AI_VIDEO "Build the ai_video component (needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
+# AI 音频播放编排（agent-core/ai_audio）：依赖 audio_player 的 svc_ai_player 接口，
+# 需 CONFIG_ENABLE_AI_COMPONENTS + CONFIG_ENABLE_AI_PLAYER（Kconfig 侧 select）
+option(CONFIG_ENABLE_COMP_AI_AUDIO "Build the ai_audio component (needs CONFIG_ENABLE_AI_COMPONENTS + CONFIG_ENABLE_AI_PLAYER)" OFF)
+# 提示音来源（Kconfig choice，默认 LOCAL）：本地素材一期未移植（alert 降级为告警跳过）
+option(CONFIG_AI_PLAYER_ALERT_SOURCE_LOCAL "ai_audio alert source: local assets (not ported in phase 1)" OFF)
+option(CONFIG_AI_PLAYER_ALERT_SOURCE_CUSTOM "ai_audio alert source: custom callback registered by the app" OFF)
+# AI 播放器（agent-core/audio_player）：依赖 base_event.h，随 ENABLE_AI_COMPONENTS 门控；
+# OPUS/OGGOPUS 解码器开关为二期范围，打开会在 CMake 阶段报错（见其 CMakeLists.txt）
+option(CONFIG_ENABLE_AI_PLAYER "Build the audio_player module (needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
+option(CONFIG_ENABLE_AI_PLAYER_DECODER_OPUS "Enable the OPUS decoder of audio_player (phase 2, not ported)" OFF)
+option(CONFIG_ENABLE_AI_PLAYER_DECODER_OGGOPUS "Enable the OGGOPUS decoder of audio_player (phase 2, not ported)" OFF)
 option(CONFIG_ENABLE_QRCODE "Build the qrcode module (QR output for app binding)" OFF)
 option(CONFIG_LITTLE_END "PJ little-endian (ON) vs big-endian (OFF)" ON)
 
@@ -45,9 +54,13 @@ foreach(_tuyaopen_opt
     CONFIG_ENABLE_TUYA_CODEC_OPUS_IPC
     CONFIG_ENABLE_TUYA_CODEC_SPEEX
     CONFIG_ENABLE_AI_COMPONENTS
-    CONFIG_ENABLE_COMP_AI_AUDIO
     CONFIG_ENABLE_COMP_AI_MCP
-    CONFIG_ENABLE_COMP_AI_VIDEO
+    CONFIG_ENABLE_COMP_AI_AUDIO
+    CONFIG_AI_PLAYER_ALERT_SOURCE_LOCAL
+    CONFIG_AI_PLAYER_ALERT_SOURCE_CUSTOM
+    CONFIG_ENABLE_AI_PLAYER
+    CONFIG_ENABLE_AI_PLAYER_DECODER_OPUS
+    CONFIG_ENABLE_AI_PLAYER_DECODER_OGGOPUS
     CONFIG_ENABLE_QRCODE
     CONFIG_LITTLE_END
 )

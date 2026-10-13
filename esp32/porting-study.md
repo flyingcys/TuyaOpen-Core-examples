@@ -57,12 +57,11 @@ port（平台适配层，每个平台一份：linux/port、esp32/port）
   契约集中在头文件（`tal_*_ops.h`）、单点组装、按需挂载（门控能力可让成员为
   NULL，core 侧有 "not available" 兜底）、类型检查（成员签名与实现必须一致）。
 
-### 2.2 九张卡与分发路径
+### 2.2 八张卡与分发路径
 
 | 卡（core 定义） | 契约头 | port 组装点 | 谁在用 |
 |---|---|---|---|
 | `TAL_API_OPS_T`（主卡：log/memory/system/semaphore/mutex/thread/queue，24 成员；thread 组含 p2p 用的 `thread_get_id`） | `iot-core/tal_system/include/tal_api_ops.h` | `port/src/tkl_runtime.c` 文件尾 | `tal_api.c` / `tal_thread.c` / `tal_system.c` |
-| `TAL_OTA_OPS_T`（3 成员） | `tal_ota_ops.h` | `port/src/tkl_ota.c` | `tal_api.c`（**强引用**：不实现也必须给空桩） |
 | `TAL_KV_OPS_T`（4 成员） | `tal_kv_ops.h` | `port/src/tkl_kv.c` | `tal_kv.c`（4 接口纯透传） |
 | `TAL_NETIF_OPS_T`（2 成员：get_ip/set_link_cb） | `tal_netif_ops.h` | `port/src/tkl_netif.c` | `tal_netif.c` |
 | `TAL_NETWORK_CARD_T`（35 成员，含 ops 结构 + 卡信息） | `tal_network.h` 尾部 | `port/src/tkl_network.c` 文件尾 | `tal_network.c`（`tal_network_get_active_ops()`） |
@@ -70,6 +69,11 @@ port（平台适配层，每个平台一份：linux/port、esp32/port）
 | `TAL_AUDIO_ENC_OPS_T`（1 成员：request，AI 音频 IPC 编码） | `tal_audio_enc_ops.h` | `port/src/tkl_ai_codec.c`（空卡） | AI 服务 svc_ai_codec 的 opus/speex IPC 编码器 |
 | `TAL_VAD_OPS_T`（4 成员：init/start/stop/get_status） | `tal_vad_ops.h` | `port/src/tkl_ai_vad.c`（空卡） | agent-core/ai_audio 的 ai_audio_input |
 | `TAL_BLUETOOTH_OPS_T`（27 成员，签名用 core 自持镜像类型 `TAL_BLE_*`） | `tal_bluetooth_ops.h` | linux：`port/src/tkl_bt/tal_bluetooth_ops.c`（镜像布局强转 + 编译期断言）；esp32：`port/src/tkl_bluetooth_ops.c`（空卡） | iot-core/ble 的 tal_bluetooth.c |
+
+> OTA 已不是卡（2026-10 从本表移除）：core 改为回调注入制
+> （`tal_ota_register_cbs`，契约见 `tal_ota.h` 的 `TAL_OTA_CBS_T`），实现由
+> 应用层提供并注册（iot_demo：`main/ota_app.c`）；不注册即不支持
+> （`tal_ota_*` 返回 `OPRT_NOT_SUPPORTED`），port 无需任何桩。
 
 分发路径示例（一次 `tal_system_sleep()` 的完整旅程）：
 
@@ -492,7 +496,7 @@ ROM 里的 mbedtls 在跑，它把 mutex/calloc/free 及 SHA 的 update 等回�
 - 两个方向的引用都真实存在 → **静态库循环依赖**。解耦不消环：core 引卡实例、
   port 引 tal API 是卡机制的固有双向依赖。**实测（2026-10 解耦后）**：
   - esp32：去掉链接组后链接失败，报的正是**卡实例未定义**
-    （`tal_api_ops_platform`/`tal_ota_ops_platform`/…）→ 组必需；
+    （`tal_api_ops_platform` 等卡实例；OTA 已非卡）→ 组必需；
   - linux：链接行的库列表本身就含重复（实测：`libtuyaopen-port.a` 在组内/组外
     各出现一次——app 的 CMakeLists 显式列了两处；`libtal_system.a` 出现 3 次），
     去掉显式组后仍链接成功 → 显式组在 linux 侧是冗余保险。
@@ -564,7 +568,7 @@ target_link_libraries(${COMPONENT_LIB} INTERFACE
 | KV | littlefs + AES（文件模拟 flash） | **NVS** + key 映射 | NVS key 上限 15 字符，core 实际用 26 字符（`uuidxxx.devid`）→ 超长 key 折叠为 `h`+FNV-1a 56bit hex；NVS 自身线程安全，免互斥 |
 | netif | ioctl 遍历接口 + 3s 轮询线程 | **esp_netif 事件**（GOT_IP/DISCONNECTED） | 事件驱动免轮询；**链路 up = 已获 IP**（对齐"连上 WiFi 即当有线"） |
 | network | POSIX socket | lwIP socket | errno 映射表同表（→ core 的 `UNW_*` 私有错误码空间）；`set_block` 用 fcntl（ioctlsocket 在 esp-idf 默认配置无声明） |
-| OTA | 写文件 `./tuyadb/ota` | `esp_ota` 双槽轮换 | 需要分区表有 `otadata`+`ota_0/ota_1` |
+| OTA | 无（未注册） | `main/ota_app.c`（esp_ota 双槽轮换，回调注入） | 需要分区表有 `otadata`+`ota_0/ota_1` |
 
 ### 7.1 网络模型："WiFi 连上即当有线"
 

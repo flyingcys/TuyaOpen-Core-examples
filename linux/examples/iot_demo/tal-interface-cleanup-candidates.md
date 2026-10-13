@@ -17,6 +17,8 @@
 ## 一、卡成员（TAL_API_OPS_T）使用度总表（30 个）
 
 > **注（2026-10-07 更新）**：OTA 四成员已拆为**独立卡**（契约 `tuyaopen-core/iot-core/tal_system/include/tal_ota_ops.h`，port 实现 `port/src/tkl_ota.c` 的 `tal_ota_ops_platform`），主卡 `TAL_API_OPS_T` 现为 **26 个成员**；下表 ota 行保留（仍适用于独立卡），B1 的删除清单路径已同步更新。
+>
+> **注（2026-10-13 更新）**：OTA 独立卡已进一步改为**回调注入制**——`tal_ota_ops.h` 已删除，回调契约（`TAL_OTA_CBS_T`）与注册接口（`tal_ota_register_cbs`）并入 `tal_ota.h`；两侧 port 不再提供实现（`tkl_ota.c` 已删），由应用层按需注册（esp32 iot_demo：`main/ota_app.c`；linux iot_demo：`src/ota_app.c` 写文件版）；未注册时 `tal_ota_*` 返回 `OPRT_NOT_SUPPORTED`，无需空实现桩。本文件其余提到 `tal_ota_ops.h` / `port/src/tkl_ota.c` 的段落均为历史记录。（注意：不注册即无 OTA；云端若下发升级，core 流程会报"升级完成"而设备未应用——需确保云端不下发。）
 
 | # | 卡成员 | 最终调用点数 | 调用方摘要 | 结论 |
 |---|---|---|---|---|

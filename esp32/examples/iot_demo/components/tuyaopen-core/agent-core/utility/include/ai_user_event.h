@@ -28,10 +28,18 @@ extern "C" {
 ***********************typedef define***********************
 ***********************************************************/
 /* 事件编号保持与历史一致：零引用的事件值已删除，保留项全部显式赋值钉住编号，
- * 后续新增事件请追加新值，不要复用已删除项的编号。 */
+ * 后续新增事件请追加新值，不要复用已删除项的编号（新语义不得占用旧编号）。
+ * 例外：随 TTS/音乐播放链路恢复的原语义事件（TTS_*、PLAY_CTL_*、PLAY_END）
+ * 按原编号复用是正确做法——恢复的是原事件而非新事件，应用层订阅不受影响。 */
 typedef enum {
     AI_USER_EVT_ASR_EMPTY = 0,
     AI_USER_EVT_ASR_OK = 1,
+    AI_USER_EVT_TTS_PRE = 4,
+    AI_USER_EVT_TTS_START = 5,
+    AI_USER_EVT_TTS_DATA = 6,
+    AI_USER_EVT_TTS_STOP = 7,
+    AI_USER_EVT_TTS_ABORT = 8,
+    AI_USER_EVT_TTS_ERROR = 9, /* app 订阅面（core 内暂无消费者） */
     AI_USER_EVT_TEXT_STREAM_START = 11,
     AI_USER_EVT_TEXT_STREAM_DATA = 12,
     AI_USER_EVT_TEXT_STREAM_STOP = 13,
@@ -39,6 +47,17 @@ typedef enum {
     AI_USER_EVT_SKILL = 17,
     AI_USER_EVT_CHAT_BREAK = 18,
     AI_USER_EVT_SERVER_VAD = 19,
+    AI_USER_EVT_PLAY_CTL_PLAY = 21,
+    AI_USER_EVT_PLAY_CTL_RESUME = 22,
+    AI_USER_EVT_PLAY_CTL_PAUSE = 23,
+    AI_USER_EVT_PLAY_CTL_REPLAY = 24,
+    AI_USER_EVT_PLAY_CTL_PREV = 25,
+    AI_USER_EVT_PLAY_CTL_NEXT = 26,
+    AI_USER_EVT_PLAY_CTL_SEQUENTIAL = 27,
+    AI_USER_EVT_PLAY_CTL_SEQUENTIAL_LOOP = 28,
+    AI_USER_EVT_PLAY_CTL_SINGLE_LOOP = 29,
+    AI_USER_EVT_PLAY_CTL_END = 30,
+    AI_USER_EVT_PLAY_END = 31,
     AI_USER_EVT_PLAY_ALERT = 32,
     AI_USER_EVT_EXIT = 38,
 } AI_USER_EVT_TYPE_E;

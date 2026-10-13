@@ -1,0 +1,55 @@
+# AI 播放器开关（audio_player 模块，上游 src/audio_player 移植）。
+# 默认值与 agent-core/audio_player/CMakeLists.txt 的 CONFIG_ENABLE_AI_PLAYER
+# 及 svc_ai_player.h 的 #ifndef 兜底保持一致。
+menuconfig ENABLE_AI_PLAYER
+    bool "ENABLE_AI_PLAYER: Enable AI player"
+    default n
+    help
+        Enable the AI audio player (MP3/WAV playback from memory, file or URL).
+        Platform audio output is injected by the port through
+        tuya_ai_player_set_consumer(); without it the built-in no-op consumer
+        is used (decoding still runs, PCM is discarded).
+
+    if (ENABLE_AI_PLAYER)
+        config AI_PLAYER_STACK_SIZE
+            int "AI_PLAYER_STACK_SIZE: player thread stack size"
+            default 5120
+        config AI_PLAYER_FRAMEBUF_SIZE
+            int "AI_PLAYER_FRAMEBUF_SIZE: player frame buf size"
+            default 4096
+        config AI_PLAYER_DECODEBUF_SIZE
+            int "AI_PLAYER_DECODEBUF_SIZE: player decode buf size"
+            default 8192
+        config AI_PLAYER_RINGBUF_SIZE
+            int "AI_PLAYER_RINGBUF_SIZE: player ring buf size"
+            default 16384
+        config AI_PLAYER_HTTP_YIELD_MS
+            int "AI_PLAYER_HTTP_YIELD_MS: player http yield ms"
+            range 1 100
+            default 10
+        config AI_PLAYER_HTTP_TIMEOUT_S
+            int "AI_PLAYER_HTTP_TIMEOUT_S: player http timeout seconds"
+            range 60 300
+            default 180
+        menu "Decoder Options"
+            # 二期范围：本仓暂无 libopus / libogg 与解码实现，两个开关打开会
+            # 在 CMake 阶段 FATAL_ERROR（见 CMakeLists.txt），保留条件结构备用。
+            config ENABLE_AI_PLAYER_DECODER_OPUS
+                bool "ENABLE_AI_PLAYER_DECODER_OPUS: Enable OPUS decoder without any container (phase 2, not ported)"
+                default n
+            config AI_PLAYER_DECODER_OPUS_FRAME_SIZE
+                depends on ENABLE_AI_PLAYER_DECODER_OPUS
+                int "AI_PLAYER_DECODER_OPUS_FRAME_SIZE: OPUS decoder frame size in ms"
+                default 40
+                range 10 60
+            config AI_PLAYER_DECODER_OPUS_KBPS
+                depends on ENABLE_AI_PLAYER_DECODER_OPUS
+                int "AI_PLAYER_DECODER_OPUS_KBPS: OPUS decoder kbps, 16kbps or 24kbps is recommended"
+                default 16
+                range 16 128
+            config ENABLE_AI_PLAYER_DECODER_OGGOPUS
+                depends on ENABLE_AI_PLAYER_DECODER_OPUS
+                bool "ENABLE_AI_PLAYER_DECODER_OGGOPUS: Enable OGGOPUS decoder (phase 2, not ported)"
+                default n
+        endmenu # Decoder Options
+    endif # ENABLE_AI_PLAYER

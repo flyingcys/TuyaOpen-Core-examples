@@ -109,7 +109,7 @@ typedef struct {
 TAL_KV_OPS_T *tal_kv_get_ops(void);
 ```
 
-与 `tal_api_ops.h` / `tal_ota_ops.h` 同构：契约头在 core、实例在 port（`tal_kv_ops_platform`）、强引用（省略 `tkl_kv.c` 会链接失败）。
+与 `tal_api_ops.h` 同构：契约头在 core、实例在 port（`tal_kv_ops_platform`）、强引用（省略 `tkl_kv.c` 会链接失败）。
 
 **移植契约与实现量**：新平台只需实现 4 个区域原语——
 

@@ -2,8 +2,8 @@
  * @file ai_skill.c
  * @brief AI skill module implementation
  *
- * This module implements AI skill processing (emotion skills and dispatch of
- * unhandled skill payloads to the application).
+ * This module implements AI skill processing, including emotion skills,
+ * music/story skills, and play control skills.
  *
  * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.
  *
@@ -14,6 +14,11 @@
 
 #include "ai_user_event.h"
 #include "skill_emotion.h"
+
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+#include "ai_audio_player.h"
+#include "skill_music_story.h"
+#endif
 
 #include "ai_skill.h"
 
@@ -67,6 +72,23 @@ static OPERATE_RET __ai_skills_process(cJSON *root, bool eof)
     if (strcmp(code, "emo") == 0 || strcmp(code, "llm_emo") == 0) {
         ai_skill_emo_process(root);
     }
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+    else if (strcmp(code, "music") == 0 || strcmp(code, "story") == 0) {
+        AI_AUDIO_MUSIC_T *music = NULL;
+        if (ai_skill_parse_music(root, &music) == OPRT_OK) {
+            ai_skill_parse_music_dump(music);
+            ai_audio_play_music(music);
+            ai_skill_parse_music_free(music);
+        }
+    } else if (strcmp(code, "PlayControl") == 0) {
+        AI_AUDIO_MUSIC_T *music = NULL;
+        if ((rt = ai_skill_parse_playcontrol(root, &music)) == 0) {
+            ai_skill_parse_music_dump(music);
+            ai_skill_playcontrol_music(music);
+            ai_skill_parse_music_free(music);
+        }
+    }
+#endif
     else {
         PR_NOTICE("skill %s not handled", code);
 

@@ -30,6 +30,7 @@
 
 #include "reset_netcfg.h"
 #include "wifi_sta.h"
+#include "ota_app.h"
 
 #if defined(ENABLE_QRCODE) && (ENABLE_QRCODE == 1)
 #include "qrencode_print.h"
@@ -277,6 +278,11 @@ void user_main(void)
     });
     tal_sw_timer_init();
     tal_workq_init();
+
+    /* OTA 回调注入（应用层 esp_ota 实现，见 ota_app.c）：须在云连接建立前
+     * 注册，云端升级指令经 core 的 tuya_ota 流程分发到注册的回调；
+     * 不注册的应用即不支持 OTA（tal_ota_* 返回 OPRT_NOT_SUPPORTED） */
+    ota_app_register();
 
     reset_netconfig_start();
 

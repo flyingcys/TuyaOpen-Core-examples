@@ -2,8 +2,8 @@
  * @file ai_skill.h
  * @brief AI skill module header
  *
- * This header file defines the functions for processing AI skill data
- * (emotion and cloud-event skills).
+ * This header file defines the functions for processing AI skills such as
+ * emotion, music, story, and play control skills.
  *
  * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.
  *
@@ -17,6 +17,10 @@
 #include "tuya_ai_output.h"
 #include "skill_emotion.h"
 #include "skill_cloudevent.h"
+
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+#include "skill_music_story.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {

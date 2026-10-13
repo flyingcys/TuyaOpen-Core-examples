@@ -42,8 +42,8 @@ if(_port_srcs)
     target_sources(tuyaopen-port PRIVATE ${_port_srcs})
     target_include_directories(tuyaopen-port PUBLIC ${_port_incs})
 
-    # tkl_runtime/tkl_network/tkl_kv/tkl_ota/tkl_netif：include core 的
-    # tal_api_ops.h / tal_network.h / tal_kv_ops.h / tal_ota_ops.h /
+    # tkl_runtime/tkl_network/tkl_kv/tkl_netif：include core 的
+    # tal_api_ops.h / tal_network.h / tal_kv_ops.h /
     # tal_netif_ops.h / tal_log.h（tal_system 公共头），符号在最终链接组解析
     if(TARGET tal_system)
         target_link_libraries(tuyaopen-port PRIVATE tal_system)

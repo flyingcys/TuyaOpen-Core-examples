@@ -63,7 +63,7 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 ## 已知限制
 
-- OTA 通道已接（`tkl_ota.c` + 双槽分区表），但未做真机升级验证；
+- OTA 通道已接（`main/ota_app.c` 回调注入 + 双槽分区表），但未做真机升级验证；
 - `tkl_fs`/`tkl_bt`/`tkl_ai_demo`（media）未适配——p2p/agent demo 需要时补；
 - 仅 station 模式连接预置 AP；无配网（BLE/AP netcfg 随 netmgr 移除，如需要
   走 BLE 配网需另行接入）。

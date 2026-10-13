@@ -11,7 +11,6 @@ esp32/
   port/                       # ESP32 TKL 适配（ops 卡模式，与 linux port 同构）
     include/                  #   TKL 域头（从 linux port 同步）
     src/tkl_runtime.c         #   主卡：log/memory/system/sem/mutex/thread/queue（FreeRTOS）
-    src/tkl_ota.c             #   OTA 卡（esp_ota）
     src/tkl_kv.c              #   KV 卡（NVS + 超长 key 映射）
     src/tkl_netif.c           #   netif 卡（esp_netif 事件驱动）
     src/tkl_network.c         #   network 卡（lwIP socket）
@@ -105,5 +104,5 @@ idf.py -p /dev/ttyUSB0 flash monitor
 | KV | tkl_kv.c（littlefs+AES，文件模拟 flash） | tkl_kv.c（NVS + 超长 key 映射） |
 | netif | tkl_netif.c（ioctl 3s 轮询） | tkl_netif.c（esp_netif 事件） |
 | network | tkl_network.c（POSIX socket） | tkl_network.c（lwIP socket） |
-| OTA | tkl_ota.c（写文件） | tkl_ota.c（esp_ota，双槽分区） |
+| OTA | 无（未注册） | main/ota_app.c（esp_ota，双槽分区；回调注入） |
 | fs/bt/media | tkl_fs/tkl_bt/tkl_ai_demo | 暂未适配（p2p/agent demo 需要时补） |

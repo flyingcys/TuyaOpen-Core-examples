@@ -4,7 +4,7 @@
  *
  * This module implements the AI agent functionality, which handles communication
  * with the Tuya AI cloud service. It processes ASR, NLG, and skill data,
- * and handles various AI events.
+ * manages audio playback, and handles various AI events.
  *
  * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.
  *
@@ -23,6 +23,10 @@
 #include "ai_user_event.h"
 #include "ai_skill.h"
 
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+#include "ai_audio_player.h"
+#endif
+
 #if defined(ENABLE_AI_MONITOR) && (ENABLE_AI_MONITOR == 1)
 #include "tuya_ai_monitor.h"
 #endif
@@ -38,7 +42,9 @@
 /***********************************************************
 ***********************variable define**********************
 ***********************************************************/
-
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+static uint16_t __s_audio_codec_type = AI_AUDIO_CODEC_MP3;
+#endif
 /***********************************************************
 ***********************function define**********************
 ***********************************************************/
@@ -55,17 +61,28 @@ OPERATE_RET __ai_agent_event_cb(AI_EVENT_TYPE type, AI_PACKET_PT ptype, AI_EVENT
 
     if (AI_EVENT_START == type) {
         if (AI_PT_AUDIO == ptype) {
-            /* 下行 TTS 播放随 ai_audio 组件移除，暂不处理 */
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+            /* Start audio player */
+            ai_audio_play_tts_stream(AI_AUDIO_PLAYER_TTS_START, __s_audio_codec_type, NULL, 0);
+#endif
         }
     } else if ((AI_EVENT_CHAT_BREAK == type)) {
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+        /* Cloud break, stop audio player */
+        ai_audio_player_stop(AI_AUDIO_PLAYER_FG);
+#endif
         ai_user_event_notify(AI_USER_EVT_CHAT_BREAK, NULL);
     }else if(AI_EVENT_SERVER_VAD == type) {
 		ai_user_event_notify(AI_USER_EVT_SERVER_VAD, NULL);
 	} else if ((AI_EVENT_END == type)) {
         if (AI_PT_AUDIO == ptype) {
-            /* 下行 TTS 播放随 ai_audio 组件移除，暂不处理 */
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+            /* Stop audio player */
+            ai_audio_play_tts_stream(AI_AUDIO_PLAYER_TTS_STOP, __s_audio_codec_type, NULL, 0);
+#endif
         }
     } else if (AI_EVENT_CHAT_EXIT == type) {
+        /* Stop audio player */
         ai_user_event_notify(AI_USER_EVT_EXIT, NULL);
     }
 
@@ -82,6 +99,19 @@ OPERATE_RET __ai_agent_media_attr_cb(AI_BIZ_ATTR_INFO_T *attr)
     /* PR_DEBUG(" ai agent -> recv media attr type: %d", attr->type); */
     if (attr->type == AI_PT_AUDIO && attr->flag & AI_HAS_ATTR) {
         PR_DEBUG("ai agent -> audio codec type: %d", attr->value.audio.base.codec_type);
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+        switch (attr->value.audio.base.codec_type) {
+            case AUDIO_CODEC_MP3:
+                __s_audio_codec_type = AI_AUDIO_CODEC_MP3;
+                break;
+            case AUDIO_CODEC_OPUS:
+                __s_audio_codec_type = AI_AUDIO_CODEC_OPUS;
+                break;
+            default:
+                __s_audio_codec_type = AI_AUDIO_CODEC_MAX;
+                break;
+        }
+#endif
     }
     return OPRT_OK;
 }
@@ -99,7 +129,9 @@ OPERATE_RET __ai_agent_media_data_cb(AI_PACKET_PT type, char *data, uint32_t len
     /* TAL_PR_NOTICE(" ai agent -> recv media type %d", type); */
     OPERATE_RET rt = OPRT_OK;
     if(type == AI_PT_AUDIO) {
-        /* 下行 TTS 播放随 ai_audio 组件移除，暂不处理 */
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+        rt = ai_audio_play_tts_stream(AI_AUDIO_PLAYER_TTS_DATA, __s_audio_codec_type, (char*)data, len);
+#endif
     } else if(type == AI_PT_VIDEO) {
         /* TBD */
     } else if(type == AI_PT_IMAGE) {
@@ -167,8 +199,9 @@ OPERATE_RET ai_agent_init(void)
     memset(&ai_agent_cfg, 0x00, sizeof(AI_AGENT_CFG_T));
 
     /* 上行由应用直接喂 PCM（port 的 tkl_ai_demo 文件回放），属性按素材口径固定
-     * 16kHz/16bit/单声道，不启用编码器（PCM 直传）。原 ai_audio 组件的 TDL 取音频
-     * 信息 + codec 选择已随组件移除。
+     * 16kHz/16bit/单声道，不启用编码器（PCM 直传）。上游 ENABLE_COMP_AI_AUDIO
+     * 分支经 TDL 取音频信息 + codec 选择，依赖 tdl_audio——core 去 tdl 后不恢复
+     * （输入侧二期随 ai_audio_input 一起处理）。
      * 注：不设置时 attr.audio 全 0，云端拿不到格式、不会返回 ASR/NLG。 */
     ai_agent_cfg.attr.audio.codec_type  = AUDIO_CODEC_PCM;
     ai_agent_cfg.attr.audio.sample_rate = 16000;
