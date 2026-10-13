@@ -19,6 +19,11 @@ extern "C" {
  * 需要 OTA 的应用在初始化时调用（云连接建立前）；不调用即不支持 OTA
  * （tal_ota_* 返回 OPRT_NOT_SUPPORTED）。
  *
+ * @note 不注册时云端仍会上报"升级完成"而设备未实际应用——core 的云端
+ *       OTA 流程不检查 tal_ota_* 返回值（详见 tal_ota.h 的
+ *       tal_ota_register_cbs @note）；不打算支持 OTA 的应用需确保云端
+ *       不下发升级任务。
+ *
  * @return none
  */
 void ota_app_register(void);
