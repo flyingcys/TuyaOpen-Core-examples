@@ -110,7 +110,19 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode/CMakeLists.txt")
 endif()
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode ${CMAKE_BINARY_DIR}/qrcode)
 
-# 4) 语音素材：configure 期复制到构建目录，供默认路径 "voice_16k.pcm" 使用
+# 4) 应用侧 AI 组件（自 core agent-core 下沉，见 components/）：utility（事件总线）/
+#    audio_player（播放器核心）/ai_audio（TTS/音乐编排）/ai_agent（应用封装）/
+#    ai_skills（下行文字解析）/ai_mcp（MCP 工具集）。顺序沿用原 core 布局：
+#    audio_player 先于 ai_audio/ai_agent/ai_skills（后三者按其 svc_ai_player 接口
+#    编排播放）。各组件自带开关门控（ENABLE_AI_PLAYER / ENABLE_COMP_AI_AUDIO /
+#    ENABLE_COMP_AI_MCP），关闭时对应 target 不存在，链接前须过滤。
+set(_agent_demo_components utility audio_player ai_audio ai_agent ai_skills ai_mcp)
+foreach(_agent_demo_comp IN LISTS _agent_demo_components)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/components/${_agent_demo_comp}
+        ${CMAKE_BINARY_DIR}/components/${_agent_demo_comp})
+endforeach()
+
+# 5) 语音素材：configure 期复制到构建目录，供默认路径 "voice_16k.pcm" 使用
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/voice_16k.pcm ${CMAKE_BINARY_DIR}/voice_16k.pcm COPYONLY)
 
 file(GLOB _agent_demo_srcs CONFIGURE_DEPENDS
@@ -145,12 +157,21 @@ set(_agent_demo_defs
 )
 target_compile_definitions(agent_demo PRIVATE ${_agent_demo_defs})
 
-# app 链接：一个组同时包 core 库与 port（解析 TAL/云服务与 TKL 的循环引用）；
-# 组外的 tuyaopen-port 提供头路径，tuyaopen-headers 提供开关宏注入与 port 头
-# （app 自己的源码也要看见 ENABLE_* 与 TKL 头）
+# app 链接：一个组同时包 core 库、应用侧组件与 port（解析 TAL/云服务、应用组件
+# 与 TKL 的循环引用）；组外的 tuyaopen-port 提供头路径，tuyaopen-headers 提供
+# 开关宏注入与 port 头（app 自己的源码也要看见 ENABLE_* 与 TKL 头）。
+# 应用侧组件 target 随开关缺失（各 CMakeLists 自门控），先过滤再入组。
+set(_agent_demo_comp_libs)
+foreach(_agent_demo_comp IN LISTS _agent_demo_components)
+    if(TARGET ${_agent_demo_comp})
+        list(APPEND _agent_demo_comp_libs ${_agent_demo_comp})
+    endif()
+endforeach()
+
 set(_agent_demo_link
     -Wl,--start-group
     ${TUYAOPEN_CORE_LIBS}
+    ${_agent_demo_comp_libs}
     $<TARGET_FILE:tuyaopen-port>
 )
 list(APPEND _agent_demo_link -Wl,--end-group tuyaopen-port tuyaopen-headers)
@@ -199,6 +220,9 @@ target_link_libraries(agent_http_selftest PRIVATE ${_agent_demo_link})
 # 若将来某自测真要读素材路径，务必同步注入该宏，否则会踩上面那个静默不一致。
 unset(_agent_demo_link)
 unset(_agent_demo_defs)
+unset(_agent_demo_components)
+unset(_agent_demo_comp_libs)
+unset(_agent_demo_comp)
 
 # qrcode 无循环依赖，组外链接；开关关闭时目标不注册，跳过
 if(TARGET qrcode)

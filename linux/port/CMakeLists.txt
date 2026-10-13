@@ -106,16 +106,18 @@ if(_port_srcs)
     endif()
 
     # AI 播放器消费端（port_ai_player_consumer.c）：把 svc_ai_player 解码后的 PCM
-    # 写进 ALSA（16k/16bit/mono）。core 的契约头 svc_ai_player.h 在
-    # agent-core/audio_player/include，需补进包含路径；libasound 经 pkg-config
-    # 探测（写法同 BT 的 GIO/DBUS）。
+    # 写进 ALSA（16k/16bit/mono）。契约头 svc_ai_player.h 随应用侧组件提供
+    # （audio_player 自 core 下沉后位于 examples/agent_demo/components/），
+    # 需补进包含路径；路径与应用层落点耦合，搬移/改名须同步，否则
+    # port_ai_player_consumer.c 编不过（找不到 svc_ai_player.h）。
+    # libasound 经 pkg-config 探测（写法同 BT 的 GIO/DBUS）。
     # 同一宏还放行 port_fs.c 的门控（见文件头：P2P || AI_PLAYER）——AI 播放器的
     # 文件源（datasink_file.c → tal_fopen）会把 core 的 tal_fs.o 拉进链接，
     # 没有 P2P 也必须提供 tal_fs_ops 卡。
     if(CONFIG_ENABLE_AI_PLAYER)
         target_compile_definitions(tuyaopen-port PRIVATE ENABLE_AI_PLAYER=1)
         target_include_directories(tuyaopen-port PRIVATE
-            "${PORT_ROOT}/../tuyaopen-core/agent-core/audio_player/include")
+            "${PORT_ROOT}/../examples/agent_demo/components/audio_player/include")
         find_package(PkgConfig QUIET)
         if(PkgConfig_FOUND)
             pkg_check_modules(ALSA alsa QUIET)
