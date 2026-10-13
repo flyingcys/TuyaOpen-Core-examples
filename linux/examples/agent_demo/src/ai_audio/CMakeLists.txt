@@ -12,17 +12,17 @@ if(NOT CONFIG_ENABLE_AI_PLAYER)
     message(FATAL_ERROR
         "CONFIG_ENABLE_COMP_AI_AUDIO=ON 但 CONFIG_ENABLE_AI_PLAYER=OFF："
         "ai_audio 依赖 audio_player 的 svc_ai_player 接口，请同时打开 "
-        "ENABLE_AI_PLAYER（见 components/audio_player/Kconfig）。")
+        "ENABLE_AI_PLAYER（见 src/audio_player/Kconfig）。")
 endif()
 
 file(GLOB _ai_audio_srcs CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
 )
 
 add_library(ai_audio STATIC)
 target_sources(ai_audio PRIVATE ${_ai_audio_srcs})
 target_include_directories(ai_audio PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
 )
 # audio_player 按 PUBLIC 链接：svc_ai_player.h 出现在 ai_audio_player.h 的公共
 # 接口里（AI_AUDIO_CODEC_E / AI_PLAYER_* 等类型），消费者（ai_skills/ai_agent）

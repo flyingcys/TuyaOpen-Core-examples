@@ -46,7 +46,7 @@ unset(TUYAOPEN_DOTCONFIG)
 if(NOT DEFINED CONFIG_ENABLE_AI_COMPONENTS)
     set(CONFIG_ENABLE_AI_COMPONENTS ON)
 endif()
-# MCP 工具服务（components/ai_mcp）：demo 在 tuya_main.c 里调 ai_mcp_init() 接线，
+# MCP 工具服务（src/ai_mcp）：demo 在 tuya_main.c 里调 ai_mcp_init() 接线，
 # 云端可通过 MCP 协议列出/调用设备工具（当前工具列表见 ai_mcp_tools.c）
 if(NOT DEFINED CONFIG_ENABLE_COMP_AI_MCP)
     set(CONFIG_ENABLE_COMP_AI_MCP ON)
@@ -105,7 +105,7 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode/CMakeLists.txt")
 endif()
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode ${CMAKE_BINARY_DIR}/qrcode)
 
-# 4) 应用侧 AI 组件（自 core agent-core 下沉，见 components/）：utility（事件总线）/
+# 4) 应用侧 AI 组件（自 core agent-core 下沉，见 src/）：utility（事件总线）/
 #    audio_player（播放器核心）/ai_audio（TTS/音乐编排）/ai_agent（应用封装）/
 #    ai_skills（下行文字解析）/ai_mcp（MCP 工具集）。顺序沿用原 core 布局：
 #    audio_player 先于 ai_audio/ai_agent/ai_skills（后三者按其 svc_ai_player 接口
@@ -117,8 +117,8 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode ${CMAKE_BINARY_D
 set(_agent_demo_components utility audio_player ai_audio ai_agent ai_skills ai_mcp)
 if(CONFIG_ENABLE_AI_COMPONENTS)
     foreach(_agent_demo_comp IN LISTS _agent_demo_components)
-        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/components/${_agent_demo_comp}
-            ${CMAKE_BINARY_DIR}/components/${_agent_demo_comp})
+        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/${_agent_demo_comp}
+            ${CMAKE_BINARY_DIR}/src/${_agent_demo_comp})
     endforeach()
 endif()
 

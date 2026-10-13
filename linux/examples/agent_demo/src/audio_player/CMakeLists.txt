@@ -13,7 +13,7 @@ if(CONFIG_ENABLE_AI_PLAYER_DECODER_OPUS OR CONFIG_ENABLE_AI_PLAYER_DECODER_OGGOP
     message(FATAL_ERROR
         "CONFIG_ENABLE_AI_PLAYER_DECODER_OPUS / OGGOPUS 已开，但 OPUS/OGGOPUS "
         "解码实现属二期范围（未移植）：请关闭这两个开关 "
-        "（见 components/audio_player/Kconfig 的 Decoder Options）。")
+        "（见 src/audio_player/Kconfig 的 Decoder Options）。")
 endif()
 
 # 文件源（datasink_file.c）经 tal_fs 读文件，需要平台提供 tal_fs_ops 卡。
@@ -25,18 +25,18 @@ if(NOT CONFIG_ENABLE_TUYA_P2P)
 endif()
 
 file(GLOB _audio_player_srcs CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/consumer/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/datasink/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/decoder/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/mixer/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/resample/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/consumer/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/datasink/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/decoder/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/mixer/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/resample/*.c"
 )
 
 add_library(audio_player STATIC)
 target_sources(audio_player PRIVATE ${_audio_player_srcs})
 target_include_directories(audio_player PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
 )
 # tuya_ai_service：base_event.h（ty_publish_event 发布播放状态事件）
 # tuya_transport：http_session.h（URL 源）+ tal_api.h 转链的 tal_security.h

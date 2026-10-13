@@ -51,7 +51,7 @@ secrets 会静默覆盖 `-D`）。语音素材在构建时复制到 `build/voice
 |---|---|---|
 | `AGENT_DEMO` | 构建本 example；select `ENABLE_AI_COMPONENTS`、`ENABLE_QRCODE`、`ENABLE_TUYA_CODEC` | y（无 prompt） |
 | `AGENT_DEMO_AUDIO_FILE` | 上行语音素材路径（16k/16bit/mono PCM）；留空用内置素材 | "" |
-| `ENABLE_COMP_AI_MCP`（core 定义，见 `agent-core/svc_ai_mcp/Kconfig`） | MCP 全链开关：core 的 server 核心（`svc_ai_mcp`）+ 应用侧工具集（`components/ai_mcp`，见"MCP 支持"一节）；demo 在 `CMakeLists.txt` 内置默认 ON | ON（内置默认） |
+| `ENABLE_COMP_AI_MCP`（core 定义，见 `agent-core/svc_ai_mcp/Kconfig`） | MCP 全链开关：core 的 server 核心（`svc_ai_mcp`）+ 应用侧工具集（`src/ai_mcp`，见"MCP 支持"一节）；demo 在 `CMakeLists.txt` 内置默认 ON | ON（内置默认） |
 
 menuconfig 用法（`AGENT_DEMO` 无 prompt，不构建该 example 即可，无需关闭）：
 
@@ -90,7 +90,7 @@ SUBSCRIBE_TYPE_ONETIME)`；真正的初始化在 MQTT 连上后的回调里：`a
 → `ai_mcp_server_parse_message`（处理 `initialize` / `tools/list` / `tools/call`）
 → 执行工具 → `tuya_ai_agent_mcp_response` 回包。
 
-**当前工具列表**（`components/ai_mcp/src/ai_mcp_tools.c`）：
+**当前工具列表**（`src/ai_mcp/src/ai_mcp_tools.c`）：
 
 | 工具名 | 能力 | 参数 | 返回 |
 |---|---|---|---|
@@ -196,7 +196,8 @@ cd build && ./agent_http_selftest
 保留：`tuya_ai_service`（AI 协议与传输：MQTT 信令 + TCP/TLS 流 + MCP server 核心）、
 二维码绑定链路（`mqtt_bind`）。应用侧组件（`ai_agent` 应用封装、`ai_skills` 下行文字解析、
 `ai_audio` 播放编排、`audio_player` 播放器、`ai_mcp` 工具集、`utility` 事件总线）
-已自 core 的 `agent-core/` 下沉到本 demo 的 `components/`（`CMakeLists.txt` 经
+已自 core 的 `agent-core/` 下沉到本 demo 的 `src/` 下（与主源同层、模块内平铺，
+形如上游 your_chat_bot 的 `src/battery/`；`CMakeLists.txt` 经
 `add_subdirectory` 纳入，符号名/开关名与 CMake target 名均不变）。
 
 ## 已知限制
@@ -247,10 +248,17 @@ cd build && ./agent_http_selftest
     |   -- agent_audio.c/.h         # 上行：读素材 → 按帧喂 tuya_ai_audio_input
     |   -- agent_downlink.c/.h      # 下行：注册事件回调，打印 ASR/NLG 文字
     |   -- agent_chain_selftest.c   # 链路自测（目标 agent_chain_selftest）
+    |   -- play_local_in.c/.h       # 音频输入契约 + Linux 实现（PCM 文件回放，真实设备替换点）
+    |   -- play_local_out.c/.h      # ALSA 输出端（随 ENABLE_AI_PLAYER 门控编入）
+    |   -- fs_card.c                # 文件系统卡（备用；DATASINK 收窄时不参与链接）
     |   -- tuya_config.h            # PID/UUID/AuthKey（可被 secrets 或 -D 覆盖）
     |   -- tuya_config_secrets.h.example  # 凭据覆盖模板
-    +- components                    # 应用侧 AI 组件（自 core agent-core 下沉）
-    |   -- utility/ audio_player/ ai_audio/ ai_agent/ ai_skills/ ai_mcp/
+    |   -- utility/                 # 事件总线（ai_user_event）
+    |   -- audio_player/            # 播放器核心（svc_ai_player + consumer/datasink/decoder/mixer/resample）
+    |   -- ai_audio/                # TTS/音乐播放编排
+    |   -- ai_agent/                # 应用封装（output cbs 注册、text/file/image 上行）
+    |   -- ai_skills/               # 下行文字解析（ASR/NLG/skill）
+    |   -- ai_mcp/                  # MCP 工具集
     -- CMakeLists.txt
     -- Kconfig                      # AGENT_DEMO* 开关 + 组件开关（audio_player/ai_audio）
     -- agent-demo-design.md         # 技术方案文档

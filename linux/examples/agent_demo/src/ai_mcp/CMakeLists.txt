@@ -3,13 +3,13 @@ if(NOT CONFIG_ENABLE_COMP_AI_MCP)
 endif()
 
 file(GLOB _ai_mcp_srcs CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
 )
 
 add_library(ai_mcp STATIC)
 target_sources(ai_mcp PRIVATE ${_ai_mcp_srcs})
 target_include_directories(ai_mcp PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
 )
 # tuya_cloud_service：tools 里 device_info_get 读 tuya_iot 客户端的真实 devid
 # （tuya_iot_client_get / tuya_iot_devid_get，头文件在 tuya_cloud_service 的 PUBLIC 路径）。
