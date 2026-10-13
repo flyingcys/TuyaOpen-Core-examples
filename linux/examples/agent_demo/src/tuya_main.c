@@ -5,9 +5,9 @@
  * 链路：IoT 激活/连云 →（MQTT 连上后）初始化 AI agent → 等客户端就绪 →
  *       自动上传一段预置语音（触发）→ 下行打印文字（ASR/NLG）。
  *
- * 无 UI；下行语音在 CONFIG_ENABLE_COMP_AI_AUDIO 开启时经 port 注入的 ALSA
- * 消费端播放（port_ai_player_consumer），关闭时媒体包在 core 内丢弃；
- * 上行音频经 port 的 port_ai_demo_* 契约取得（Linux：PCM 文件回放）。
+ * 无 UI；下行语音在 CONFIG_ENABLE_COMP_AI_AUDIO 开启时经应用侧 ALSA
+ * 消费端（port_ai_player_consumer）播放，关闭时媒体包在 core 内丢弃；
+ * 上行音频经应用侧 port_ai_demo_* 契约取得（Linux：PCM 文件回放）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */

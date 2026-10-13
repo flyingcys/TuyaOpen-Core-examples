@@ -3,9 +3,9 @@
  * @brief AI 播放器（agent_demo/components/audio_player）平台消费端：Linux ALSA 输出
  *
  * core 的 svc_ai_player 默认装载空消费端（consumer_default.c，六回调全 OK 不
- * 发声），平台侧实现自己的 AI_PLAYER_CONSUMER_T 并经
+ * 发声），应用侧实现自己的 AI_PLAYER_CONSUMER_T 并经
  * tuya_ai_player_set_consumer() 注入——本文件暴露的 install 函数就是该注入的
- * port 侧入口：把本 port 的 ALSA 实现（tkl_ai_player_consumer.c）挂到播放器。
+ * 入口：把本应用的 ALSA 实现（port_ai_player_consumer.c）挂到播放器。
  *
  * 调用时机（与 svc_ai_player.c 的时序强绑定）：
  *   1. tuya_ai_player_service_init(cfg)    —— 装载默认空消费端并 open
@@ -20,8 +20,8 @@
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
 
-#ifndef __TKL_AI_PLAYER_CONSUMER_H__
-#define __TKL_AI_PLAYER_CONSUMER_H__
+#ifndef __PORT_AI_PLAYER_CONSUMER_H__
+#define __PORT_AI_PLAYER_CONSUMER_H__
 
 #include "tuya_cloud_types.h"
 
@@ -44,4 +44,4 @@ OPERATE_RET port_ai_player_consumer_install(void);
 }
 #endif
 
-#endif /* __TKL_AI_PLAYER_CONSUMER_H__ */
+#endif /* __PORT_AI_PLAYER_CONSUMER_H__ */

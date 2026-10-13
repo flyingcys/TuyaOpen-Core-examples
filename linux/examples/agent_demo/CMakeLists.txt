@@ -137,12 +137,42 @@ file(GLOB _agent_demo_srcs CONFIGURE_DEPENDS
 list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_chain_selftest\\.c$")
 list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_nlg_selftest\\.c$")
 list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_http_selftest\\.c$")
+# 音频消费端（自 port 下沉）：依赖 audio_player 组件头（svc_ai_player.h），
+# 随 ENABLE_AI_PLAYER 门控——见下方条件加入
+list(FILTER _agent_demo_srcs EXCLUDE REGEX "/port_ai_player_consumer\\.c$")
 
 add_executable(agent_demo ${_agent_demo_srcs})
 
 target_include_directories(agent_demo PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+
+# 音频消费端（port_ai_player_consumer.c，自 port 下沉）：把 svc_ai_player
+# 解码后的 PCM 写进 ALSA（16k/16bit/mono）。依赖 audio_player 组件的
+# svc_ai_player.h——组件随 ENABLE_AI_PLAYER 门控，关时头不存在，故源与
+# libasound 链接一并随开关。libasound 经 pkg-config 探测（写法同 BT 的
+# GIO/DBUS），无 pkg-config 时按库名兜底（libasound2-dev 提供）。
+if(CONFIG_ENABLE_AI_PLAYER)
+    target_sources(agent_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/port_ai_player_consumer.c)
+    # 文件系统卡（port_fs.c，tal_fs_ops_platform）：AI 播放器文件源
+    # （datasink_file.c → tal_fopen）会拉入 tal_fs.o，需要该卡。2026-10-13
+    # 自平台 port 下沉至 p2p_demo（主用户 local_store），此处按 qrcode
+    # 同模式跨目录复用（不复制文件）。
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../p2p_demo/src/port_fs.c")
+        message(FATAL_ERROR "agent_demo 需与 p2p_demo 同树（复用其 port_fs.c 文件系统卡）：找不到 ${CMAKE_CURRENT_SOURCE_DIR}/../p2p_demo/src/port_fs.c")
+    endif()
+    target_sources(agent_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../p2p_demo/src/port_fs.c)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(ALSA alsa QUIET)
+    endif()
+    if(ALSA_FOUND)
+        target_include_directories(agent_demo PRIVATE ${ALSA_INCLUDE_DIRS})
+        target_link_libraries(agent_demo PRIVATE ${ALSA_LIBRARIES})
+    else()
+        target_link_libraries(agent_demo PRIVATE asound)
+    endif()
+endif()
 
 # 显式提供的凭据覆盖 tuya_config.h 的 #ifndef 默认值
 if(TUYA_PRODUCT_ID)
@@ -184,9 +214,10 @@ target_link_libraries(agent_demo PRIVATE ${_agent_demo_link})
 
 # 链路自测（独立可执行，链接与 agent_demo 相同的库组）：
 # 无云地验证 素材加载 → 帧切分 → 边界（不依赖网络与凭据）
-# 只测 port 的 tkl_ai_demo_* 契约（上传编排依赖 AI 客户端上下文，属在线实跑范畴）
+# 只测应用侧 port_ai_demo_* 契约（上传编排依赖 AI 客户端上下文，属在线实跑范畴）
 add_executable(agent_chain_selftest
     src/agent_chain_selftest.c
+    src/port_ai_demo.c
 )
 target_include_directories(agent_chain_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -196,11 +227,13 @@ target_link_libraries(agent_chain_selftest PRIVATE ${_agent_demo_link})
 
 # 下行消费自测（独立可执行）：构造 STOP 事件（含非空末段）验证 agent_downlink
 # 的消费策略（STOP 携带的末段必须打印）——防回归，不依赖云端分包行为
-# agent_audio.c：agent_downlink 的 ASR 分支调用上行校验 notify，链接需带实现
+# agent_audio.c：agent_downlink 的 ASR 分支调用上行校验 notify，链接需带实现；
+# 其引用的 port_ai_demo_* 契约实现（src/port_ai_demo.c）须一并带上
 add_executable(agent_nlg_selftest
     src/agent_nlg_selftest.c
     src/agent_downlink.c
     src/agent_audio.c
+    src/port_ai_demo.c
 )
 target_include_directories(agent_nlg_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src

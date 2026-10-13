@@ -1,6 +1,8 @@
 /**
  * @file port_fs.c
- * @brief 文件系统平台 ops 卡组装 + POSIX 实现（linux port）
+ * @brief 文件系统平台 ops 卡组装 + POSIX 实现（2026-10-13 自平台 port 下沉，
+ *        落点 p2p_demo——主用户 local_store；agent_demo 的 AI 播放文件源
+ *        按 qrcode 同模式跨目录复用本文件）
  *
  * 文件系统是可选能力，调用方两类：
  *   - p2p-core/local_store（本地录像分段存储）；
@@ -9,9 +11,9 @@
  * core 的 tal_fs.c 无条件编入 tal_system 静态库，引用本文件的
  * tal_fs_ops_platform；但只有上述调用方存在时 tal_fs.o 才会被拉进链接
  * （静态库按需拉入）。故本文件整文件由 ENABLE_TUYA_P2P || ENABLE_AI_PLAYER
- * 门控——两者全关的平台不编译、不必实现这 18 个接口；两个宏由 port 的 CMake
- * 从 CONFIG_ENABLE_TUYA_P2P / CONFIG_ENABLE_AI_PLAYER 映射注入（见
- * port/CMakeLists.txt）。
+ * 门控——两者全关的平台不编译、不必实现这 18 个接口；两个宏由 core 的
+ * tuyaopen-core.cmake 经 tuyaopen-headers 注入（宿主与应用共享），
+ * 消费者（p2p_demo / agent_demo）各自把本文件编进目标。
  *
  * 实现为 POSIX 直包装（open/read/write/opendir/readdir...），经 TAL_FS_OPS_T
  * 分发；两者全关时 core 的 tal_fs.c 无人引用其符号，静态库不拉入 tal_fs.o，

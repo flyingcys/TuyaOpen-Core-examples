@@ -87,9 +87,9 @@ if(_port_srcs)
     endif()
 
     # 模块级隔离（独立于上面的条件块）：仅 p2p 使用的适配由 ENABLE_TUYA_P2P 门控
-    # ——port_network 的 5 个 p2p 成员 + port_fs 整文件。core 的开关宏
+    # ——port_network 的 5 个 p2p 成员。core 的开关宏
     # （TuyaOpenOptions → tuyaopen-headers）只作用于 core 模块，port 目标须注入
-    # 同一宏名，否则开了 P2P 也挂不上卡成员/编不出 port_fs。
+    # 同一宏名，否则开了 P2P 也挂不上卡成员。
     if(CONFIG_ENABLE_TUYA_P2P)
         target_compile_definitions(tuyaopen-port PRIVATE ENABLE_TUYA_P2P=1)
     endif()
@@ -105,31 +105,12 @@ if(_port_srcs)
         target_compile_definitions(tuyaopen-port PRIVATE ENABLE_AI_COMPONENTS=1)
     endif()
 
-    # AI 播放器消费端（port_ai_player_consumer.c）：把 svc_ai_player 解码后的 PCM
-    # 写进 ALSA（16k/16bit/mono）。契约头 svc_ai_player.h 随应用侧组件提供
-    # （audio_player 自 core 下沉后位于 examples/agent_demo/components/），
-    # 需补进包含路径；路径与应用层落点耦合，搬移/改名须同步，否则
-    # port_ai_player_consumer.c 编不过（找不到 svc_ai_player.h）。
-    # libasound 经 pkg-config 探测（写法同 BT 的 GIO/DBUS）。
-    # 同一宏还放行 port_fs.c 的门控（见文件头：P2P || AI_PLAYER）——AI 播放器的
-    # 文件源（datasink_file.c → tal_fopen）会把 core 的 tal_fs.o 拉进链接，
-    # 没有 P2P 也必须提供 tal_fs_ops 卡。
-    if(CONFIG_ENABLE_AI_PLAYER)
-        target_compile_definitions(tuyaopen-port PRIVATE ENABLE_AI_PLAYER=1)
-        target_include_directories(tuyaopen-port PRIVATE
-            "${PORT_ROOT}/../examples/agent_demo/components/audio_player/include")
-        find_package(PkgConfig QUIET)
-        if(PkgConfig_FOUND)
-            pkg_check_modules(ALSA alsa QUIET)
-        endif()
-        if(ALSA_FOUND)
-            target_include_directories(tuyaopen-port PRIVATE ${ALSA_INCLUDE_DIRS})
-            target_link_libraries(tuyaopen-port PRIVATE ${ALSA_LIBRARIES})
-        else()
-            # 无 pkg-config 的兜底：直接按库名链接（libasound2-dev 提供）
-            target_link_libraries(tuyaopen-port PRIVATE asound)
-        endif()
-    endif()
+    # （原 AI 播放器消费端（port_ai_player_consumer.c）与文件系统卡
+    # （port_fs.c）已下沉应用层：前者 → examples/agent_demo/src/，
+    # 后者 → examples/p2p_demo/src/（2026-10-13 分层修正）。port 内已无
+    # ENABLE_AI_PLAYER 消费者，宏注入随之移除；两者文件内门控所需的
+    # ENABLE_AI_PLAYER / ENABLE_TUYA_P2P 宏由 core 的 tuyaopen-core.cmake
+    # 经 tuyaopen-headers 提供，宿主与应用共享。）
 
     # 路径与 src 下文件名/目录名耦合：port 去 tkl 化改名后须同步
     if(EXISTS "${PORT_ROOT}/src/port_kv.c")

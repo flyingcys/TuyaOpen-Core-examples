@@ -4,7 +4,7 @@
  *
  * 本实现不做真实 Linux 音频适配（不接 ALSA/麦克风），只为 agent_demo 上行链路
  * 提供"一段语音"数据源、让全链路能跑通。真实设备移植时在本文件替换为麦克风
- * 采集实现（契约见 include/media/port_ai_demo.h）。
+ * 采集实现（契约见 port_ai_demo.h）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
