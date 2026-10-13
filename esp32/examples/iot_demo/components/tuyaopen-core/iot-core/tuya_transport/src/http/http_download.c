@@ -265,6 +265,10 @@ int http_file_download(http_download_config_t *config)
                 break;
             }
             ctx->state = DL_STATE_DATE_GET;
+            /* fall through */
+            /* 设计意图：range 请求发出后不必再绕一圈 while，直接进入本轮数据读取
+             * （DATE_GET 是 RANGE_REQUEST 的唯一后继，不跳过任何状态）。
+             * 上一行是 GCC 认可的英文关键词注释，缺了它 esp32 构建会告警 */
 
         case DL_STATE_DATE_GET: {
             /* 首轮先消费 Send(DO_NOT_PARSE_BODY) 时预收进 pBuffer 的 body 片段

@@ -11,7 +11,7 @@ rsource "tuya_ai_service/Kconfig"
 
 if (ENABLE_AI_COMPONENTS)
 menu "configure ai components"
-    choice
+    choice AI_LANGUAGE
         prompt "choose ai language"
         default ENABLE_AI_LANGUAGE_CHINESE
 
