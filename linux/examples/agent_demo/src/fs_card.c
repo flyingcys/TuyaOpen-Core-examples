@@ -1,13 +1,17 @@
 /**
- * @file port_fs.c
- * @brief 文件系统平台 ops 卡组装 + POSIX 实现（2026-10-13 自平台 port 下沉，
- *        落点 p2p_demo——主用户 local_store；agent_demo 的 AI 播放文件源
- *        按 qrcode 同模式跨目录复用本文件）
+ * @file fs_card.c
+ * @brief 文件系统平台 ops 卡组装 + POSIX 实现（2026-10-13 自平台 port 下沉）
+ *
+ * @note 本文件在 p2p_demo 与 agent_demo 各有一份副本（内容须逐字节同步）：
+ *       - p2p_demo/src/fs_card.c：服务 local_store（P2P 录像存储）；
+ *       - agent_demo/src/fs_card.c：备用——agent_demo 的 DATASINK 已收窄为
+ *         MEM|URL（见其 CMakeLists.txt），当前不链接 FS；恢复 FILE 源时
+ *         删掉收窄注入即可（卡已就位）。
  *
  * 文件系统是可选能力，调用方两类：
  *   - p2p-core/local_store（本地录像分段存储）；
- *   - agent_demo/components/audio_player 的文件源（datasink_file.c → tal_fopen，AI 播放器的
- *     AI_PLAYER_SRC_FILE 路径）。
+ *   - audio_player 的文件源（datasink_file.c → tal_fopen，AI 播放器的
+ *     AI_PLAYER_SRC_FILE 路径；agent_demo 当前未启用该源，见上）。
  * core 的 tal_fs.c 无条件编入 tal_system 静态库，引用本文件的
  * tal_fs_ops_platform；但只有上述调用方存在时 tal_fs.o 才会被拉进链接
  * （静态库按需拉入）。故本文件整文件由 ENABLE_TUYA_P2P || ENABLE_AI_PLAYER
@@ -49,7 +53,7 @@
 *
 * @return 0 on success. Others on failed
 */
-int port_fs_mkdir(const char* path);
+int fs_card_mkdir(const char* path);
 
 /**
 * @brief Remove directory
@@ -60,7 +64,7 @@ int port_fs_mkdir(const char* path);
 *
 * @return 0 on success. Others on failed
 */
-int port_fs_remove(const char* path);
+int fs_card_remove(const char* path);
 
 
 /**
@@ -73,7 +77,7 @@ int port_fs_remove(const char* path);
 *
 * @return 0 on success. Others on failed
 */
-int port_fs_is_exist(const char* path, BOOL_T* is_exist);
+int fs_card_is_exist(const char* path, BOOL_T* is_exist);
 
 /**
 * @brief File rename
@@ -85,7 +89,7 @@ int port_fs_is_exist(const char* path, BOOL_T* is_exist);
 *
 * @return 0 on success. Others on failed
 */
-int port_fs_rename(const char* path_old, const char* path_new);
+int fs_card_rename(const char* path_old, const char* path_new);
 
 /**
 * @brief Open directory
@@ -97,7 +101,7 @@ int port_fs_rename(const char* path_old, const char* path_new);
 *
 * @return 0 on success. Others on failed
 */
-int port_dir_open(const char* path, TUYA_DIR* dir);
+int fs_card_dir_open(const char* path, TUYA_DIR* dir);
 
 /**
 * @brief Close directory
@@ -108,7 +112,7 @@ int port_dir_open(const char* path, TUYA_DIR* dir);
 *
 * @return 0 on success. Others on failed
 */
-int port_dir_close(TUYA_DIR dir);
+int fs_card_dir_close(TUYA_DIR dir);
 
 
 /**
@@ -122,7 +126,7 @@ int port_dir_close(TUYA_DIR dir);
 *
 * @return 0 on success. Others on failed
 */
-int port_dir_read(TUYA_DIR dir, TUYA_FILEINFO* info);
+int fs_card_dir_read(TUYA_DIR dir, TUYA_FILEINFO* info);
 
 /**
 * @brief Get the name of the file node
@@ -134,7 +138,7 @@ int port_dir_read(TUYA_DIR dir, TUYA_FILEINFO* info);
 *
 * @return 0 on success. Others on failed
 */
-int port_dir_name(TUYA_FILEINFO info, const char** name);
+int fs_card_dir_name(TUYA_FILEINFO info, const char** name);
 
 /**
 * @brief Check whether the node is a directory
@@ -146,7 +150,7 @@ int port_dir_name(TUYA_FILEINFO info, const char** name);
 *
 * @return 0 on success. Others on failed
 */
-int port_dir_is_directory(TUYA_FILEINFO info, BOOL_T* is_dir);
+int fs_card_dir_is_directory(TUYA_FILEINFO info, BOOL_T* is_dir);
 
 /**
 * @brief Open file
@@ -158,7 +162,7 @@ int port_dir_is_directory(TUYA_FILEINFO info, BOOL_T* is_dir);
 *
 * @return the file handle, NULL means failed
 */
-TUYA_FILE port_fopen(const char* path, const char* mode);
+TUYA_FILE fs_card_fopen(const char* path, const char* mode);
 
 /**
 * @brief Close file
@@ -169,7 +173,7 @@ TUYA_FILE port_fopen(const char* path, const char* mode);
 *
 * @return 0 on success. EOF on failed
 */
-int port_fclose(TUYA_FILE file);
+int fs_card_fclose(TUYA_FILE file);
 
 /**
 * @brief Read file
@@ -182,7 +186,7 @@ int port_fclose(TUYA_FILE file);
 *
 * @return the bytes read from file
 */
-int port_fread(void* buf, int bytes, TUYA_FILE file);
+int fs_card_fread(void* buf, int bytes, TUYA_FILE file);
 
 /**
 * @brief write file
@@ -195,7 +199,7 @@ int port_fread(void* buf, int bytes, TUYA_FILE file);
 *
 * @return the bytes write to file
 */
-int port_fwrite(void* buf, int bytes, TUYA_FILE file);
+int fs_card_fwrite(void* buf, int bytes, TUYA_FILE file);
 
 /**
 * @brief write buffer to flash
@@ -206,7 +210,7 @@ int port_fwrite(void* buf, int bytes, TUYA_FILE file);
 *
 * @return 0 on success. others on failed
 */
-int port_fsync(int fd);
+int fs_card_fsync(int fd);
 
 /**
 * @brief Read string from file
@@ -219,7 +223,7 @@ int port_fsync(int fd);
 *
 * @return the content get from file, NULL means failed
 */
-char* port_fgets(char* buf, int len, TUYA_FILE file);
+char* fs_card_fgets(char* buf, int len, TUYA_FILE file);
 
 /**
 * @brief Seek to the offset position of the file
@@ -232,7 +236,7 @@ char* port_fgets(char* buf, int len, TUYA_FILE file);
 *
 * @return 0 on success, others on failed
 */
-int port_fseek(TUYA_FILE file, int64_t offs, int whence);
+int fs_card_fseek(TUYA_FILE file, int64_t offs, int whence);
 
 /**
 * @brief flush the IO read/write stream
@@ -243,7 +247,7 @@ int port_fseek(TUYA_FILE file, int64_t offs, int whence);
 *
 * @return 0 success,-1 failed
 */
-int port_fflush(TUYA_FILE file);
+int fs_card_fflush(TUYA_FILE file);
 
 /**
 * @brief get the file fd
@@ -254,7 +258,7 @@ int port_fflush(TUYA_FILE file);
 *
 * @return the file fd
 */
-int port_fileno(TUYA_FILE file);
+int fs_card_fileno(TUYA_FILE file);
 
 
 /**
@@ -266,7 +270,7 @@ int port_fileno(TUYA_FILE file);
 *
 * @return 0 on success. Others on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_fs_mkdir(const char* path)
+TUYA_WEAK_ATTRIBUTE int fs_card_mkdir(const char* path)
 {
     return mkdir(path, 0755);
 }
@@ -280,7 +284,7 @@ TUYA_WEAK_ATTRIBUTE int port_fs_mkdir(const char* path)
 *
 * @return 0 on success. Others on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_fs_remove(const char* path)
+TUYA_WEAK_ATTRIBUTE int fs_card_remove(const char* path)
 {
     return remove(path);
 }
@@ -296,7 +300,7 @@ TUYA_WEAK_ATTRIBUTE int port_fs_remove(const char* path)
 *
 * @return 0 on success. Others on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_fs_is_exist(const char* path, BOOL_T* is_exist)
+TUYA_WEAK_ATTRIBUTE int fs_card_is_exist(const char* path, BOOL_T* is_exist)
 {
     if (is_exist == NULL) {
         return -1;
@@ -317,7 +321,7 @@ TUYA_WEAK_ATTRIBUTE int port_fs_is_exist(const char* path, BOOL_T* is_exist)
 *
 * @return 0 on success. Others on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_fs_rename(const char* path_old, const char* path_new)
+TUYA_WEAK_ATTRIBUTE int fs_card_rename(const char* path_old, const char* path_new)
 {
     return rename(path_old, path_new);
 }
@@ -333,7 +337,7 @@ TUYA_WEAK_ATTRIBUTE int port_fs_rename(const char* path_old, const char* path_ne
 *
 * @return 0 on success. Others on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_dir_open(const char* path, TUYA_DIR* dir)
+TUYA_WEAK_ATTRIBUTE int fs_card_dir_open(const char* path, TUYA_DIR* dir)
 {
     if (dir == NULL) {
         return -1;
@@ -357,7 +361,7 @@ TUYA_WEAK_ATTRIBUTE int port_dir_open(const char* path, TUYA_DIR* dir)
 *
 * @return 0 on success. Others on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_dir_close(TUYA_DIR dir)
+TUYA_WEAK_ATTRIBUTE int fs_card_dir_close(TUYA_DIR dir)
 {
     DIR* dirp = (DIR*)dir;
     return closedir(dirp);
@@ -374,7 +378,7 @@ TUYA_WEAK_ATTRIBUTE int port_dir_close(TUYA_DIR dir)
 *
 * @return 0 on success. Others on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_dir_read(TUYA_DIR dir, TUYA_FILEINFO* info)
+TUYA_WEAK_ATTRIBUTE int fs_card_dir_read(TUYA_DIR dir, TUYA_FILEINFO* info)
 {
     if (info == NULL) {
         return -1;
@@ -400,7 +404,7 @@ TUYA_WEAK_ATTRIBUTE int port_dir_read(TUYA_DIR dir, TUYA_FILEINFO* info)
 *
 * @return 0 on success. Others on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_dir_name(TUYA_FILEINFO info, const char** name)
+TUYA_WEAK_ATTRIBUTE int fs_card_dir_name(TUYA_FILEINFO info, const char** name)
 {
     if (name == NULL) {
         return -1;
@@ -425,7 +429,7 @@ TUYA_WEAK_ATTRIBUTE int port_dir_name(TUYA_FILEINFO info, const char** name)
 *
 * @return 0 on success. Others on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_dir_is_directory(TUYA_FILEINFO info, BOOL_T* is_dir)
+TUYA_WEAK_ATTRIBUTE int fs_card_dir_is_directory(TUYA_FILEINFO info, BOOL_T* is_dir)
 {
     if (is_dir == NULL) {
         return -1;
@@ -447,7 +451,7 @@ TUYA_WEAK_ATTRIBUTE int port_dir_is_directory(TUYA_FILEINFO info, BOOL_T* is_dir
 *
 * @return the file handle, NULL means failed
 */
-TUYA_WEAK_ATTRIBUTE TUYA_FILE port_fopen(const char* path, const char* mode)
+TUYA_WEAK_ATTRIBUTE TUYA_FILE fs_card_fopen(const char* path, const char* mode)
 {
     return fopen(path, mode);
 }
@@ -461,7 +465,7 @@ TUYA_WEAK_ATTRIBUTE TUYA_FILE port_fopen(const char* path, const char* mode)
 *
 * @return 0 on success. EOF on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_fclose(TUYA_FILE file)
+TUYA_WEAK_ATTRIBUTE int fs_card_fclose(TUYA_FILE file)
 {
     FILE* fp = (FILE*)file;
     return fclose(fp);
@@ -478,7 +482,7 @@ TUYA_WEAK_ATTRIBUTE int port_fclose(TUYA_FILE file)
 *
 * @return the bytes read from file
 */
-TUYA_WEAK_ATTRIBUTE int port_fread(void* buf, int bytes, TUYA_FILE file)
+TUYA_WEAK_ATTRIBUTE int fs_card_fread(void* buf, int bytes, TUYA_FILE file)
 {
     FILE* fp = (FILE*)file;
     return fread(buf, 1, bytes, fp);
@@ -495,7 +499,7 @@ TUYA_WEAK_ATTRIBUTE int port_fread(void* buf, int bytes, TUYA_FILE file)
 *
 * @return the bytes write to file
 */
-TUYA_WEAK_ATTRIBUTE int port_fwrite(void* buf, int bytes, TUYA_FILE file)
+TUYA_WEAK_ATTRIBUTE int fs_card_fwrite(void* buf, int bytes, TUYA_FILE file)
 {
     FILE* fp = (FILE*)file;
     return fwrite(buf, 1, bytes, fp);
@@ -510,7 +514,7 @@ TUYA_WEAK_ATTRIBUTE int port_fwrite(void* buf, int bytes, TUYA_FILE file)
 *
 * @return 0 on success. others on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_fsync(int fd)
+TUYA_WEAK_ATTRIBUTE int fs_card_fsync(int fd)
 {
     return fsync(fd);
 }
@@ -526,7 +530,7 @@ TUYA_WEAK_ATTRIBUTE int port_fsync(int fd)
 *
 * @return the content get from file, NULL means failed
 */
-TUYA_WEAK_ATTRIBUTE char* port_fgets(char* buf, int len, TUYA_FILE file)
+TUYA_WEAK_ATTRIBUTE char* fs_card_fgets(char* buf, int len, TUYA_FILE file)
 {
     FILE* fp = (FILE*)file;
     return fgets(buf, len, fp);
@@ -544,7 +548,7 @@ TUYA_WEAK_ATTRIBUTE char* port_fgets(char* buf, int len, TUYA_FILE file)
 *
 * @return 0 on success, others on failed
 */
-TUYA_WEAK_ATTRIBUTE int port_fseek(TUYA_FILE file, int64_t offs, int whence)
+TUYA_WEAK_ATTRIBUTE int fs_card_fseek(TUYA_FILE file, int64_t offs, int whence)
 {
     FILE* fp = (FILE*)file;
     return fseek(fp, offs, whence);
@@ -563,7 +567,7 @@ TUYA_WEAK_ATTRIBUTE int port_fseek(TUYA_FILE file, int64_t offs, int whence)
 *
 * @return 0 success,-1 failed
 */
-TUYA_WEAK_ATTRIBUTE int port_fflush(TUYA_FILE file)
+TUYA_WEAK_ATTRIBUTE int fs_card_fflush(TUYA_FILE file)
 {
     FILE* fp = (FILE*)file;
     return fflush(fp);
@@ -578,7 +582,7 @@ TUYA_WEAK_ATTRIBUTE int port_fflush(TUYA_FILE file)
 *
 * @return the file fd
 */
-TUYA_WEAK_ATTRIBUTE int port_fileno(TUYA_FILE file)
+TUYA_WEAK_ATTRIBUTE int fs_card_fileno(TUYA_FILE file)
 {
     FILE* fp = (FILE*)file;
     return fileno(fp);
@@ -592,24 +596,24 @@ TUYA_WEAK_ATTRIBUTE int port_fileno(TUYA_FILE file)
  * ENABLE_TUYA_P2P || ENABLE_AI_PLAYER 门控，两者全关的平台无需适配。
  * --------------------------------------------------------------------------- */
 TAL_FS_OPS_T tal_fs_ops_platform = {
-    .fopen = port_fopen,
-    .fclose = port_fclose,
-    .fwrite = port_fwrite,
-    .fread = port_fread,
-    .fseek = port_fseek,
-    .fflush = port_fflush,
-    .fsync = port_fsync,
-    .fileno = port_fileno,
-    .fgets = port_fgets,
-    .fs_is_exist = port_fs_is_exist,
-    .fs_mkdir = port_fs_mkdir,
-    .fs_remove = port_fs_remove,
-    .fs_rename = port_fs_rename,
-    .dir_open = port_dir_open,
-    .dir_close = port_dir_close,
-    .dir_read = port_dir_read,
-    .dir_name = port_dir_name,
-    .dir_is_directory = port_dir_is_directory,
+    .fopen = fs_card_fopen,
+    .fclose = fs_card_fclose,
+    .fwrite = fs_card_fwrite,
+    .fread = fs_card_fread,
+    .fseek = fs_card_fseek,
+    .fflush = fs_card_fflush,
+    .fsync = fs_card_fsync,
+    .fileno = fs_card_fileno,
+    .fgets = fs_card_fgets,
+    .fs_is_exist = fs_card_is_exist,
+    .fs_mkdir = fs_card_mkdir,
+    .fs_remove = fs_card_remove,
+    .fs_rename = fs_card_rename,
+    .dir_open = fs_card_dir_open,
+    .dir_close = fs_card_dir_close,
+    .dir_read = fs_card_dir_read,
+    .dir_name = fs_card_dir_name,
+    .dir_is_directory = fs_card_dir_is_directory,
 };
 
 #endif /* ENABLE_TUYA_P2P */

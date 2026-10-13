@@ -1,5 +1,5 @@
 /**
- * @file port_ai_demo.h
+ * @file play_local_in.h
  * @brief agent_demo 音频输入最小契约：从音频源取 PCM 帧
  *
  * 用途：agent_demo 上行链路需要"一段语音"作为云端 agent 的触发输入。
@@ -14,8 +14,8 @@
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
 
-#ifndef __PORT_AI_DEMO_H__
-#define __PORT_AI_DEMO_H__
+#ifndef __PLAY_LOCAL_IN_H__
+#define __PLAY_LOCAL_IN_H__
 
 #include "tuya_cloud_types.h"
 
@@ -29,7 +29,7 @@ extern "C" {
  * @param[in] src_path 音频源路径（Linux：PCM 文件路径；真实设备可忽略/改为设备参数）
  * @return OPRT_OK 成功；其他见 tuya_error_code.h
  */
-OPERATE_RET port_ai_demo_open(const char *src_path);
+OPERATE_RET play_local_in_open(const char *src_path);
 
 /**
  * @brief 读取一段 PCM 数据
@@ -38,17 +38,17 @@ OPERATE_RET port_ai_demo_open(const char *src_path);
  * @param[in]  len 期望读取的字节数
  * @return >0 实际读到的字节数；0 数据结束(EOF)；<0 错误
  */
-INT_T port_ai_demo_read(UINT8_T *buf, UINT_T len);
+INT_T play_local_in_read(UINT8_T *buf, UINT_T len);
 
 /**
  * @brief 关闭音频源
  *
  * @return OPRT_OK 成功
  */
-OPERATE_RET port_ai_demo_close(VOID);
+OPERATE_RET play_local_in_close(VOID);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __PORT_AI_DEMO_H__ */
+#endif /* __PLAY_LOCAL_IN_H__ */

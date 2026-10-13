@@ -1,15 +1,15 @@
 /**
- * @file port_ai_player_consumer.h
+ * @file play_local_out.h
  * @brief AI 播放器（agent_demo/components/audio_player）平台消费端：Linux ALSA 输出
  *
  * core 的 svc_ai_player 默认装载空消费端（consumer_default.c，六回调全 OK 不
  * 发声），应用侧实现自己的 AI_PLAYER_CONSUMER_T 并经
  * tuya_ai_player_set_consumer() 注入——本文件暴露的 install 函数就是该注入的
- * 入口：把本应用的 ALSA 实现（port_ai_player_consumer.c）挂到播放器。
+ * 入口：把本应用的 ALSA 实现（play_local_out.c）挂到播放器。
  *
  * 调用时机（与 svc_ai_player.c 的时序强绑定）：
  *   1. tuya_ai_player_service_init(cfg)    —— 装载默认空消费端并 open
- *   2. port_ai_player_consumer_install()    —— 替换为 ALSA 消费端（close 旧的 + open 新的）
+ *   2. play_local_out_install()    —— 替换为 ALSA 消费端（close 旧的 + open 新的）
  * install 必须晚于 service_init：service_init 内部 memcpy 会覆盖 consumer，
  * 先注入会被默认实例顶掉（见 tuya_ai_player_set_consumer 实现）。
  *
@@ -20,8 +20,8 @@
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
 
-#ifndef __PORT_AI_PLAYER_CONSUMER_H__
-#define __PORT_AI_PLAYER_CONSUMER_H__
+#ifndef __PLAY_LOCAL_OUT_H__
+#define __PLAY_LOCAL_OUT_H__
 
 #include "tuya_cloud_types.h"
 
@@ -38,10 +38,10 @@ extern "C" {
  *
  * @return OPRT_OK 注入完成（含设备打开失败的降级）；其他见 tuya_error_code.h
  */
-OPERATE_RET port_ai_player_consumer_install(void);
+OPERATE_RET play_local_out_install(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __PORT_AI_PLAYER_CONSUMER_H__ */
+#endif /* __PLAY_LOCAL_OUT_H__ */

@@ -127,6 +127,18 @@ if(CONFIG_ENABLE_AI_COMPONENTS)
     endforeach()
 endif()
 
+# 音频数据源收窄（关 FILE 位）：agent_demo 实际只播 MEM（TTS 流）与 URL
+# （TTS URL/音乐）源——唯一的 FILE 源入口 ai_audio_play_local() 全仓零调用。
+# 关位后 datasink 分发（ai_player_datasink.c）不再引用 g_datasink_file →
+# datasink_file.o 与 tal_fs.o 不进链接 → 不依赖文件系统卡。src/fs_card.c
+# （复制自 p2p_demo，本目录内编入备用）就地待命：恢复 FILE 源时删掉本注入
+# 即可（卡已就位）。注入目标是 audio_player 库——宏定义在 svc_ai_player.h，
+# 唯一消费方是 ai_player_datasink.c。
+if(TARGET audio_player)
+    target_compile_definitions(audio_player PRIVATE
+        "AI_PLAYER_DATASINK=(AI_PLAYER_DATASINK_MEM|AI_PLAYER_DATASINK_URL)")
+endif()
+
 # 5) 语音素材：configure 期复制到构建目录，供默认路径 "voice_16k.pcm" 使用
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/voice_16k.pcm ${CMAKE_BINARY_DIR}/voice_16k.pcm COPYONLY)
 
@@ -137,9 +149,9 @@ file(GLOB _agent_demo_srcs CONFIGURE_DEPENDS
 list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_chain_selftest\\.c$")
 list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_nlg_selftest\\.c$")
 list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_http_selftest\\.c$")
-# 音频消费端（自 port 下沉）：依赖 audio_player 组件头（svc_ai_player.h），
-# 随 ENABLE_AI_PLAYER 门控——见下方条件加入
-list(FILTER _agent_demo_srcs EXCLUDE REGEX "/port_ai_player_consumer\\.c$")
+# 音频输出端（play_local_out.c，自 port 下沉）：依赖 audio_player 组件头
+# （svc_ai_player.h），随 ENABLE_AI_PLAYER 门控——见下方条件加入
+list(FILTER _agent_demo_srcs EXCLUDE REGEX "/play_local_out\\.c$")
 
 add_executable(agent_demo ${_agent_demo_srcs})
 
@@ -147,21 +159,13 @@ target_include_directories(agent_demo PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# 音频消费端（port_ai_player_consumer.c，自 port 下沉）：把 svc_ai_player
-# 解码后的 PCM 写进 ALSA（16k/16bit/mono）。依赖 audio_player 组件的
-# svc_ai_player.h——组件随 ENABLE_AI_PLAYER 门控，关时头不存在，故源与
-# libasound 链接一并随开关。libasound 经 pkg-config 探测（写法同 BT 的
-# GIO/DBUS），无 pkg-config 时按库名兜底（libasound2-dev 提供）。
+# 音频输出端（play_local_out.c，自 port 下沉）：把 svc_ai_player 解码后的
+# PCM 写进 ALSA（16k/16bit/mono）。依赖 audio_player 组件的 svc_ai_player.h
+# ——组件随 ENABLE_AI_PLAYER 门控，关时头不存在，故源与 libasound 链接一并
+# 随开关。libasound 经 pkg-config 探测（写法同 BT 的 GIO/DBUS），无
+# pkg-config 时按库名兜底（libasound2-dev 提供）。
 if(CONFIG_ENABLE_AI_PLAYER)
-    target_sources(agent_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/port_ai_player_consumer.c)
-    # 文件系统卡（port_fs.c，tal_fs_ops_platform）：AI 播放器文件源
-    # （datasink_file.c → tal_fopen）会拉入 tal_fs.o，需要该卡。2026-10-13
-    # 自平台 port 下沉至 p2p_demo（主用户 local_store），此处按 qrcode
-    # 同模式跨目录复用（不复制文件）。
-    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../p2p_demo/src/port_fs.c")
-        message(FATAL_ERROR "agent_demo 需与 p2p_demo 同树（复用其 port_fs.c 文件系统卡）：找不到 ${CMAKE_CURRENT_SOURCE_DIR}/../p2p_demo/src/port_fs.c")
-    endif()
-    target_sources(agent_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../p2p_demo/src/port_fs.c)
+    target_sources(agent_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/play_local_out.c)
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
         pkg_check_modules(ALSA alsa QUIET)
@@ -217,7 +221,7 @@ target_link_libraries(agent_demo PRIVATE ${_agent_demo_link})
 # 只测应用侧 port_ai_demo_* 契约（上传编排依赖 AI 客户端上下文，属在线实跑范畴）
 add_executable(agent_chain_selftest
     src/agent_chain_selftest.c
-    src/port_ai_demo.c
+    src/play_local_in.c
 )
 target_include_directories(agent_chain_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -233,7 +237,7 @@ add_executable(agent_nlg_selftest
     src/agent_nlg_selftest.c
     src/agent_downlink.c
     src/agent_audio.c
-    src/port_ai_demo.c
+    src/play_local_in.c
 )
 target_include_directories(agent_nlg_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src

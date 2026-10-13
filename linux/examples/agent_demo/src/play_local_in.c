@@ -1,21 +1,21 @@
 /**
- * @file port_ai_demo.c
+ * @file play_local_in.c
  * @brief agent_demo 音频输入实现（Linux：PCM 文件回放）
  *
  * 本实现不做真实 Linux 音频适配（不接 ALSA/麦克风），只为 agent_demo 上行链路
  * 提供"一段语音"数据源、让全链路能跑通。真实设备移植时在本文件替换为麦克风
- * 采集实现（契约见 port_ai_demo.h）。
+ * 采集实现（契约见 play_local_in.h）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
-#include "port_ai_demo.h"
+#include "play_local_in.h"
 
 #include <stdio.h>
 
 /* 当前音频源（单实例；真实设备接入时替换为麦克风句柄） */
 static FILE *s_ai_src = NULL;
 
-OPERATE_RET port_ai_demo_open(const char *src_path)
+OPERATE_RET play_local_in_open(const char *src_path)
 {
     if (s_ai_src) {
         return OPRT_COM_ERROR; /* 已打开，防重入 */
@@ -26,14 +26,14 @@ OPERATE_RET port_ai_demo_open(const char *src_path)
 
     s_ai_src = fopen(src_path, "rb");
     if (!s_ai_src) {
-        printf("port_ai_demo: open %s failed\n", src_path);
+        printf("play_local_in: open %s failed\n", src_path);
         return OPRT_NOT_FOUND;
     }
 
     return OPRT_OK;
 }
 
-INT_T port_ai_demo_read(UINT8_T *buf, UINT_T len)
+INT_T play_local_in_read(UINT8_T *buf, UINT_T len)
 {
     size_t n = 0;
 
@@ -51,7 +51,7 @@ INT_T port_ai_demo_read(UINT8_T *buf, UINT_T len)
     return (INT_T)n; /* 0 = 数据结束(EOF) */
 }
 
-OPERATE_RET port_ai_demo_close(VOID)
+OPERATE_RET play_local_in_close(VOID)
 {
     if (s_ai_src) {
         fclose(s_ai_src);

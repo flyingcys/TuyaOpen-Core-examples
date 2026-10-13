@@ -1,9 +1,9 @@
 /**
- * @file port_ai_player_consumer.c
+ * @file play_local_out.c
  * @brief AI 播放器平台消费端实现（Linux ALSA）：把解码 PCM 写进声卡
  *
  * 契约：agent_demo/components/audio_player 的 AI_PLAYER_CONSUMER_T（六回调），经
- * tuya_ai_player_set_consumer() 注入（port 侧入口 port_ai_player_consumer_install）。
+ * tuya_ai_player_set_consumer() 注入（port 侧入口 play_local_out_install）。
  *
  * 与上游 consumer_speaker 的差异（有意）：
  *   - 上游依赖平台音频服务层（tkl_audio）且设备随输入路径打开/关闭；本实现
@@ -37,7 +37,7 @@
 
 #include "tal_log.h"
 #include "svc_ai_player.h" /* AI_PLAYER_CONSUMER_T / PLAYER_CONSUMER_HANDLE / TAL_AUDIO_* */
-#include "port_ai_player_consumer.h"
+#include "play_local_out.h"
 
 /* ---------------------------------------------------------------------------
  * 输出格式：与 service_init 的约定一致（上游固定 16k/16bit/mono）。
@@ -372,7 +372,7 @@ AI_PLAYER_CONSUMER_T g_ai_player_consumer = {
     .set_volume = __ai_player_consumer_set_volume,
 };
 
-OPERATE_RET port_ai_player_consumer_install(void)
+OPERATE_RET play_local_out_install(void)
 {
     /* 必须在 tuya_ai_player_service_init() 之后调用：service_init 会装载默认
      * 空消费端并覆盖 consumer，此处 set_consumer 才是最终替换点（见 svc_ai_player.c） */

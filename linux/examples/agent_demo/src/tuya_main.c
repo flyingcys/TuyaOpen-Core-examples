@@ -6,8 +6,8 @@
  *       自动上传一段预置语音（触发）→ 下行打印文字（ASR/NLG）。
  *
  * 无 UI；下行语音在 CONFIG_ENABLE_COMP_AI_AUDIO 开启时经应用侧 ALSA
- * 消费端（port_ai_player_consumer）播放，关闭时媒体包在 core 内丢弃；
- * 上行音频经应用侧 port_ai_demo_* 契约取得（Linux：PCM 文件回放）。
+ * 消费端（play_local_out）播放，关闭时媒体包在 core 内丢弃；
+ * 上行音频经应用侧 play_local_in_* 契约取得（Linux：PCM 文件回放）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
@@ -38,7 +38,7 @@
  * 同 MCP：关开关时头与目标都不存在，include 与调用一并由宏守卫 */
 #if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
 #include "ai_audio_player.h"
-#include "port_ai_player_consumer.h"
+#include "play_local_out.h"
 #endif
 
 #include <assert.h>
@@ -328,12 +328,12 @@ void user_main(void)
      * - 下行 TTS 在 MQTT_CONNECTED 之后才可能到达，播放服务须先就绪，
      *   否则首个音频包落在默认空消费端上被丢弃；
      * - install 必须在 init 之后：service_init 会装载默认空消费端，
-     *   set_consumer 才是最终替换点（时序见 port_ai_player_consumer.h）；
+     *   set_consumer 才是最终替换点（时序见 play_local_out.h）；
      * - 失败不阻断主流程：打印错误继续，下行降级为无声（默认空消费端行为） */
     rt = ai_audio_player_init();
     if (rt == OPRT_OK) {
         PR_NOTICE("[AGENT] ai_audio_player initialized, ALSA consumer install rt=%d",
-                  port_ai_player_consumer_install());
+                  play_local_out_install());
     } else {
         PR_ERR("[AGENT] ai_audio_player_init failed: %d (downlink audio disabled)", rt);
     }

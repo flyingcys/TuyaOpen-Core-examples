@@ -8,7 +8,7 @@
 #include "tal_api.h"
 
 #include "tuya_ai_input.h"
-#include "port_ai_demo.h"
+#include "play_local_in.h"
 
 #include "agent_audio.h"
 
@@ -51,7 +51,7 @@ OPERATE_RET agent_audio_upload_once(const char *src_path, agent_audio_stat_t *st
         return OPRT_INVALID_PARM;
     }
 
-    rt = port_ai_demo_open(src_path);
+    rt = play_local_in_open(src_path);
     if (rt != OPRT_OK) {
         PR_ERR("[AGENT] audio source open failed: %s, rt:%d", src_path, rt);
         return rt;
@@ -61,7 +61,7 @@ OPERATE_RET agent_audio_upload_once(const char *src_path, agent_audio_stat_t *st
     tuya_ai_input_start(true);
 
     for (;;) {
-        INT_T n = port_ai_demo_read(frame, sizeof(frame));
+        INT_T n = play_local_in_read(frame, sizeof(frame));
         if (n < 0) {
             PR_ERR("[AGENT] audio source read error");
             rt = OPRT_COM_ERROR;
@@ -87,7 +87,7 @@ OPERATE_RET agent_audio_upload_once(const char *src_path, agent_audio_stat_t *st
 
     /* 结束本轮输入：云端据此开始 ASR 与 agent 处理 */
     tuya_ai_input_stop();
-    port_ai_demo_close();
+    play_local_in_close();
 
     /* 防御：0 字节上传无意义（空文件/异常源），按失败处理，避免"upload done"假绿 */
     if ((rt == OPRT_OK) && (0 == local_stat.bytes)) {

@@ -2,8 +2,8 @@
  * @file agent_audio.h
  * @brief agent_demo 上行音频：把一段 PCM 素材按帧喂给云端 agent
  *
- * 音频源经应用侧 port_ai_demo_* 契约取得（Linux：PCM 文件回放；
- * 真实设备：替换为麦克风采集，见 port_ai_demo.h）。
+ * 音频源经应用侧 play_local_in_* 契约取得（Linux：PCM 文件回放；
+ * 真实设备：替换为麦克风采集，见 play_local_in.h）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
