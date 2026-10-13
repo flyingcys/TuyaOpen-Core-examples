@@ -46,7 +46,7 @@ unset(TUYAOPEN_DOTCONFIG)
 if(NOT DEFINED CONFIG_ENABLE_AI_COMPONENTS)
     set(CONFIG_ENABLE_AI_COMPONENTS ON)
 endif()
-# MCP 工具服务（agent-core/ai_mcp）：demo 在 tuya_main.c 里调 ai_mcp_init() 接线，
+# MCP 工具服务（components/ai_mcp）：demo 在 tuya_main.c 里调 ai_mcp_init() 接线，
 # 云端可通过 MCP 协议列出/调用设备工具（当前工具列表见 ai_mcp_tools.c）
 if(NOT DEFINED CONFIG_ENABLE_COMP_AI_MCP)
     set(CONFIG_ENABLE_COMP_AI_MCP ON)

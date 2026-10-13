@@ -4,7 +4,7 @@
  *
  * 文件系统是可选能力，调用方两类：
  *   - p2p-core/local_store（本地录像分段存储）；
- *   - agent-core/audio_player 的文件源（datasink_file.c → tal_fopen，AI 播放器的
+ *   - agent_demo/components/audio_player 的文件源（datasink_file.c → tal_fopen，AI 播放器的
  *     AI_PLAYER_SRC_FILE 路径）。
  * core 的 tal_fs.c 无条件编入 tal_system 静态库，引用本文件的
  * tal_fs_ops_platform；但只有上述调用方存在时 tal_fs.o 才会被拉进链接
@@ -586,7 +586,7 @@ TUYA_WEAK_ATTRIBUTE int port_fileno(TUYA_FILE file)
 /* ---------------------------------------------------------------------------
  * 文件系统平台 ops 卡：由本文件组装，core 的 tal_fs.c 经 extern 引用并完成
  * tal_fs_* / tal_dir_* 分发。文件系统为可选能力（p2p-core/local_store 与
- * agent-core/audio_player 的文件源），与主卡（port_runtime.c）解耦；整文件随
+ * agent_demo/components/audio_player 的文件源），与主卡（port_runtime.c）解耦；整文件随
  * ENABLE_TUYA_P2P || ENABLE_AI_PLAYER 门控，两者全关的平台无需适配。
  * --------------------------------------------------------------------------- */
 TAL_FS_OPS_T tal_fs_ops_platform = {

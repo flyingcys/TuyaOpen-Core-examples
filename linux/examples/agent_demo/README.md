@@ -50,7 +50,7 @@ secrets 会静默覆盖 `-D`）。语音素材在构建时复制到 `build/voice
 |---|---|---|
 | `AGENT_DEMO` | 构建本 example；select `ENABLE_AI_COMPONENTS`、`ENABLE_QRCODE`、`ENABLE_TUYA_CODEC` | y（无 prompt） |
 | `AGENT_DEMO_AUDIO_FILE` | 上行语音素材路径（16k/16bit/mono PCM）；留空用内置素材 | "" |
-| `ENABLE_COMP_AI_MCP`（core 定义，见 `tuya_ai_service/svc_ai_mcp/Kconfig`） | MCP 全链开关：core 的 server 核心（`svc_ai_mcp`）+ 应用侧工具集（`components/ai_mcp`，见"MCP 支持"一节）；demo 在 `CMakeLists.txt` 内置默认 ON | ON（内置默认） |
+| `ENABLE_COMP_AI_MCP`（core 定义，见 `agent-core/svc_ai_mcp/Kconfig`） | MCP 全链开关：core 的 server 核心（`svc_ai_mcp`）+ 应用侧工具集（`components/ai_mcp`，见"MCP 支持"一节）；demo 在 `CMakeLists.txt` 内置默认 ON | ON（内置默认） |
 
 menuconfig 用法（`AGENT_DEMO` 无 prompt，不构建该 example 即可，无需关闭）：
 

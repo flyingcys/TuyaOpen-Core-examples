@@ -1,6 +1,6 @@
 /**
  * @file port_ai_player_consumer.h
- * @brief AI 播放器（agent-core/audio_player）平台消费端：Linux ALSA 输出
+ * @brief AI 播放器（agent_demo/components/audio_player）平台消费端：Linux ALSA 输出
  *
  * core 的 svc_ai_player 默认装载空消费端（consumer_default.c，六回调全 OK 不
  * 发声），平台侧实现自己的 AI_PLAYER_CONSUMER_T 并经
