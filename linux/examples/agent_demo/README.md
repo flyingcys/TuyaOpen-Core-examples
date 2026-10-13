@@ -264,5 +264,9 @@ cd build && ./agent_http_selftest
     +- play_local_out.h/.c           # ALSA 输出端（随 ENABLE_AI_PLAYER 门控编入）
     +- fs_card.c                     # 文件系统卡（tal_fs_ops；复制自 p2p_demo 备用——
                                      #   DATASINK 收窄为 MEM|URL 时不参与链接，恢复 FILE 源时启用）
-+- p2p_demo/src/fs_card.c            # 同上原件（local_store 使用；两份内容须同步）
++- p2p_demo/src/fs_card.c            # 同上原件（local_store 使用）
 ```
+
+> `fs_card.c` 两份副本**须逐字节同步**：修改任一份后运行
+> `diff examples/agent_demo/src/fs_card.c examples/p2p_demo/src/fs_card.c`
+> 校验（不一致时把改动同步到另一份）。

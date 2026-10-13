@@ -173,6 +173,7 @@ cmake --build build-ls -j$(nproc)
     |   -- tuya_ipc_demo.c/.h       # 媒体链路（取帧/队列/ring buffer/录制）与回调契约
     |   -- demo_vcam.c/.h           # 虚拟摄像头：样片 AU 索引 + 按帧率循环喂帧
     |   -- demo_media_event.c/.h    # local_store 回放（日历查询/回放送帧）
+    |   -- fs_card.c                # 文件系统卡（tal_fs_ops；local_store 使用）
     |   -- demo_vcam_selftest.c     # vcam 自测（目标 vcam_selftest）
     |   -- media_chain_selftest.c   # 媒体链路自测（目标 media_chain_selftest）
     |   -- tuya_config.h            # PID/UUID/AuthKey（可被 secrets 或 -D 覆盖）
@@ -180,3 +181,7 @@ cmake --build build-ls -j$(nproc)
     -- CMakeLists.txt
     -- Kconfig                      # P2P_DEMO* 开关
 ```
+
+> `fs_card.c` 在 p2p_demo 与 agent_demo 各有一份副本，**须逐字节同步**：修改任
+> 一份后运行 `diff examples/p2p_demo/src/fs_card.c examples/agent_demo/src/fs_card.c`
+> 校验（不一致时把改动同步到另一份）。
