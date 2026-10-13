@@ -207,7 +207,6 @@ OPERATE_RET ai_agent_init(void)
     ai_agent_cfg.attr.audio.sample_rate = 16000;
     ai_agent_cfg.attr.audio.channels    = AUDIO_CHANNELS_MONO;
     ai_agent_cfg.attr.audio.bit_depth   = 16;
-    ai_agent_cfg.codec_enable           = FALSE;
 
     ai_agent_cfg.output.alert_cb      = __ai_agent_alert_cb;
     ai_agent_cfg.output.text_cb       = __ai_agent_text_cb;

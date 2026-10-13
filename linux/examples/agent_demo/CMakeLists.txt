@@ -57,11 +57,6 @@ endif()
 if(NOT DEFINED CONFIG_ENABLE_QRCODE)
     set(CONFIG_ENABLE_QRCODE ON)
 endif()
-# 编码器注册表（tuya_ai_encoder.c，纯注册无 opus 依赖）：
-# svc_ai_agent 无条件引用 tuya_ai_get_encoder，不编会链接失败（本 demo PCM 直传不用编码器）
-if(NOT DEFINED CONFIG_ENABLE_TUYA_CODEC)
-    set(CONFIG_ENABLE_TUYA_CODEC ON)
-endif()
 # 下行语音播放：agent-core 的 AI 播放器（audio_player）及其平台消费端。
 # - CONFIG_ENABLE_AI_PLAYER：audio_player 模块 + port 的 ALSA 消费端
 #   （tkl_ai_player_consumer）+ tkl_fs 卡（文件源用）；不开则无播放能力；
