@@ -26,10 +26,10 @@ cd build && ./agent_demo
 > 构建必须在本仓库树内进行：agent_demo 复用 `../iot_demo/qrcode` 组件（不复制副本），
 > 单独拷贝本目录会因找不到 qrcode 而 configure 失败（CMake 会给出明确提示）。
 
-凭据可选：默认取 `src/tuya_config.h` 的 PID/UUID/AuthKey（PID 为上游 your_chat_bot
+凭据可选：默认取 `include/tuya_config.h` 的 PID/UUID/AuthKey（PID 为上游 your_chat_bot
 同款 AI 产品 `alon7qgyjj8yus74`，授权码与 iot_demo 相同），可用
 `-DTUYA_PRODUCT_ID=.. -DTUYA_OPENSDK_UUID=.. -DTUYA_OPENSDK_AUTHKEY=..` 覆盖，或在
-`src/tuya_config_secrets.h`（参考 `.example` 模板）里配置，也支持同名环境变量。
+`include/tuya_config_secrets.h`（参考 `.example` 模板）里配置，也支持同名环境变量。
 凭据优先级：**`-D` / 环境变量 > `tuya_config_secrets.h` > `tuya_config.h` 默认值**
 （secrets 模板的 `#define` 带 `#ifndef` 守卫，不会覆盖命令行注入；若自行去掉守卫，
 secrets 会静默覆盖 `-D`）。语音素材在构建时复制到 `build/voice_16k.pcm`，从 `build/`
@@ -204,7 +204,7 @@ cd build && ./agent_http_selftest
 
 - **PID 需开通 AI 服务**：默认 PID `alon7qgyjj8yus74`（上游 your_chat_bot 同款 AI 产品，
   已验证可建会话/可收下行）；授权码沿用 iot_demo 的测试 license。生产使用请换成自己的
-  AI 产品 + 授权码（`-D` 或 `src/tuya_config_secrets.h`）。
+  AI 产品 + 授权码（`-D` 或 `include/tuya_config_secrets.h`）。
 - **默认 UUID/AuthKey 是仓库内的测试 license**（与 iot_demo/p2p_demo 相同）：同一 license
   不能多处同时在线，与其他 demo 并行跑会互相踢下线。
 - **连续复位 3 次会清配网**：`reset_netcfg` 计数在 5 秒内未被清零时累加，达到 3 次即触发
@@ -243,16 +243,18 @@ cd build && ./agent_http_selftest
 +- agent_demo
     +- assets
     |   -- voice_16k.pcm            # 上行语音素材（edge-tts 合成，16k/16bit/mono）
+    +- include                       # 应用头（对齐上游 your_chat_bot 的 src/+include/ 布局）
+    |   -- agent_audio.h / agent_downlink.h / play_local_in.h / play_local_out.h
+    |   -- reset_netcfg.h / tuya_config.h / tuya_config_secrets.h.example
     +- src
     |   -- tuya_main.c              # 入口：初始化、连云、事件处理、AI 链路启动与触发
-    |   -- agent_audio.c/.h         # 上行：读素材 → 按帧喂 tuya_ai_audio_input
-    |   -- agent_downlink.c/.h      # 下行：注册事件回调，打印 ASR/NLG 文字
+    |   -- agent_audio.c            # 上行：读素材 → 按帧喂 tuya_ai_audio_input
+    |   -- agent_downlink.c         # 下行：注册事件回调，打印 ASR/NLG 文字
     |   -- agent_chain_selftest.c   # 链路自测（目标 agent_chain_selftest）
-    |   -- play_local_in.c/.h       # 音频输入契约 + Linux 实现（PCM 文件回放，真实设备替换点）
-    |   -- play_local_out.c/.h      # ALSA 输出端（随 ENABLE_AI_PLAYER 门控编入）
+    |   -- play_local_in.c          # 音频输入契约实现（PCM 文件回放，真实设备替换点）
+    |   -- play_local_out.c         # ALSA 输出端（随 ENABLE_AI_PLAYER 门控编入）
     |   -- fs_card.c                # 文件系统卡（备用；DATASINK 收窄时不参与链接）
-    |   -- tuya_config.h            # PID/UUID/AuthKey（可被 secrets 或 -D 覆盖）
-    |   -- tuya_config_secrets.h.example  # 凭据覆盖模板
+    |   -- reset_netcfg.c           # 连续复位清配网（同上游 your_chat_bot 同名文件）
     |   -- utility/                 # 事件总线（ai_user_event）
     |   -- audio_player/            # 播放器核心（svc_ai_player + consumer/datasink/decoder/mixer/resample）
     |   -- ai_audio/                # TTS/音乐播放编排

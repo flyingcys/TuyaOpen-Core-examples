@@ -75,8 +75,8 @@ if(NOT DEFINED CONFIG_AGENT_DEMO_AUDIO_FILE)
     set(CONFIG_AGENT_DEMO_AUDIO_FILE "")
 endif()
 
-# 凭据可选：不设置时使用 src/tuya_config.h 的默认值，
-# 或在同目录放一份 tuya_config_secrets.h（参考 .example 文件）
+# 凭据可选：不设置时使用 include/tuya_config.h 的默认值，
+# 或在 include/ 放一份 tuya_config_secrets.h（参考 .example 文件）
 if(NOT TUYA_PRODUCT_ID AND DEFINED ENV{TUYA_PRODUCT_ID})
     set(TUYA_PRODUCT_ID "$ENV{TUYA_PRODUCT_ID}")
 endif()
@@ -152,6 +152,7 @@ add_executable(agent_demo ${_agent_demo_srcs})
 
 target_include_directories(agent_demo PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 # 音频输出端（play_local_out.c，自 port 下沉）：把 svc_ai_player 解码后的
@@ -220,6 +221,7 @@ add_executable(agent_chain_selftest
 )
 target_include_directories(agent_chain_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_compile_definitions(agent_chain_selftest PRIVATE ${_agent_demo_defs})
 target_link_libraries(agent_chain_selftest PRIVATE ${_agent_demo_link})
@@ -236,6 +238,7 @@ add_executable(agent_nlg_selftest
 )
 target_include_directories(agent_nlg_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(agent_nlg_selftest PRIVATE ${_agent_demo_link})
 
@@ -246,6 +249,7 @@ add_executable(agent_http_selftest
 )
 target_include_directories(agent_http_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(agent_http_selftest PRIVATE ${_agent_demo_link})
 
