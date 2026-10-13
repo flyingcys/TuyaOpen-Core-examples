@@ -116,11 +116,16 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode ${CMAKE_BINARY_D
 #    audio_player 先于 ai_audio/ai_agent/ai_skills（后三者按其 svc_ai_player 接口
 #    编排播放）。各组件自带开关门控（ENABLE_AI_PLAYER / ENABLE_COMP_AI_AUDIO /
 #    ENABLE_COMP_AI_MCP），关闭时对应 target 不存在，链接前须过滤。
+#    总闸随之下沉：ENABLE_AI_COMPONENTS 关时组件整体不参与（与 core 原
+#    agent-core/CMakeLists.txt 的总闸一致）——组件依赖 tuya_ai_service 的
+#    base_event.h 等头，服务层不编时无法编译。
 set(_agent_demo_components utility audio_player ai_audio ai_agent ai_skills ai_mcp)
-foreach(_agent_demo_comp IN LISTS _agent_demo_components)
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/components/${_agent_demo_comp}
-        ${CMAKE_BINARY_DIR}/components/${_agent_demo_comp})
-endforeach()
+if(CONFIG_ENABLE_AI_COMPONENTS)
+    foreach(_agent_demo_comp IN LISTS _agent_demo_components)
+        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/components/${_agent_demo_comp}
+            ${CMAKE_BINARY_DIR}/components/${_agent_demo_comp})
+    endforeach()
+endif()
 
 # 5) 语音素材：configure 期复制到构建目录，供默认路径 "voice_16k.pcm" 使用
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/voice_16k.pcm ${CMAKE_BINARY_DIR}/voice_16k.pcm COPYONLY)
