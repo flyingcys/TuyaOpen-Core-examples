@@ -161,10 +161,13 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
         tuya_iot_dp_obj_report(client, dpobj->devid, dpobj->dps, dpobj->dpscnt, 0);
     } break;
 
-    /* RECV RAW DP（对齐上游）：打印后回报 */
+    /* RECV RAW DP（对齐上游）：打印（含字节 dump）后回报 */
     case TUYA_EVENT_DP_RECEIVE_RAW: {
         dp_raw_recv_t *dpraw = event->value.dpraw;
         PR_NOTICE("[AGENT] DP raw recv: id=%d len=%d", dpraw->dp.id, dpraw->dp.len);
+        for (uint32_t i = 0; i < dpraw->dp.len; i++) {
+            PR_DEBUG_RAW("%02x", dpraw->dp.data[i]);
+        }
         tuya_iot_dp_raw_report(client, dpraw->devid, &dpraw->dp, 3);
     } break;
 
