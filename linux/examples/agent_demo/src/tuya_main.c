@@ -48,6 +48,9 @@
 #define PROJECT_VERSION "1.0.0"
 #endif
 
+/* 产品 DP：音量（0-100，rw）——与上游 your_chat_bot 的 DPID_VOLUME 一致 */
+#define AGENT_DPID_VOLUME 3
+
 /* Tuya device handle */
 tuya_iot_client_t client;
 
@@ -139,6 +142,31 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
         PR_INFO("Device Reset Complete!");
         tal_system_reset();
         break;
+
+    /* RECV OBJ DP（对齐上游 your_chat_bot）：打印 + 音量 DP 驱动播放器主音量 +
+     * 全量回报（不回报 App 侧会显示设备无响应） */
+    case TUYA_EVENT_DP_RECEIVE_OBJ: {
+        dp_obj_recv_t *dpobj = event->value.dpobj;
+        PR_NOTICE("[AGENT] DP recv: cnt=%u", dpobj->dpscnt);
+        for (uint32_t i = 0; i < dpobj->dpscnt; i++) {
+            dp_obj_t *dp = dpobj->dps + i;
+            PR_NOTICE("[AGENT] DP id=%d type=%d value=%d", dp->id, dp->type, (int)dp->value.dp_value);
+#if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)
+            if (dp->id == AGENT_DPID_VOLUME) {
+                PR_NOTICE("[AGENT] volume DP -> set_vol(%d)", (int)dp->value.dp_value);
+                ai_audio_player_set_vol((int)dp->value.dp_value);
+            }
+#endif
+        }
+        tuya_iot_dp_obj_report(client, dpobj->devid, dpobj->dps, dpobj->dpscnt, 0);
+    } break;
+
+    /* RECV RAW DP（对齐上游）：打印后回报 */
+    case TUYA_EVENT_DP_RECEIVE_RAW: {
+        dp_raw_recv_t *dpraw = event->value.dpraw;
+        PR_NOTICE("[AGENT] DP raw recv: id=%d len=%d", dpraw->dp.id, dpraw->dp.len);
+        tuya_iot_dp_raw_report(client, dpraw->devid, &dpraw->dp, 3);
+    } break;
 
     default:
         break;
