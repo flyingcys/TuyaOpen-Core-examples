@@ -20,11 +20,20 @@
 cd examples/agent_demo
 cmake -B build
 cmake --build build -j$(nproc)
-cd build && ./agent_demo
+cd build && env -u DISPLAY ./agent_demo
 ```
 
 > 构建必须在本仓库树内进行：agent_demo 复用 examples 公共组件 `../qrcode`（不复制副本），
 > 单独拷贝本目录会因找不到 qrcode 而 configure 失败（CMake 会给出明确提示）。
+
+> **运行注意：用 `env -u DISPLAY` 启动**（Linux 桌面/虚拟机环境）。本 demo 启动时会打开
+> ALSA 音频输出端（`play_local_out_install`）；ALSA 的 pulse 插件初始化时会读取 `DISPLAY`
+> 去连 X server——若 `DISPLAY` 指向**不可达的 X**（如虚拟机/SSH 环境里指向宿主机、但宿主
+> X 未开 TCP 监听），该连接会**永久挂起**（`ss` 可见进程 `SYN-SENT` 到 `<host>:6000`，
+> 6000 即 X11 端口号），主线程卡死在 ALSA 打开 → **连云不启动、配网二维码不打印**。
+> 去掉 `DISPLAY`（ALSA 不需要 X）即恢复：`env -u DISPLAY ./agent_demo`。
+> 自测目标（agent_chain/nlg/http_selftest）不打开音频设备，不受影响；
+> iot_demo / p2p_demo 无音频输出端，同样不受影响。
 
 凭据可选：默认取 `include/tuya_config.h` 的 PID/UUID/AuthKey（PID 为上游 your_chat_bot
 同款 AI 产品 `alon7qgyjj8yus74`，授权码与 iot_demo 相同），可用
