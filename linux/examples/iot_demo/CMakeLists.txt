@@ -106,7 +106,7 @@ list(APPEND _iot_demo_link -Wl,--end-group tuyaopen-port tuyaopen-headers)
 target_link_libraries(iot_demo PRIVATE ${_iot_demo_link})
 
 # tal_kv 自测（独立可执行，链接与 iot_demo 相同的库）
-add_executable(tal_kv_selftest tal_kv_selftest.c)
+add_executable(tal_kv_selftest selftest/tal_kv_selftest.c)
 target_link_libraries(tal_kv_selftest PRIVATE ${_iot_demo_link})
 unset(_iot_demo_link)
 
