@@ -49,34 +49,83 @@ static AI_PLAYER_ALERT_CUSTOM_CB __s_alert_custom_cb = NULL;
 ***********************************************************/
 #if defined(AI_PLAYER_ALERT_SOURCE_LOCAL) && (AI_PLAYER_ALERT_SOURCE_LOCAL == 1)
 
-/* 一期未移植提示音素材（media_src.h 的 LOCAL_ALERT_SRC_*，约 2MB）：保留类型
- * 分发骨架，二期补 assets 后在各 case 恢复素材赋值与播放。原实现（各 case 对应
- * 素材）：POWER_ON/NOT_ACTIVE/NET_CFG/NET_FAILED/NET_DISCONNECT/NET_CONNECTED/
- * LOW_BATTERY/PLEASE_AGAIN/LONG_KEY_TALK/KEY_TALK/WAKEUP_TALK/FREE_TALK/WAKEUP。 */
+/* 语言无关提示音（上游 5e9b27b4 方案：本地化语音包改为 4 个语义 tone，~14KB）：
+ * 素材在 local_alert_src_tone.c（自上游逐字节移植）；13 种 alert 的映射与上游
+ * assets/include/media_src.h 的 tone 版一致。 */
+extern const uint8_t media_src_tone_success[3780];
+extern const uint8_t media_src_tone_wait[2520];
+extern const uint8_t media_src_tone_fail[4032];
+extern const uint8_t media_src_tone_wake[4032];
+
 OPERATE_RET __player_local_alert(AI_AUDIO_ALERT_TYPE_E type)
 {
+    OPERATE_RET rt = OPRT_OK;
+    uint8_t *audio_data = NULL;
+    uint32_t audio_size = 0;
+
     switch(type) {
     case AI_AUDIO_ALERT_POWER_ON:
+        audio_data = (uint8_t*)media_src_tone_wake;
+        audio_size = sizeof(media_src_tone_wake);
+    break;
     case AI_AUDIO_ALERT_NOT_ACTIVE:
+        audio_data = (uint8_t*)media_src_tone_wait;
+        audio_size = sizeof(media_src_tone_wait);
+    break;
     case AI_AUDIO_ALERT_NETWORK_CFG:
+        audio_data = (uint8_t*)media_src_tone_wait;
+        audio_size = sizeof(media_src_tone_wait);
+    break;
     case AI_AUDIO_ALERT_NETWORK_FAIL:
+        audio_data = (uint8_t*)media_src_tone_fail;
+        audio_size = sizeof(media_src_tone_fail);
+    break;
     case AI_AUDIO_ALERT_NETWORK_DISCONNECT:
+        audio_data = (uint8_t*)media_src_tone_fail;
+        audio_size = sizeof(media_src_tone_fail);
+    break;
     case AI_AUDIO_ALERT_NETWORK_CONNECTED:
+        audio_data = (uint8_t*)media_src_tone_success;
+        audio_size = sizeof(media_src_tone_success);
+    break;
     case AI_AUDIO_ALERT_BATTERY_LOW:
+        audio_data = (uint8_t*)media_src_tone_fail;
+        audio_size = sizeof(media_src_tone_fail);
+    break;
     case AI_AUDIO_ALERT_PLEASE_AGAIN:
+        audio_data = (uint8_t*)media_src_tone_wait;
+        audio_size = sizeof(media_src_tone_wait);
+    break;
     case AI_AUDIO_ALERT_LONG_KEY_TALK:
+        audio_data = (uint8_t*)media_src_tone_wake;
+        audio_size = sizeof(media_src_tone_wake);
+    break;
     case AI_AUDIO_ALERT_KEY_TALK:
+        audio_data = (uint8_t*)media_src_tone_wake;
+        audio_size = sizeof(media_src_tone_wake);
+    break;
     case AI_AUDIO_ALERT_WAKEUP_TALK:
+        audio_data = (uint8_t*)media_src_tone_wake;
+        audio_size = sizeof(media_src_tone_wake);
+    break;
     case AI_AUDIO_ALERT_RANDOM_TALK:
+        audio_data = (uint8_t*)media_src_tone_wake;
+        audio_size = sizeof(media_src_tone_wake);
+    break;
     case AI_AUDIO_ALERT_WAKEUP:
-        PR_WARN("local alert skipped (asset not ported), type=%d", type);
+        audio_data = (uint8_t*)media_src_tone_wake;
+        audio_size = sizeof(media_src_tone_wake);
     break;
     default:
         PR_NOTICE("audio player -> local alert type: %d not support", type);
     break;
     }
 
-    return OPRT_OK;
+    if(audio_data && audio_size) {
+        TUYA_CALL_ERR_LOG(ai_audio_play_data(AI_AUDIO_CODEC_MP3, audio_data, audio_size));
+    }
+
+    return rt;
 }
 
 #endif
