@@ -250,7 +250,6 @@ cd build && ./agent_http_selftest
     |   -- tuya_main.c              # 入口：初始化、连云、事件处理、AI 链路启动与触发
     |   -- agent_audio.c            # 上行：读素材 → 按帧喂 tuya_ai_audio_input
     |   -- agent_downlink.c         # 下行：注册事件回调，打印 ASR/NLG 文字
-    |   -- agent_chain_selftest.c   # 链路自测（目标 agent_chain_selftest）
     |   -- play_local_in.c          # 音频输入契约实现（PCM 文件回放，真实设备替换点）
     |   -- play_local_out.c         # ALSA 输出端（随 ENABLE_AI_PLAYER 门控编入）
     |   -- fs_card.c                # 文件系统卡（备用；DATASINK 收窄时不参与链接）
@@ -261,6 +260,10 @@ cd build && ./agent_http_selftest
     |   -- ai_agent/                # 应用封装（output cbs 注册、text/file/image 上行）
     |   -- ai_skills/               # 下行文字解析（ASR/NLG/skill）
     |   -- ai_mcp/                  # MCP 工具集
+    +- selftest                      # 离线自测（独立目标，不连云；见「自测」章节）
+    |   -- agent_chain_selftest.c   # 链路自测（目标 agent_chain_selftest）
+    |   -- agent_nlg_selftest.c     # 下行消费自测（目标 agent_nlg_selftest）
+    |   -- agent_http_selftest.c    # URL 解析边界自测（目标 agent_http_selftest）
     -- CMakeLists.txt
     -- Kconfig                      # AGENT_DEMO* 开关 + 组件开关（audio_player/ai_audio）
     -- agent-demo-design.md         # 技术方案文档

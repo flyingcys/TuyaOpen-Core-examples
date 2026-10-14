@@ -174,10 +174,11 @@ cmake --build build-ls -j$(nproc)
     |   -- demo_vcam.c/.h           # 虚拟摄像头：样片 AU 索引 + 按帧率循环喂帧
     |   -- demo_media_event.c/.h    # local_store 回放（日历查询/回放送帧）
     |   -- fs_card.c                # 文件系统卡（tal_fs_ops；local_store 使用）
-    |   -- demo_vcam_selftest.c     # vcam 自测（目标 vcam_selftest）
-    |   -- media_chain_selftest.c   # 媒体链路自测（目标 media_chain_selftest）
     |   -- tuya_config.h            # PID/UUID/AuthKey（可被 secrets 或 -D 覆盖）
     |   -- tuya_config_secrets.h.example  # 凭据覆盖模板
+    +- selftest                      # 离线自测（独立目标，不连云；见「自测」章节）
+    |   -- demo_vcam_selftest.c     # vcam 自测（目标 vcam_selftest）
+    |   -- media_chain_selftest.c   # 媒体链路自测（目标 media_chain_selftest）
     -- CMakeLists.txt
     -- Kconfig                      # P2P_DEMO* 开关
 ```

@@ -115,9 +115,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/demo_video.264 ${CMAKE_BINARY_
 file(GLOB _p2p_demo_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
 )
-# 自测文件自带 main()（独立自测目标），不能进 app 的源列表
-list(FILTER _p2p_demo_srcs EXCLUDE REGEX "/demo_vcam_selftest\\.c$")
-list(FILTER _p2p_demo_srcs EXCLUDE REGEX "/media_chain_selftest\\.c$")
+# 自测（selftest/ 目录，独立目标自带 main()）不在此 GLOB 范围内，无需过滤
 
 add_executable(p2p_demo ${_p2p_demo_srcs})
 
@@ -188,7 +186,7 @@ target_link_libraries(p2p_demo PRIVATE ${_p2p_demo_link})
 # demo_vcam 自测（独立可执行，链接与 p2p_demo 相同的库组）
 # demo_vcam.c 是自测的实现面（app 目标经 GLOB 收它），这里显式带上
 add_executable(vcam_selftest
-    src/demo_vcam_selftest.c
+    selftest/demo_vcam_selftest.c
     src/demo_vcam.c
 )
 target_include_directories(vcam_selftest PRIVATE
@@ -204,7 +202,7 @@ target_link_libraries(vcam_selftest PRIVATE ${_p2p_demo_link})
 # 无云无 App 地跑通 vcam → 帧校验/队列/ring buffer → 取帧回调。
 # 不带 tuya_main.c/reset_netcfg.c（自测不连云），媒体实现面显式列出
 add_executable(media_chain_selftest
-    src/media_chain_selftest.c
+    selftest/media_chain_selftest.c
     src/tuya_ipc_demo.c
     src/demo_vcam.c
     src/demo_media_event.c

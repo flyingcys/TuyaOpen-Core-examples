@@ -140,10 +140,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/voice_16k.pcm ${CMAKE_BINARY_D
 file(GLOB _agent_demo_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
 )
-# 自测文件自带 main()（独立自测目标），不能进 app 的源列表
-list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_chain_selftest\\.c$")
-list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_nlg_selftest\\.c$")
-list(FILTER _agent_demo_srcs EXCLUDE REGEX "/agent_http_selftest\\.c$")
+# 自测（selftest/ 目录，独立目标自带 main()）不在此 GLOB 范围内，无需过滤
 # 音频输出端（play_local_out.c，自 port 下沉）：依赖 audio_player 组件头
 # （svc_ai_player.h），随 ENABLE_AI_PLAYER 门控——见下方条件加入
 list(FILTER _agent_demo_srcs EXCLUDE REGEX "/play_local_out\\.c$")
@@ -214,9 +211,9 @@ target_link_libraries(agent_demo PRIVATE ${_agent_demo_link})
 
 # 链路自测（独立可执行，链接与 agent_demo 相同的库组）：
 # 无云地验证 素材加载 → 帧切分 → 边界（不依赖网络与凭据）
-# 只测应用侧 port_ai_demo_* 契约（上传编排依赖 AI 客户端上下文，属在线实跑范畴）
+# 只测应用侧 play_local_in_* 契约（上传编排依赖 AI 客户端上下文，属在线实跑范畴）
 add_executable(agent_chain_selftest
-    src/agent_chain_selftest.c
+    selftest/agent_chain_selftest.c
     src/play_local_in.c
 )
 target_include_directories(agent_chain_selftest PRIVATE
@@ -229,9 +226,9 @@ target_link_libraries(agent_chain_selftest PRIVATE ${_agent_demo_link})
 # 下行消费自测（独立可执行）：构造 STOP 事件（含非空末段）验证 agent_downlink
 # 的消费策略（STOP 携带的末段必须打印）——防回归，不依赖云端分包行为
 # agent_audio.c：agent_downlink 的 ASR 分支调用上行校验 notify，链接需带实现；
-# 其引用的 port_ai_demo_* 契约实现（src/port_ai_demo.c）须一并带上
+# 其引用的 play_local_in_* 契约实现（src/play_local_in.c）须一并带上
 add_executable(agent_nlg_selftest
-    src/agent_nlg_selftest.c
+    selftest/agent_nlg_selftest.c
     src/agent_downlink.c
     src/agent_audio.c
     src/play_local_in.c
@@ -245,7 +242,7 @@ target_link_libraries(agent_nlg_selftest PRIVATE ${_agent_demo_link})
 # http_manager URL 解析边界自测（独立可执行，不依赖网络）：
 # 端口越界必须被 parser 拒绝（uint16 回绕会静默连错端口/落默认端口）
 add_executable(agent_http_selftest
-    src/agent_http_selftest.c
+    selftest/agent_http_selftest.c
 )
 target_include_directories(agent_http_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
