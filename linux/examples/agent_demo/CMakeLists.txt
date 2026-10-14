@@ -229,13 +229,12 @@ target_include_directories(agent_chain_selftest PRIVATE
 target_compile_definitions(agent_chain_selftest PRIVATE ${_agent_demo_defs})
 target_link_libraries(agent_chain_selftest PRIVATE ${_agent_demo_link})
 
-# 下行消费自测（独立可执行）：构造 STOP 事件（含非空末段）验证 agent_downlink
-# 的消费策略（STOP 携带的末段必须打印）——防回归，不依赖云端分包行为
-# agent_audio.c：agent_downlink 的 ASR 分支调用上行校验 notify，链接需带实现；
-# 其引用的 play_local_in_* 契约实现（src/adapt/play_local_in.c）须一并带上
+# 下行消费自测（独立可执行）：构造 STOP 事件（含非空末段）验证下行消费策略
+# （STOP 携带的末段必须打印）——防回归，不依赖云端分包行为
+# agent_audio.c：内含下行回调（ASR 分支调用上行校验 notify）与上行实现，链接
+# 需带；其引用的 play_local_in_* 契约实现（src/adapt/play_local_in.c）须一并带上
 add_executable(agent_nlg_selftest
     selftest/agent_nlg_selftest.c
-    src/agent_downlink.c
     src/agent_audio.c
     src/adapt/play_local_in.c
 )

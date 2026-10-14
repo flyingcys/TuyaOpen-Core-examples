@@ -7,14 +7,14 @@
  * 显式空包 {NULL,0,0}。消费端若在 STOP 分支不读 event->data，会漏最后一段文字。
  *
  * 本自测用公开 API（ai_user_event_notify，同步调用）构造事件，捕获
- * agent_downlink 的 stdout 输出并断言——不依赖云端分包行为，可稳定复现。
+ * 下行回调（agent_audio.c 内）的 stdout 输出并断言——不依赖云端分包行为，
+ * 可稳定复现。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
 
 #include "tal_api.h"
 #include "ai_user_event.h"
-#include "agent_downlink.h"
 #include "agent_audio.h"
 
 #include <stdio.h>
@@ -109,7 +109,7 @@ int main(void)
 
     /* 3) 上行校验信号量：ASR_OK / ASR_EMPTY 都应 post（空识别=链路通但无内容，
      *    不是上传失败）；未收到 ASR 时 wait 必须超时（否则"upload done"会假绿）。
-     *    这条把 agent_downlink→agent_audio 的联动从连云里剥出来，离线可判。 */
+     *    这条把下行回调→上行校验的联动从连云里剥出来，离线可判。 */
     CHECK(agent_audio_uplink_verify_init() == OPRT_OK, "uplink verify init");
     capture_stdout(__emit_asr_ok, NULL, out, sizeof(out));
     CHECK(agent_audio_uplink_verify_wait(2000) == OPRT_OK, "ASR_OK posts uplink verify");

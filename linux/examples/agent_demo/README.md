@@ -253,13 +253,12 @@ cd build && ./agent_http_selftest
     +- assets
     |   -- voice_16k.pcm            # 上行语音素材（edge-tts 合成，16k/16bit/mono）
     +- include                       # 应用头（对齐上游 your_chat_bot 的 src/+include/ 布局）
-    |   -- agent.h / agent_audio.h / agent_downlink.h / play_local_in.h / play_local_out.h
+    |   -- agent.h / agent_audio.h / play_local_in.h / play_local_out.h
     |   -- reset_netcfg.h / tuya_config.h / tuya_config_secrets.h.example
     +- src
     |   -- tuya_main.c              # 入口：初始化、连云、事件处理与事件分发
     |   -- agent.c                  # AI 链路启动编排（MQTT 连上后：agent 初始化 + 一次语音触发）
-    |   -- agent_audio.c            # 上行：读素材 → 按帧喂 tuya_ai_audio_input
-    |   -- agent_downlink.c         # 下行：注册事件回调，打印 ASR/NLG 文字
+    |   -- agent_audio.c            # 音频链路对接：上行喂送（PCM 按帧上传）+ 下行 ASR/NLG 打印
     |   -- reset_netcfg.c           # 连续复位清配网（同上游 your_chat_bot 同名文件）
     |   +- adapt/                    # 平台适配层（真实设备替换点；见下方专段）
     |   |   -- play_local_in.c      # 音频输入契约实现（PCM 文件回放）

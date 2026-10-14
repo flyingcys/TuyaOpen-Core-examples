@@ -12,7 +12,6 @@
 #include "ai_agent.h"
 #include "tuya_ai_agent.h"
 #include "agent_audio.h"
-#include "agent_downlink.h"
 #include "agent.h"
 
 /* 触发时序：等客户端就绪上限 / 就绪后等会话建立（crt_session 一次取 token 往返） */

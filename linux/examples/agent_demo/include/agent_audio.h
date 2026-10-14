@@ -1,9 +1,10 @@
 /**
  * @file agent_audio.h
- * @brief agent_demo 上行音频：把一段 PCM 素材按帧喂给云端 agent
+ * @brief agent_demo 音频链路对接：上行喂送 + 下行打印（2026-10-14 两文件合并）
  *
- * 音频源经应用侧 play_local_in_* 契约取得（Linux：PCM 文件回放；
- * 真实设备：替换为麦克风采集，见 play_local_in.h）。
+ * 上行：把一段 PCM 素材按帧喂给云端 agent——音频源经应用侧 play_local_in_* 契约
+ * 取得（Linux：PCM 文件回放；真实设备：替换为麦克风采集，见 play_local_in.h）。
+ * 下行：注册事件回调打印 ASR 识别结果与 NLG 回复文字（agent_downlink_init）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
@@ -68,6 +69,18 @@ OPERATE_RET agent_audio_uplink_verify_wait(uint32_t timeout_ms);
  *        空识别是"链路通了但没内容"，不是上传失败）
  */
 void agent_audio_uplink_verify_notify(void);
+
+/**
+ * @brief 注册下行事件回调（ai_user_event_notify_register）
+ *
+ * 打印：
+ *   [AGENT][ASR]  <语音识别结果>        （验证"上传的语音被云端识别"）
+ *   [AGENT][NLG]  <agent 回复文字>      （全链路通的最终判据）
+ * 下行音频包在 ai_agent.c 的 media_data_cb 里被丢弃（本 demo 不启用 AI 音频模块）。
+ *
+ * @return OPRT_OK 成功
+ */
+OPERATE_RET agent_downlink_init(void);
 
 #ifdef __cplusplus
 }
