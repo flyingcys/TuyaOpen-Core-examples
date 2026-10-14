@@ -33,7 +33,7 @@
 #include "ai_mcp.h"
 #endif
 
-/* 下行语音播放（src/ai_audio，B 波次恢复）：ai_audio_player_init 建立
+/* 下行语音播放（src/components/ai_audio，B 波次恢复）：ai_audio_player_init 建立
  * 播放服务（内部 tuya_ai_player_service_init），port 的 ALSA 消费端随后注入。
  * 同 MCP：关开关时头与目标都不存在，include 与调用一并由宏守卫 */
 #if defined(ENABLE_COMP_AI_AUDIO) && (ENABLE_COMP_AI_AUDIO == 1)

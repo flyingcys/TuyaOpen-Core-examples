@@ -28,7 +28,7 @@ menu "configure app (agent_demo)"
             （构建目录的 voice_16k.pcm，由 assets/voice_16k.pcm 复制而来，
             为 edge-tts 合成的"请问，现在是几点钟？"）；填写则用该文件。
 
-    # 应用侧 AI 组件开关（自 core agent-core 下沉，见 src/）：
+    # 应用侧 AI 组件开关（自 core agent-core 下沉，见 src/components/）：
     # audio_player（ENABLE_AI_PLAYER 及解码器/资源参数子开关）→ ai_audio
     # （ENABLE_COMP_AI_AUDIO + 提示音来源选择，select ENABLE_AI_PLAYER）。
     # 符号名/默认值与原 core 定义一致（.config 与 CMake -D 的既有用法不受
@@ -37,7 +37,7 @@ menu "configure app (agent_demo)"
     # 拉回），套 if 是恒真冗余。
     # 注：ENABLE_COMP_AI_MCP 不在此列——MCP server 核心在 core 服务层
     # （agent-core/svc_ai_mcp/），开关随模块定义在那里。
-    rsource "src/audio_player/Kconfig"
-    rsource "src/ai_audio/Kconfig"
+    rsource "src/components/audio_player/Kconfig"
+    rsource "src/components/ai_audio/Kconfig"
 
 endmenu

@@ -60,7 +60,7 @@ secrets 会静默覆盖 `-D`）。语音素材在构建时复制到 `build/voice
 |---|---|---|
 | `AGENT_DEMO` | 构建本 example；select `ENABLE_AI_COMPONENTS`、`ENABLE_QRCODE`、`ENABLE_TUYA_CODEC` | y（无 prompt） |
 | `AGENT_DEMO_AUDIO_FILE` | 上行语音素材路径（16k/16bit/mono PCM）；留空用内置素材 | "" |
-| `ENABLE_COMP_AI_MCP`（core 定义，见 `agent-core/svc_ai_mcp/Kconfig`） | MCP 全链开关：core 的 server 核心（`svc_ai_mcp`）+ 应用侧工具集（`src/ai_mcp`，见"MCP 支持"一节）；demo 在 `CMakeLists.txt` 内置默认 ON | ON（内置默认） |
+| `ENABLE_COMP_AI_MCP`（core 定义，见 `agent-core/svc_ai_mcp/Kconfig`） | MCP 全链开关：core 的 server 核心（`svc_ai_mcp`）+ 应用侧工具集（`src/components/ai_mcp`，见"MCP 支持"一节）；demo 在 `CMakeLists.txt` 内置默认 ON | ON（内置默认） |
 
 menuconfig 用法（`AGENT_DEMO` 无 prompt，不构建该 example 即可，无需关闭）：
 
@@ -99,7 +99,7 @@ SUBSCRIBE_TYPE_ONETIME)`；真正的初始化在 MQTT 连上后的回调里：`a
 → `ai_mcp_server_parse_message`（处理 `initialize` / `tools/list` / `tools/call`）
 → 执行工具 → `tuya_ai_agent_mcp_response` 回包。
 
-**当前工具列表**（`src/ai_mcp/src/ai_mcp_tools.c`）：
+**当前工具列表**（`src/components/ai_mcp/ai_mcp_tools.c`）：
 
 | 工具名 | 能力 | 参数 | 返回 |
 |---|---|---|---|
@@ -259,16 +259,18 @@ cd build && ./agent_http_selftest
     |   -- tuya_main.c              # 入口：初始化、连云、事件处理、AI 链路启动与触发
     |   -- agent_audio.c            # 上行：读素材 → 按帧喂 tuya_ai_audio_input
     |   -- agent_downlink.c         # 下行：注册事件回调，打印 ASR/NLG 文字
-    |   -- play_local_in.c          # 音频输入契约实现（PCM 文件回放，真实设备替换点）
-    |   -- play_local_out.c         # ALSA 输出端（随 ENABLE_AI_PLAYER 门控编入）
-    |   -- fs_card.c                # 文件系统卡（备用；DATASINK 收窄时不参与链接）
     |   -- reset_netcfg.c           # 连续复位清配网（同上游 your_chat_bot 同名文件）
-    |   -- utility/                 # 事件总线（ai_user_event）
-    |   -- audio_player/            # 播放器核心（svc_ai_player + consumer/datasink/decoder/mixer/resample）
-    |   -- ai_audio/                # TTS/音乐播放编排
-    |   -- ai_agent/                # 应用封装（output cbs 注册、text/file/image 上行）
-    |   -- ai_skills/               # 下行文字解析（ASR/NLG/skill）
-    |   -- ai_mcp/                  # MCP 工具集
+    |   +- adapt/                    # 平台适配层（真实设备替换点；见下方专段）
+    |   |   -- play_local_in.c      # 音频输入契约实现（PCM 文件回放）
+    |   |   -- play_local_out.c     # ALSA 输出端（随 ENABLE_AI_PLAYER 门控编入）
+    |   |   -- fs_card.c            # 文件系统卡（备用；DATASINK 收窄时不参与链接）
+    |   +- components/               # 应用侧 AI 组件（自 core agent-core 下沉）
+    |       -- utility/             # 事件总线（ai_user_event）
+    |       -- audio_player/        # 播放器核心（svc_ai_player + consumer/datasink/decoder/mixer/resample）
+    |       -- ai_audio/            # TTS/音乐播放编排
+    |       -- ai_agent/            # 应用封装（output cbs 注册、text/file/image 上行）
+    |       -- ai_skills/           # 下行文字解析（ASR/NLG/skill）
+    |       -- ai_mcp/              # MCP 工具集
     +- selftest                      # 离线自测（独立目标，不连云；见「自测」章节）
     |   -- agent_chain_selftest.c   # 链路自测（目标 agent_chain_selftest）
     |   -- agent_nlg_selftest.c     # 下行消费自测（目标 agent_nlg_selftest）
@@ -278,17 +280,17 @@ cd build && ./agent_http_selftest
     -- agent-demo-design.md         # 技术方案文档
 ```
 
-音频/文件系统适配（应用侧，2026-10-13 自平台 port 下沉）：
+平台适配层（应用侧，2026-10-13 自平台 port 下沉，2026-10-14 收拢至 src/adapt/）：
 
 ```sh
-+- agent_demo/src
++- agent_demo/src/adapt
     +- play_local_in.h/.c            # 音频输入契约 + Linux 实现（PCM 文件回放，真实设备替换点）
     +- play_local_out.h/.c           # ALSA 输出端（随 ENABLE_AI_PLAYER 门控编入）
     +- fs_card.c                     # 文件系统卡（tal_fs_ops；复制自 p2p_demo 备用——
                                      #   DATASINK 收窄为 MEM|URL 时不参与链接，恢复 FILE 源时启用）
-+- p2p_demo/src/fs_card.c            # 同上原件（local_store 使用）
++- p2p_demo/src/adapt/fs_card.c      # 同上原件（local_store 使用）
 ```
 
 > `fs_card.c` 两份副本**须逐字节同步**：修改任一份后运行
-> `diff examples/agent_demo/src/fs_card.c examples/p2p_demo/src/fs_card.c`
+> `diff examples/agent_demo/src/adapt/fs_card.c examples/p2p_demo/src/adapt/fs_card.c`
 > 校验（不一致时把改动同步到另一份）。

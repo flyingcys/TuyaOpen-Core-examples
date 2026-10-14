@@ -1,5 +1,5 @@
 # AI 播放器开关（audio_player 模块，上游 src/audio_player 移植）。
-# 默认值与 src/audio_player/CMakeLists.txt 的 CONFIG_ENABLE_AI_PLAYER
+# 默认值与 src/components/audio_player/CMakeLists.txt 的 CONFIG_ENABLE_AI_PLAYER
 # 及 svc_ai_player.h 的 #ifndef 兜底保持一致。
 menuconfig ENABLE_AI_PLAYER
     bool "ENABLE_AI_PLAYER: Enable AI player"

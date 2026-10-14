@@ -115,6 +115,12 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/demo_video.264 ${CMAKE_BINARY_
 file(GLOB _p2p_demo_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
 )
+# 平台适配层（src/adapt/：真实设备替换点——fs_card）随根一并收集
+file(GLOB _p2p_demo_adapt_srcs CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/adapt/*.c"
+)
+list(APPEND _p2p_demo_srcs ${_p2p_demo_adapt_srcs})
+unset(_p2p_demo_adapt_srcs)
 # 自测（selftest/ 目录，独立目标自带 main()）不在此 GLOB 范围内，无需过滤
 
 add_executable(p2p_demo ${_p2p_demo_srcs})

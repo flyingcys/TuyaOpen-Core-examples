@@ -3,8 +3,8 @@
  * @brief 文件系统平台 ops 卡组装 + POSIX 实现（2026-10-13 自平台 port 下沉）
  *
  * @note 本文件在 p2p_demo 与 agent_demo 各有一份副本（内容须逐字节同步）：
- *       - p2p_demo/src/fs_card.c：服务 local_store（P2P 录像存储）；
- *       - agent_demo/src/fs_card.c：备用——agent_demo 的 DATASINK 已收窄为
+ *       - p2p_demo/src/adapt/fs_card.c：服务 local_store（P2P 录像存储）；
+ *       - agent_demo/src/adapt/fs_card.c：备用——agent_demo 的 DATASINK 已收窄为
  *         MEM|URL（见其 CMakeLists.txt），当前不链接 FS；恢复 FILE 源时
  *         删掉收窄注入即可（卡已就位）。
  *
@@ -592,7 +592,7 @@ TUYA_WEAK_ATTRIBUTE int fs_card_fileno(TUYA_FILE file)
 /* ---------------------------------------------------------------------------
  * 文件系统平台 ops 卡：由本文件组装，core 的 tal_fs.c 经 extern 引用并完成
  * tal_fs_* / tal_dir_* 分发。文件系统为可选能力（p2p-core/local_store 与
- * agent_demo/src/audio_player 的文件源），与主卡（port_runtime.c）解耦；整文件随
+ * agent_demo/src/components/audio_player 的文件源），与主卡（port_runtime.c）解耦；整文件随
  * ENABLE_TUYA_P2P || ENABLE_AI_PLAYER 门控，两者全关的平台无需适配。
  * --------------------------------------------------------------------------- */
 TAL_FS_OPS_T tal_fs_ops_platform = {

@@ -46,7 +46,7 @@ unset(TUYAOPEN_DOTCONFIG)
 if(NOT DEFINED CONFIG_ENABLE_AI_COMPONENTS)
     set(CONFIG_ENABLE_AI_COMPONENTS ON)
 endif()
-# MCP 工具服务（src/ai_mcp）：demo 在 tuya_main.c 里调 ai_mcp_init() 接线，
+# MCP 工具服务（src/components/ai_mcp）：demo 在 tuya_main.c 里调 ai_mcp_init() 接线，
 # 云端可通过 MCP 协议列出/调用设备工具（当前工具列表见 ai_mcp_tools.c）
 if(NOT DEFINED CONFIG_ENABLE_COMP_AI_MCP)
     set(CONFIG_ENABLE_COMP_AI_MCP ON)
@@ -105,7 +105,7 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../qrcode/CMakeLists.txt")
 endif()
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../qrcode ${CMAKE_BINARY_DIR}/qrcode)
 
-# 4) 应用侧 AI 组件（自 core agent-core 下沉，见 src/）：utility（事件总线）/
+# 4) 应用侧 AI 组件（自 core agent-core 下沉，见 src/components/）：utility（事件总线）/
 #    audio_player（播放器核心）/ai_audio（TTS/音乐编排）/ai_agent（应用封装）/
 #    ai_skills（下行文字解析）/ai_mcp（MCP 工具集）。顺序沿用原 core 布局：
 #    audio_player 先于 ai_audio/ai_agent/ai_skills（后三者按其 svc_ai_player 接口
@@ -117,15 +117,15 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../qrcode ${CMAKE_BINARY_DIR}/qrcod
 set(_agent_demo_components utility audio_player ai_audio ai_agent ai_skills ai_mcp)
 if(CONFIG_ENABLE_AI_COMPONENTS)
     foreach(_agent_demo_comp IN LISTS _agent_demo_components)
-        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/${_agent_demo_comp}
-            ${CMAKE_BINARY_DIR}/src/${_agent_demo_comp})
+        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/components/${_agent_demo_comp}
+            ${CMAKE_BINARY_DIR}/src/components/${_agent_demo_comp})
     endforeach()
 endif()
 
 # 音频数据源收窄（关 FILE 位）：agent_demo 实际只播 MEM（TTS 流）与 URL
 # （TTS URL/音乐）源——唯一的 FILE 源入口 ai_audio_play_local() 全仓零调用。
 # 关位后 datasink 分发（ai_player_datasink.c）不再引用 g_datasink_file →
-# datasink_file.o 与 tal_fs.o 不进链接 → 不依赖文件系统卡。src/fs_card.c
+# datasink_file.o 与 tal_fs.o 不进链接 → 不依赖文件系统卡。src/adapt/fs_card.c
 # （复制自 p2p_demo，本目录内编入备用）就地待命：恢复 FILE 源时删掉本注入
 # 即可（卡已就位）。注入目标是 audio_player 库——宏定义在 svc_ai_player.h，
 # 唯一消费方是 ai_player_datasink.c。
@@ -140,8 +140,14 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/voice_16k.pcm ${CMAKE_BINARY_D
 file(GLOB _agent_demo_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
 )
+# 平台适配层（src/adapt/：真实设备替换点——play_local_in/out、fs_card）随根一并收集
+file(GLOB _agent_demo_adapt_srcs CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/adapt/*.c"
+)
+list(APPEND _agent_demo_srcs ${_agent_demo_adapt_srcs})
+unset(_agent_demo_adapt_srcs)
 # 自测（selftest/ 目录，独立目标自带 main()）不在此 GLOB 范围内，无需过滤
-# 音频输出端（play_local_out.c，自 port 下沉）：依赖 audio_player 组件头
+# 音频输出端（adapt/play_local_out.c，自 port 下沉）：依赖 audio_player 组件头
 # （svc_ai_player.h），随 ENABLE_AI_PLAYER 门控——见下方条件加入
 list(FILTER _agent_demo_srcs EXCLUDE REGEX "/play_local_out\\.c$")
 
@@ -152,13 +158,13 @@ target_include_directories(agent_demo PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# 音频输出端（play_local_out.c，自 port 下沉）：把 svc_ai_player 解码后的
+# 音频输出端（adapt/play_local_out.c，自 port 下沉）：把 svc_ai_player 解码后的
 # PCM 写进 ALSA（16k/16bit/mono）。依赖 audio_player 组件的 svc_ai_player.h
 # ——组件随 ENABLE_AI_PLAYER 门控，关时头不存在，故源与 libasound 链接一并
 # 随开关。libasound 经 pkg-config 探测（写法同 BT 的 GIO/DBUS），无
 # pkg-config 时按库名兜底（libasound2-dev 提供）。
 if(CONFIG_ENABLE_AI_PLAYER)
-    target_sources(agent_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/play_local_out.c)
+    target_sources(agent_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/adapt/play_local_out.c)
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
         pkg_check_modules(ALSA alsa QUIET)
@@ -214,7 +220,7 @@ target_link_libraries(agent_demo PRIVATE ${_agent_demo_link})
 # 只测应用侧 play_local_in_* 契约（上传编排依赖 AI 客户端上下文，属在线实跑范畴）
 add_executable(agent_chain_selftest
     selftest/agent_chain_selftest.c
-    src/play_local_in.c
+    src/adapt/play_local_in.c
 )
 target_include_directories(agent_chain_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -226,12 +232,12 @@ target_link_libraries(agent_chain_selftest PRIVATE ${_agent_demo_link})
 # 下行消费自测（独立可执行）：构造 STOP 事件（含非空末段）验证 agent_downlink
 # 的消费策略（STOP 携带的末段必须打印）——防回归，不依赖云端分包行为
 # agent_audio.c：agent_downlink 的 ASR 分支调用上行校验 notify，链接需带实现；
-# 其引用的 play_local_in_* 契约实现（src/play_local_in.c）须一并带上
+# 其引用的 play_local_in_* 契约实现（src/adapt/play_local_in.c）须一并带上
 add_executable(agent_nlg_selftest
     selftest/agent_nlg_selftest.c
     src/agent_downlink.c
     src/agent_audio.c
-    src/play_local_in.c
+    src/adapt/play_local_in.c
 )
 target_include_directories(agent_nlg_selftest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src

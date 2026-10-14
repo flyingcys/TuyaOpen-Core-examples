@@ -2,7 +2,7 @@
  * @file play_local_out.c
  * @brief AI 播放器平台消费端实现（Linux ALSA）：把解码 PCM 写进声卡
  *
- * 契约：agent_demo/src/audio_player 的 AI_PLAYER_CONSUMER_T（六回调），经
+ * 契约：agent_demo/src/components/audio_player 的 AI_PLAYER_CONSUMER_T（六回调），经
  * tuya_ai_player_set_consumer() 注入（port 侧入口 play_local_out_install）。
  *
  * 与上游 consumer_speaker 的差异（有意）：

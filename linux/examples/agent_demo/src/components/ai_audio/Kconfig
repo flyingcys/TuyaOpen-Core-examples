@@ -3,7 +3,7 @@ menuconfig ENABLE_COMP_AI_AUDIO
     default n
     select ENABLE_AI_PLAYER
     help
-        Enable the AI audio orchestration module (src/ai_audio):
+        Enable the AI audio orchestration module (src/components/ai_audio):
         TTS stream playback and music playlist playback on top of the
         audio_player component (svc_ai_player interface). Selects
         ENABLE_AI_PLAYER automatically.

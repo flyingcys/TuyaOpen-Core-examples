@@ -12,7 +12,7 @@ if(NOT CONFIG_ENABLE_AI_PLAYER)
     message(FATAL_ERROR
         "CONFIG_ENABLE_COMP_AI_AUDIO=ON 但 CONFIG_ENABLE_AI_PLAYER=OFF："
         "ai_audio 依赖 audio_player 的 svc_ai_player 接口，请同时打开 "
-        "ENABLE_AI_PLAYER（见 src/audio_player/Kconfig）。")
+        "ENABLE_AI_PLAYER（见 src/components/audio_player/Kconfig）。")
 endif()
 
 file(GLOB _ai_audio_srcs CONFIGURE_DEPENDS

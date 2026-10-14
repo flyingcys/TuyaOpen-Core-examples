@@ -13,7 +13,7 @@ if(CONFIG_ENABLE_AI_PLAYER_DECODER_OPUS OR CONFIG_ENABLE_AI_PLAYER_DECODER_OGGOP
     message(FATAL_ERROR
         "CONFIG_ENABLE_AI_PLAYER_DECODER_OPUS / OGGOPUS 已开，但 OPUS/OGGOPUS "
         "解码实现属二期范围（未移植）：请关闭这两个开关 "
-        "（见 src/audio_player/Kconfig 的 Decoder Options）。")
+        "（见 src/components/audio_player/Kconfig 的 Decoder Options）。")
 endif()
 
 # 文件源（datasink_file.c）经 tal_fs 读文件，需要平台提供 tal_fs_ops 卡。
