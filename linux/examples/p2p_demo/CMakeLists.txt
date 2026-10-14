@@ -103,11 +103,11 @@ include(${TUYAOPEN_CORE_DIR}/tuyaopen-core.cmake)
 # 2) port：自包含子目录（自建 tuyaopen-port 并把头注入 tuyaopen-headers）
 add_subdirectory(${TUYAOPEN_PORT_DIR} ${CMAKE_BINARY_DIR}/tuyaopen-port)
 
-# 3) 应用自带组件：qrcode 复用 iot_demo 的副本（不复制文件，随 CONFIG_ENABLE_QRCODE 门控）
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode/CMakeLists.txt")
-    message(FATAL_ERROR "p2p_demo 需与 iot_demo 同树（复用其 qrcode 组件）：找不到 ${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode/CMakeLists.txt")
+# 3) 公共组件：qrcode（examples/qrcode，iot/agent/p2p 三 demo 共用一份，随 CONFIG_ENABLE_QRCODE 门控）
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../qrcode/CMakeLists.txt")
+    message(FATAL_ERROR "p2p_demo 需在 examples 树内构建（复用公共 qrcode 组件）：找不到 ${CMAKE_CURRENT_SOURCE_DIR}/../qrcode/CMakeLists.txt")
 endif()
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../iot_demo/qrcode ${CMAKE_BINARY_DIR}/qrcode)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../qrcode ${CMAKE_BINARY_DIR}/qrcode)
 
 # 4) 视频源：configure 期复制到构建目录，供 demo_vcam 默认路径 "demo_video.264" 使用
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/demo_video.264 ${CMAKE_BINARY_DIR}/demo_video.264 COPYONLY)

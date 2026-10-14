@@ -23,7 +23,7 @@ cmake --build build -j$(nproc)
 cd build && ./agent_demo
 ```
 
-> 构建必须在本仓库树内进行：agent_demo 复用 `../iot_demo/qrcode` 组件（不复制副本），
+> 构建必须在本仓库树内进行：agent_demo 复用 examples 公共组件 `../qrcode`（不复制副本），
 > 单独拷贝本目录会因找不到 qrcode 而 configure 失败（CMake 会给出明确提示）。
 
 凭据可选：默认取 `include/tuya_config.h` 的 PID/UUID/AuthKey（PID 为上游 your_chat_bot
