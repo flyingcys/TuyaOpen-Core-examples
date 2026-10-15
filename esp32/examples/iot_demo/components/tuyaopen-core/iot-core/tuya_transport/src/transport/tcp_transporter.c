@@ -102,7 +102,7 @@ OPERATE_RET tuya_tcp_transporter_connect(tuya_transporter_t t, const char *host,
     TUYA_IP_ADDR_T bind_addr = tcp_transporter->config.bindAddr;
 #if OPERATING_SYSTEM != SYSTEM_LINUX
     if (bind_addr == 0 && tcp_transporter->config.bindPort == 0) {
-        bind_addr = tal_network_card_get_active_ip();
+        bind_addr = tal_network_get_active_ip();
     }
 #endif
 

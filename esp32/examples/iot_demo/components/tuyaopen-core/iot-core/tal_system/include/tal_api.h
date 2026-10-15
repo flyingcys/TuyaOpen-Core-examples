@@ -59,9 +59,20 @@
 #include "tal_sw_timer.h"
 #include "tal_event.h"
 
+/* 契约层（interface，随所选平台的 port 提供）：TAL_API_OPS_T 在
+ * port/interface/tal_api_ops.h —— core 只消费契约，不定义契约 */
+#include "tal_api_ops.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * @brief Get the platform ops of tal_api
+ *
+ * @return pointer to the platform ops, never NULL (defined in the port)
+ */
+TAL_API_OPS_T *tal_api_get_ops(void);
 
 #ifdef __cplusplus
 }

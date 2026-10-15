@@ -31,6 +31,7 @@
 #include "tal_log.h"
 #include "tal_memory.h"
 #include "tal_api_ops.h"
+#include "tal_api.h"   /* tal_api_get_ops 声明（随契约迁出后回归 tal_api.h） */
 
 /**
  * @brief Allocates a block of memory of the specified size.

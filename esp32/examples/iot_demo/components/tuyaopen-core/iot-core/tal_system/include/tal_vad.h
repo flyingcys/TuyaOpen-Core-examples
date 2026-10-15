@@ -6,9 +6,10 @@
  * 操作（建/启/停/查）交给平台执行——上游为 tkl_vad_* 直调，2026-10 解耦为
  * 经卡分发（契约见 tal_vad_ops.h）。
  *
- * @note 类型为 core 自持：TAL_VAD_CONFIG_T 逐字段镜像上游 TKL_VAD_CONFIG_T，
- *       TAL_VAD_STATUS_E 与上游 TKL_VAD_STATUS_T（uint8_t + NONE/SPEECH 宏）
- *       值一一对应——port 接实现时可原样转发，无需换算。
+ * @note 类型随契约迁至 port/interface/tal_vad_ops.h：TAL_VAD_CONFIG_T 逐字段
+ *       镜像上游 TKL_VAD_CONFIG_T，TAL_VAD_STATUS_E 与上游 TKL_VAD_STATUS_T
+ *       （uint8_t + NONE/SPEECH 宏）值一一对应——port 接实现时可原样转发，
+ *       无需换算。
  *
  * @note 上游另有 tkl_vad_set_threshold / tkl_vad_feed / tkl_vad_deinit，
  *       core 当前未使用，未纳入卡；将来需要时按同一形态加成员。
@@ -21,29 +22,21 @@
 
 #include "tuya_cloud_types.h"
 
+/* 契约层（interface，随所选平台的 port 提供）：TAL_VAD_CONFIG_T /
+ * TAL_VAD_STATUS_E / TAL_VAD_OPS_T 的定义在 port/interface/tal_vad_ops.h
+ * —— core 只消费契约，不定义契约（分层：port 不依赖 core） */
+#include "tal_vad_ops.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * @brief VAD 配置（镜像上游 TKL_VAD_CONFIG_T）
+ * @brief Get the platform ops of tal_vad
+ *
+ * @return pointer to the platform ops, never NULL (defined in the port)
  */
-typedef struct {
-    uint32_t sample_rate;       /* 采样率（Hz） */
-    uint8_t  channel_num;       /* 通道数 */
-    int      speech_min_ms;     /* 判定为语音所需的最短语音时长（ms） */
-    int      noise_min_ms;      /* 判定为噪声所需的最短噪声时长（ms） */
-    int      frame_duration_ms; /* 单帧时长（ms） */
-    float    scale;             /* 灵敏度缩放系数 */
-} TAL_VAD_CONFIG_T;
-
-/**
- * @brief VAD 状态（镜像上游 TKL_VAD_STATUS_T 的两个宏，值一一对应）
- */
-typedef enum {
-    TAL_VAD_STATUS_NONE   = 0, /* 无语音（空闲） */
-    TAL_VAD_STATUS_SPEECH = 1, /* 检测到语音 */
-} TAL_VAD_STATUS_E;
+TAL_VAD_OPS_T *tal_vad_get_ops(void);
 
 /**
  * @brief 初始化 VAD（按配置建检测器）

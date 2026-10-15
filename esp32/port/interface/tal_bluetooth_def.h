@@ -1,9 +1,12 @@
 /**
  * @file tal_bluetooth_def.h
- * @brief This header file defines the structures and constants for Tuya's
- * Bluetooth Low Energy (BLE) operations. It includes definitions for device
- * addresses, advertising parameters, connection parameters, event structures,
- * and UUIDs for Tuya BLE services and characteristics.
+ * @brief 契约层（interface）：TAL BLE 公开类型集（设备地址 / 广播与连接参数 /
+ *        事件结构 / Tuya BLE 服务与特征 UUID）。
+ *
+ * **分层定位**：同 tal_api_ops.h 的契约层——本头只含类型，core 与 port 都只
+ * include、不定义。引用方：core 的公开 API iot-core/ble/tal_bluetooth.h、
+ * core 的 ble/ 实现，以及同目录的卡契约 tal_bluetooth_ops.h（复用
+ * TAL_BLE_DATA_T 等）。2026-10 从 core 的 iot-core/ble/ 迁出（分层整改）。
  *
  * The file is part of Tuya's Bluetooth SDK and is used to facilitate BLE
  * operations such as device discovery, connection, data exchange, and more. It

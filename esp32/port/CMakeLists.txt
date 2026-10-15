@@ -1,8 +1,9 @@
 # tuyaopen-port（ESP32 TKL）构建。
-# 布局对齐 linux port：include/（域头）+ src/（TKL 实现）。
+# 布局对齐 linux port：include/（域头）+ src/（TKL 实现）+ interface/（契约层）。
 # 与 linux port 的差异：系统库/平台头（FreeRTOS/esp_wifi/lwip/nvs 等）由宿主
 # 组件 components/tuyaopen-port 声明 REQUIRES 并 target_link_libraries 注入
-# （idf::xxx），本文件只处理 core 的头与开关宏。
+# （idf::xxx），本文件只处理开关宏注入（core 的宏不传播到 port 目标）与
+# port 头对 core 的自注入（tuyaopen-headers）。
 if(TARGET tuyaopen-port)
     return()
 endif()
@@ -23,6 +24,7 @@ set(_port_incs)
 file(GLOB_RECURSE _port_hdrs CONFIGURE_DEPENDS
     "${PORT_ROOT}/include/*.h"
     "${PORT_ROOT}/src/*.h"
+    "${PORT_ROOT}/interface/*.h"
 )
 if(_port_hdrs)
     list(FILTER _port_hdrs EXCLUDE REGEX "/CMakeFiles/")
@@ -42,21 +44,13 @@ if(_port_srcs)
     target_sources(tuyaopen-port PRIVATE ${_port_srcs})
     target_include_directories(tuyaopen-port PUBLIC ${_port_incs})
 
-    # port_runtime/port_network/port_kv/port_netif：include core 的
-    # tal_api_ops.h / tal_network.h / tal_kv_ops.h /
-    # tal_netif_ops.h / tal_log.h（tal_system 公共头），符号在最终链接组解析
-    if(TARGET tal_system)
-        target_link_libraries(tuyaopen-port PRIVATE tal_system)
-    endif()
-
-    # port_bluetooth_ops.c（TAL BLE 空卡）include core 的 tal_bluetooth_ops.h
-    # （tal_system/include），该头内嵌 include "tal_bluetooth_def.h"（core 的
-    # ble/ 下）；esp32 侧 core 为 vendored 快照（相对路径不固定），经
-    # tal_system 目标的源目录定位 core 的 ble/ 补进包含路径
-    if(TARGET tal_system)
-        get_target_property(_tal_system_src_dir tal_system SOURCE_DIR)
-        target_include_directories(tuyaopen-port PRIVATE "${_tal_system_src_dir}/../ble")
-    endif()
+    # port_api/port_network/port_kv/port_netif/port_bluetooth_ops/port_ai_*：
+    # **零 core 依赖**——卡契约取本层 interface/（tal_api_ops.h /
+    # tal_network_ops.h / tal_kv_ops.h / tal_netif_ops.h / tal_bluetooth_ops.h /
+    # tal_audio_enc_ops.h / tal_vad_ops.h），公共类型取本层 include/common，
+    # 日志走本层 port_log.h。刻意不链 tal_system、不注入 core 的 ble/ 头路径：
+    # 一旦有人写回对 core 的 include（如 tal_log.h / tal_memory.h /
+    # tal_system.h / tal_network.h），编译立即失败（编译期自证的分层门禁）。
 
     # 模块级隔离（对齐 linux port）：仅 p2p 使用的适配由 ENABLE_TUYA_P2P 门控。
     # core 的开关宏（TuyaOpenOptions → tuyaopen-headers）只作用于 core 模块，

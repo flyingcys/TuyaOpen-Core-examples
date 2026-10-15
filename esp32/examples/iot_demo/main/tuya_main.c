@@ -232,7 +232,7 @@ static void __user_link_status_cb(TAL_NETIF_LINK_STAT_E stat)
             addr = tal_net_str2addr(ip.ip);
         }
     }
-    tal_network_card_set_active_ip(addr);
+    tal_network_set_active_ip(addr);
 
     PR_NOTICE("link status changed to %d, link %s", stat, s_link_up ? "UP" : "DOWN");
 }

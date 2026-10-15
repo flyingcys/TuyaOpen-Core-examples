@@ -14,22 +14,21 @@
 
 #include "tuya_cloud_types.h"
 
+/* 契约层（interface，随所选平台的 port 提供）：TAL_NETIF_LINK_STAT_E /
+ * TAL_NETIF_LINK_CHANGE_CB / TAL_NETIF_OPS_T 的定义在 port/interface/tal_netif_ops.h
+ * —— core 只消费契约，不定义契约（分层：port 不依赖 core） */
+#include "tal_netif_ops.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* 网络接口链路状态 */
-typedef enum {
-    TAL_NETIF_LINK_DOWN = 0,    ///< 链路 down（无非回环接口 up）
-    TAL_NETIF_LINK_UP,          ///< 链路 up（至少一个非回环接口 up）
-} TAL_NETIF_LINK_STAT_E;
-
 /**
- * @brief 链路状态变化回调
+ * @brief Get the platform ops of tal_netif
  *
- * @param[out] status 当前链路状态
+ * @return pointer to the platform ops, never NULL (defined in the port)
  */
-typedef void (*TAL_NETIF_LINK_CHANGE_CB)(TAL_NETIF_LINK_STAT_E status);
+TAL_NETIF_OPS_T *tal_netif_get_ops(void);
 
 /**
  * @brief  取本机网络接口 IP（第一个非回环且 up 的接口）

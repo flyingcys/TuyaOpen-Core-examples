@@ -34,6 +34,7 @@
 #include "tuya_list.h"
 #include "tal_thread.h"
 #include "tal_api_ops.h"
+#include "tal_api.h"   /* tal_api_get_ops 声明（随契约迁出后回归 tal_api.h） */
 #include "tal_mutex.h"
 #include "tal_log.h"
 #include "tal_memory.h"

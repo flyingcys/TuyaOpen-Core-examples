@@ -10,7 +10,9 @@ DP 收发。与 linux 侧同构（`linux/examples/iot_demo`），demo 代码从 
 esp32/
   port/                       # ESP32 port 适配（ops 卡模式，与 linux port 同构）
     include/                  #   平台接口域头（从 linux port 同步）
-    src/port_runtime.c         #   主卡：log/memory/system/sem/mutex/thread/queue（FreeRTOS）
+    interface/                #   契约层：core 与 port 共用的 ops 类型（C2 下沉，
+                              #   与 linux/port/interface 逐字节一致）
+    src/port_api.c         #   主卡：log/memory/system/sem/mutex/thread/queue（FreeRTOS）
     src/port_kv.c              #   KV 卡（NVS + 超长 key 映射）
     src/port_netif.c           #   netif 卡（esp_netif 事件驱动）
     src/port_network.c         #   network 卡（lwIP socket）
@@ -100,7 +102,7 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 | 能力 | linux port | esp32 port |
 |---|---|---|
-| 主卡（OS 原语） | port_runtime.c（pthread/POSIX） | port_runtime.c（FreeRTOS/esp-idf） |
+| 主卡（OS 原语） | port_api.c（pthread/POSIX） | port_api.c（FreeRTOS/esp-idf） |
 | KV | port_kv.c（littlefs+AES，文件模拟 flash） | port_kv.c（NVS + 超长 key 映射） |
 | netif | port_netif.c（ioctl 3s 轮询） | port_netif.c（esp_netif 事件） |
 | network | port_network.c（POSIX socket） | port_network.c（lwIP socket） |

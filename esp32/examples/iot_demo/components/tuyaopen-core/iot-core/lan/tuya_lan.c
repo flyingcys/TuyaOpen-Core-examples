@@ -552,8 +552,8 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
     memset(&ip, 0, sizeof(NW_IP_S));
 
     /* 本机 IP：链路管理方（应用/port 层）在链路事件时经
-     * tal_network_card_set_active_ip 推送，替代原 netmgr_conn_get */
-    TUYA_IP_ADDR_T active_ip = tal_network_card_get_active_ip();
+     * tal_network_set_active_ip 推送，替代原 netmgr_conn_get */
+    TUYA_IP_ADDR_T active_ip = tal_network_get_active_ip();
     if (active_ip != 0) {
         char *ipstr = tal_net_addr2str(active_ip);
         if (ipstr != NULL) {

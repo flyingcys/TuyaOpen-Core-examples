@@ -26,7 +26,7 @@
 
 #include <string.h>
 
-#include "tal_log.h"
+#include "port_log.h"
 
 /* station netif 的 ifkey（esp_netif_create_default_wifi_sta 创建，
  * 见 esp_netif_defaults.h 的 ESP_NETIF_DEFAULT_WIFI_STA） */
@@ -112,7 +112,7 @@ static OPERATE_RET __netif_set_link_cb(TAL_NETIF_LINK_CHANGE_CB cb)
                 err = esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, __netif_event_handler, NULL);
             }
             if (ESP_OK != err) {
-                PR_ERR("netif event handler register failed: %d (event loop created?)", err);
+                PORT_LOG_ERR("netif event handler register failed: %d (event loop created?)", err);
                 return OPRT_COM_ERROR;
             }
             s_netif_handler_registered = TRUE;

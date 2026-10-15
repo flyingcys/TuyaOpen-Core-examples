@@ -30,16 +30,17 @@ extern "C" {
 
 #include "tuya_cloud_types.h"
 
-#define TAL_LV_KEY_LEN 16
+/* 契约层（interface，随所选平台的 port 提供）：tal_kv_cfg_t 与 TAL_KV_OPS_T
+ * 的定义在 port/interface/tal_kv_ops.h —— core 只消费契约，不定义契约
+ * （分层：port 不依赖 core；core 经宿主注入的 include 路径取契约头） */
+#include "tal_kv_ops.h"
 
 /**
- * @brief KV 初始化配置：seed/key 各 16 字符，port 实现决定用途
- *        （Linux port 经 SHA256 派生 AES-128 的 IV 与密钥；NVS 类平台可忽略）
+ * @brief Get the platform ops of tal_kv
+ *
+ * @return pointer to the platform ops, never NULL (defined in the port)
  */
-typedef struct {
-    char seed[TAL_LV_KEY_LEN + 1];
-    char key[TAL_LV_KEY_LEN + 1];
-} tal_kv_cfg_t;
+TAL_KV_OPS_T *tal_kv_get_ops(void);
 
 /**
  * @brief 初始化 KV 存储（挂载介质 / 打开芯片 KV）

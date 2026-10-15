@@ -1,18 +1,19 @@
 /**
- * @file port_runtime.c
+ * @file port_api.c
  * @brief tal_api 平台 ops 卡组装 + OS 原语实现单文件收编（esp32 port）
  *
- * 与 linux port 的 port_runtime.c 同构：log output / memory / system /
+ * 与 linux port 的 port_api.c 同构：log output / memory / system /
  * semaphore / mutex / thread / queue 七组实现收编于本文件，只保留实际被
  * 分发/调用的接口（OTA 为 core 回调注入，实现由应用层提供）：
- * - log output / semaphore / memory / mutex / system / thread / queue 实现为
- *   ops 卡私有（static），适配面收敛到一张卡；memory/mutex 于 2026-10 收口
- *   转 static（port_kv.c 改用 tal_malloc/tal_free，不再跨文件调用）；
- *   calloc 由 core 的 tal_calloc 用 tal_malloc+memset 实现，卡不再要求适配；
+ * - log output / semaphore / mutex / system / thread / queue 实现为 ops 卡
+ *   私有（static），适配面收敛到一张卡；
+ * - memory 的 malloc/free 为**port 内部接口**（主卡 .malloc/.free 的实现
+ *   本体 + port_kv.c 跨文件使用；声明见 include/system/port_memory.h）
+ *   ——core 侧只经卡分发，不直调本层符号；
+ *   calloc 由 core 的 tal_calloc 用卡 .malloc + memset 实现，卡不再要求适配；
  * - thread_get_id 为 ops 卡成员（无条件提供；p2p-core 的 pjproject 经
  *   tal_thread_get_id 分发使用），收口后与 thread 家族一致转 static；
- *   原外部 RAM 分配家族已删除（p2p-core 的 tuya_ipc_skill.c 改用
- *   tal_malloc/tal_free）。
+ *   原外部 RAM 分配家族已删除（p2p-core 的 tuya_ipc_skill.c 改经 tal 层分发）。
  *
  * 实现平台差异（对照 linux 版）：
  * - memory：直接映射 esp-idf 系统堆（多区域堆，不用 linux 的
@@ -26,9 +27,16 @@
  * 2026-10 port 去 tkl 化：tkl_runtime.c → port_runtime.c，tkl_* 函数去
  * tkl_ 前缀（static 者改 __ 前缀）；原 tkl_semaphore/mutex/thread/queue/
  * system 五个头文件删除（只有本文件一个 includer），其有效声明（类型/超时宏）
- * 随之内联到下面"原 tkl_*.h 内联区"；tkl_memory.h 一度改名保留为
- * port_memory.h，2026-10 收口后 kv 改用 tal_malloc/tal_free，该头随之删除
- * （与 linux port 的布局对齐）。
+ * 随之内联到下面"原 tkl_*.h 内联区"；tkl_memory.h 改名保留为
+ * port_memory.h（include/system/，port_kv.c 跨文件使用）。
+ *
+ * 2026-10 后续（C2）：port_runtime.c → port_api.c——本文件是 core 的 tal_api
+ * 模块（契约 tal_api_ops.h）的平台侧，改名与 port_kv.c / port_netif.c /
+ * port_network.c 的 port_<模块>.c 命名线对齐。
+ *
+ * 2026-10 C2 分层收口（对齐 linux port）：port 对 core 零 include / 零符号
+ * ——卡契约取本层 interface/，日志/内存走本层 port_log.h / port_memory.h；
+ * core→port 仍经卡分发（方向不变）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  *
@@ -44,9 +52,15 @@
  *
  * 那六个头文件只有本文件一个 includer（2026-10 去 tkl 化时删除），此处保留其
  * 全部有效内容：句柄类型 + 两个超时宏。
- * 各头的函数声明（memory 两件 + mutex 四件 + thread_get_id）随实现一并在本
- * 文件下方给出（static 者本就不需前置声明）。
+ * 各头的函数声明（mutex 四件 + thread_get_id）随实现一并在本文件下方给出
+ * （static 者本就不需前置声明）；memory 两件为 port 内部接口，声明见
+ * port_memory.h。
  * --------------------------------------------------------------------------- */
+
+/* 原 tkl_memory.h：malloc/free 是主卡 TAL_API_OPS_T 的 .malloc/.free 实现本体。
+ * **port 内部接口**（port_kv.c 跨文件用，声明见 include/system/port_memory.h）
+ * ——core 侧只经卡分发，不直调本层符号。 */
+#include "port_memory.h"
 
 /* 原 tkl_semaphore.h */
 typedef void *TKL_SEM_HANDLE;
@@ -102,10 +116,12 @@ static void __log_output(const char *str, ...)
 }
 
 /* ---------------------------------------------------------------------------
- * memory 实现：malloc/free 为卡 .malloc/.free/.ex_ram_* 的实现本体，收口后
- * 转 static（无跨文件调用方）。直接映射 esp-idf 系统堆（malloc/free 线程
- * 安全；esp32 的堆为多区域分块管理，不适用 linux 的 tuya_mem_heap 大块
- * 自管堆方案）。
+ * memory 实现：malloc/free 为卡 .malloc/.free 的实现本体，**port 内部接口**
+ * （port_kv.c 跨文件用，声明见 include/system/port_memory.h）。直接映射
+ * esp-idf 系统堆（malloc/free 线程安全；esp32 的堆为多区域分块管理，不适用
+ * linux 的 tuya_mem_heap 大块自管堆方案）。
+ * calloc 不再走卡：core 的 tal_calloc 用卡 .malloc + memset 实现（含乘法
+ * 溢出检查）。
  * --------------------------------------------------------------------------- */
 /**
 * @brief Alloc memory of system
@@ -116,7 +132,7 @@ static void __log_output(const char *str, ...)
 *
 * @return the memory address malloced
 */
-static void *__memory_malloc(const SIZE_T size)
+void *port_system_malloc(const SIZE_T size)
 {
     return malloc(size);
 }
@@ -130,7 +146,7 @@ static void *__memory_malloc(const SIZE_T size)
 *
 * @return void
 */
-static void __memory_free(void *ptr)
+void port_system_free(void *ptr)
 {
     if (ptr) {
         free(ptr);
@@ -710,8 +726,8 @@ TAL_API_OPS_T tal_api_ops_platform = {
     //! log output
     .log_output = __log_output,
     //! memory
-    .malloc = __memory_malloc,
-    .free = __memory_free,
+    .malloc = port_system_malloc,
+    .free = port_system_free,
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
     //! ex ram（外部 RAM，如 PSRAM；宏隔离，默认关）
     .ex_ram_malloc = __ex_ram_malloc,

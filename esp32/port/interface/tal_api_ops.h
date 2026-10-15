@@ -1,43 +1,40 @@
 /**
  * @file tal_api_ops.h
- * @brief tal_api 的平台 ops 契约：log output / memory / system / semaphore /
- *        mutex / thread / queue 七组（OTA 为回调注入，见 tal_ota.h）
+ * @brief 契约层（interface）：tal_api 平台 ops 卡类型。
  *
- * 定义 TAL_API_OPS_T：port 据此组装平台 ops 实例 tal_api_ops_platform
- * （成员绑定到 port 的 port_output、port_memory、port_system、port_semaphore、
- * port_mutex、port_thread、port_queue 实现），core 侧经 extern 引用完成各族
- * tal_* 分发，对上 tal_* API 签名不变。移植新平台时在各自 port 中提供同名
- * 实例即可。
+ * **分层定位**：本头是 core（上层）与 port（下层）之间的**中性契约**，物理上放在
+ * port 下（每个芯片平台各一份，见 platform/<P>/port/interface）。依赖方向：
+ *   core ──include──▶ 本头 ◀──include── port      # 谁都不依赖谁
+ *   core ──extern tal_api_ops_platform / 经卡调用──▶ port   # 上层→下层，允许
+ *   port ──▶ core                                  # 禁止（include 与调用都不许）
+ * 本头**只含类型**（结构体 + 句柄/回调别名），不含任何 core 实现声明。
  *
- * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
+ * 句柄/回调别名与 core 的 tal_semaphore/tal_mutex/tal_thread/tal_queue 定义逐字一致
+ * （同为 void* / void(*)(void*) 别名）；C11 起重复 typedef 合法，core 的 TU 同时
+ * include 两侧不会冲突。
  *
+ * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
-
 #ifndef __TAL_API_OPS_H__
 #define __TAL_API_OPS_H__
 
 #include "tuya_cloud_types.h"
-
-#include "tal_memory.h"
-#include "tal_semaphore.h"
-#include "tal_mutex.h"
-#include "tal_thread.h"
-#include "tal_queue.h"
-#include "tal_ota.h"
+#include "tuya_error_code.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/* 句柄/回调别名（与 core 的 tal_* 头定义一致） */
+typedef void *SEM_HANDLE;
+typedef void *MUTEX_HANDLE;
+typedef void *THREAD_HANDLE;
+typedef void (*THREAD_FUNC_CB)(void *args);
+typedef void *QUEUE_HANDLE;
+
 /**
- * @brief tal_api 平台 ops：成员与 port 的 port_output、port_memory、
- *        port_system、port_semaphore、port_mutex、port_thread、port_queue
+ * @brief tal_api 平台 ops：成员与 port 的 memory/system/semaphore/mutex/thread/queue/log
  *        实现一一对应，只收编实际被 tal 层分发的接口（OTA 为回调注入，见 tal_ota.h）
- *
- * @note 句柄/回调类型沿用 tal 层定义（SEM_HANDLE/MUTEX_HANDLE/
- *       THREAD_HANDLE/QUEUE_HANDLE 与 TKL 层的 TKL_SEM_HANDLE 等同为
- *       void* 别名；THREAD_FUNC_CB 与 TKL 层 THREAD_FUNC_T 同为
- *       void (*)(void *)），可直接绑定 port 的 tkl_* 实现。
  */
 typedef struct {
     //! log output（启动早期即被 tal_log 回调与 QR 输出使用，置卡首位）
@@ -79,15 +76,8 @@ typedef struct {
 #endif
 } TAL_API_OPS_T;
 
-/**
- * @brief Get the platform ops of tal_api
- *
- * @return pointer to the platform ops, never NULL (defined in the port)
- */
-TAL_API_OPS_T *tal_api_get_ops(void);
-
 #ifdef __cplusplus
 }
-#endif /* __cplusplus */
-
 #endif
+
+#endif /* __TAL_API_OPS_H__ */

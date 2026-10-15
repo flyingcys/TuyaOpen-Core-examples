@@ -1,15 +1,23 @@
 /**
  * @file tal_bluetooth_ops.h
- * @brief tal_bluetooth 的平台 ops 契约：BLE 27 接口 + core 自持镜像类型集
+ * @brief 契约层（interface）：tal_bluetooth 平台 ops 卡 + TAL_BLE_* 镜像类型集
+ *
+ * **分层定位**：同 tal_api_ops.h——core 与 port 之间的中性契约，物理上放在
+ * port 下（每个芯片平台各一份，见 platform/<P>/port/interface）。依赖方向：
+ *   core ──include──▶ 本头 ◀──include── port      # 谁都不依赖谁
+ *   core ──extern tal_bluetooth_ops_platform / 经卡调用──▶ port   # 上层→下层，允许
+ *   port ──▶ core                                  # 禁止（include 与调用都不许）
  *
  * 背景：core 的 iot-core/ble/tal_bluetooth.c 原直调 tkl_ble_*（上游 TKL
  * 平台接口）并在内部用 TKL_BLE_* 类型搭值对象。2026-10 解耦为经卡分发：
  * 本文件定义 TAL_BLUETOOTH_OPS_T（27 成员，与 port 的 port_bluetooth.h 接口
  * 面一一对应）与**镜像类型集**（TAL_BLE_* 前缀，逐字段镜像 port 的
- * port_bluetooth_def.h）。
+ * port_bluetooth_def.h）；公开类型集在同目录 tal_bluetooth_def.h
+ * （core 的公开 API tal_bluetooth.h 亦引用它）。
  *
  * 约定：
- * - port 侧适配层（linux: port/src/port_bt/port_bluetooth_ops.c）以
+ * - port 侧适配层（linux: port/src/port_bt/port_bluetooth_ops.c 镜像强转；
+ *   esp32: port/src/port_bluetooth_ops.c 空卡）以
  *   "布局逐字节一致 + 指针强转"接线，并用编译期 sizeof/offsetof 断言兜底
  *   （镜像一旦漂移即编译失败）；
  * - **注册次序约束**：gap/gatt 回调注册必须先于 stack_init 与
@@ -32,9 +40,9 @@
 #include "tuya_cloud_types.h"
 #include "tuya_error_code.h"
 
-/* 说明：本文件为 TKL BLE 类型集的 core 自持镜像（TAL_BLE_* 前缀）——
- * 卡的成员签名只能用 core 类型，port 侧适配层靠"布局逐字节一致 + 强转"
- * 接线（见 tal_bluetooth_ops.h 的布局断言约定）。
+/* 说明：本类型集为 TKL BLE 类型集的 TAL 自持镜像（TAL_BLE_* 前缀）——
+ * 卡的成员签名只能用 TAL 类型，port 侧适配层靠"布局逐字节一致 + 强转"
+ * 接线（见本文件头的布局断言约定）。
  * 与公开集（tal_bluetooth_def.h）的冲突项已按改名表处理：
  *   DATA_T 复用公开 TAL_BLE_DATA_T；DATA_REPORT_T/SUBSCRBE_EVT_T/READ_CHAR_EVT_T
  *   加 GATT_ 前缀；ADV 报告枚举值加 GAP_ 前缀；SCAN_TYPE 宏不镜像（用位域）。 */

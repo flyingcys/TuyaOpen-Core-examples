@@ -19,9 +19,20 @@
 
 #include "tuya_cloud_types.h"
 
+/* 契约层（interface，随所选平台的 port 提供）：TAL_AUDIO_ENC_OPS_T 在
+ * port/interface/tal_audio_enc_ops.h —— core 只消费契约，不定义契约 */
+#include "tal_audio_enc_ops.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * @brief Get the platform ops of tal_audio_enc
+ *
+ * @return pointer to the platform ops, never NULL (defined in the port)
+ */
+TAL_AUDIO_ENC_OPS_T *tal_audio_enc_get_ops(void);
 
 /**
  * @brief 请求平台执行一次 IPC 音频编码操作

@@ -1,6 +1,6 @@
 /**
  * @file port_network.c
- * @brief 标准网络卡（lwIP socket 实现）+ TAL_NETWORK_CARD_T 组装（esp32 port）
+ * @brief 标准网络 ops 实例（lwIP socket 实现）+ TAL_NETWORK_OPS_T 组装（esp32 port）
  *
  * 与 linux 版（POSIX socket）对应：errno 转换表、fd_set 系列、select、
  * socket/connect/bind/send/recv、timeout/reuse/nagle/keepalive、
@@ -21,8 +21,10 @@
 
 #include "tuya_error_code.h"
 
-#include "tal_network.h"
-#include "tal_system.h"
+#include "tal_network_ops.h"   /* 契约层（port/interface）：网络 ops 类型 */
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "lwip/err.h"
 #include "lwip/sockets.h"
@@ -470,7 +472,7 @@ TUYA_ERRNO port_net_recv(const int fd, void *buf, const uint32_t nbytes)
     ret = recv(fd, buf, nbytes, 0);
     if (ret <= 0) {
         if ((UNW_EINTR == port_net_get_errno()) || (UNW_EAGAIN == port_net_get_errno())) {
-            tal_system_sleep(10);
+            vTaskDelay(pdMS_TO_TICKS(10)); /* 10ms（原 tal 层 sleep(10) 的等价延时） */
             ret = recv(fd, buf, nbytes, 0);
         }
     }
@@ -844,7 +846,7 @@ int port_net_recv_nd_size(const int fd, void *buf, const uint32_t buf_size, cons
         if (ret <= 0) {
             TUYA_ERRNO err = port_net_get_errno();
             if (UNW_EWOULDBLOCK == err || UNW_EINTR == err || UNW_EAGAIN == err) {
-                tal_system_sleep(10);
+                vTaskDelay(pdMS_TO_TICKS(10)); /* 10ms（原 tal 层 sleep(10) 的等价延时） */
                 continue;
             }
 
@@ -996,12 +998,14 @@ OPERATE_RET port_net_getpeername(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port)
 #endif /* ENABLE_TUYA_P2P */
 
 /* ---------------------------------------------------------------------------
- * 标准网络卡：由本平台 TKL 实现组装，core 的 tal_network.c 经 extern 引用并
- * 完成 tal_net_* 分发。卡成员与实现同开关：可选能力（局域网/对端服务、p2p）
- * 的 ops 仅在对应宏定义时才挂载，关掉时成员为 NULL，core 侧 TAL_NET_EXEC_OP
- * 会打印 "not available"。
+ * 标准网络 ops 实例：由本平台 TKL 实现组装，core 的 tal_network.c 经
+ * extern 引用并完成 tal_net_* 分发。移植新平台时在各自 port 的
+ * port_network.c 中提供同名实例即可。
+ * ops 成员与实现同开关：可选能力（局域网/对端服务、p2p）的 ops 仅在对应宏
+ * 定义时才挂载，关掉时成员为 NULL，core 侧 TAL_NET_EXEC_OP 会打印
+ * "not available"。
  * --------------------------------------------------------------------------- */
-TAL_NETWORK_CARD_T tal_network_card_platform = {
+TAL_NETWORK_OPS_T tal_network_ops_platform = {
     .name = "tkl",
     .type = TAL_NET_TYPE_PLATFORM,
     .ipaddr = 0,

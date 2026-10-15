@@ -11,7 +11,9 @@
  * 将来接 NimBLE 时，在此把 27 个成员接到平台实现（结构体参数按
  * linux 侧适配层的"镜像布局强转 + 编译期断言"方式接线）。
  *
- * 本文件只依赖 core 头（tal_bluetooth_ops.h），零副作用，放在 src/ 根恒编译。
+ * 本文件只依赖契约头 tal_bluetooth_ops.h（含其内嵌 include 的
+ * tal_bluetooth_def.h），二者均从本层 interface/ 解析，零 core 依赖；
+ * 零副作用，放在 src/ 根恒编译。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */

@@ -61,7 +61,7 @@ port（平台适配层，每个平台一份：linux/port、esp32/port）
 
 | 卡（core 定义） | 契约头 | port 组装点 | 谁在用 |
 |---|---|---|---|
-| `TAL_API_OPS_T`（主卡：log/memory/system/semaphore/mutex/thread/queue，24 成员；thread 组含 p2p 用的 `thread_get_id`） | `iot-core/tal_system/include/tal_api_ops.h` | `port/src/port_runtime.c` 文件尾 | `tal_api.c` / `tal_thread.c` / `tal_system.c` |
+| `TAL_API_OPS_T`（主卡：log/memory/system/semaphore/mutex/thread/queue，24 成员；thread 组含 p2p 用的 `thread_get_id`） | `iot-core/tal_system/include/tal_api_ops.h` | `port/src/port_api.c` 文件尾 | `tal_api.c` / `tal_thread.c` / `tal_system.c` |
 | `TAL_KV_OPS_T`（4 成员） | `tal_kv_ops.h` | `port/src/port_kv.c` | `tal_kv.c`（4 接口纯透传） |
 | `TAL_NETIF_OPS_T`（2 成员：get_ip/set_link_cb） | `tal_netif_ops.h` | `port/src/port_netif.c` | `tal_netif.c` |
 | `TAL_NETWORK_CARD_T`（35 成员，含 ops 结构 + 卡信息） | `tal_network.h` 尾部 | `port/src/port_network.c` 文件尾 | `tal_network.c`（`tal_network_get_active_ops()`） |
@@ -75,12 +75,22 @@ port（平台适配层，每个平台一份：linux/port、esp32/port）
 > 应用层提供并注册（iot_demo：`main/ota_app.c`）；不注册即不支持
 > （`tal_ota_*` 返回 `OPRT_NOT_SUPPORTED`），port 无需任何桩。
 
+> **2026-10 C2 分层整改（本表的后续更新，读表时以本条为准）**：上表"契约头"列的
+> 位置已变——契约头（`tal_*_ops.h` / `tal_bluetooth_def.h`）从 core 下沉到各芯片
+> port 的 `port/interface/`（esp32: `esp32/port/interface/`，8 个头），core 只
+> include 消费（`tal_*.h` 反向 include 契约头），port 目标零 core 链接与头注入
+> （写回即编译失败，编译期门禁）。网络契约同时更名：`TAL_NETWORK_CARD_T` →
+> `TAL_NETWORK_OPS_T`（原 socket 函数表让位为 `TAL_NETWORK_SOCKET_OPS_T`），
+> 实例 `tal_network_card_platform` → `tal_network_ops_platform`，
+> `tal_network_card_{get,set}_active_ip` → `tal_network_{get,set}_active_ip`。
+> 表内 `port/src/port_*.c` 的组装点不变。
+
 分发路径示例（一次 `tal_system_sleep()` 的完整旅程）：
 
 ```
 demo: tal_system_sleep(500)
   → core: tal_system.c → TAL_EXEC_OP 宏 → tal_api_get_ops()（返回 &tal_api_ops_platform）
-  → port: port_runtime.c 的 __system_sleep → vTaskDelay(pdMS_TO_TICKS(...))
+  → port: port_api.c 的 __system_sleep → vTaskDelay(pdMS_TO_TICKS(...))
 ```
 
 ### 2.3 直调符号：已全部收编（2026-10 解耦）

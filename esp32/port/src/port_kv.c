@@ -16,6 +16,10 @@
  * 未 init 时 set/get/del 拒绝（不触碰 NVS 句柄）。NVS 自身线程安全，
  * 不再加 port 层互斥。
  *
+ * 内存/日志全走本层（port_system_malloc / PORT_LOG_ERR，见 include/system/
+ * port_memory.h 与 include/common/port_log.h），**不调用 core**（分层约束：
+ * port 只向下依赖，core 只向下经卡调 port）。
+ *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  *
  */
@@ -28,8 +32,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "tal_log.h"
-#include "tal_memory.h"
+#include "port_log.h"
+#include "port_memory.h"
 
 #define KV_NVS_NAMESPACE "tuya_kv"
 /* NVS key 上限 15 字符（不含结尾 '\0'，见 nvs_flash 文档） */
@@ -88,7 +92,7 @@ static OPERATE_RET __kv_init(tal_kv_cfg_t *kv_cfg)
 
     esp_err_t err = nvs_open(KV_NVS_NAMESPACE, NVS_READWRITE, &s_kv_handle);
     if (ESP_OK != err) {
-        PR_ERR("kv nvs_open failed: %d (nvs_flash_init called first?)", err);
+        PORT_LOG_ERR("kv nvs_open failed: %d (nvs_flash_init called first?)", err);
         return OPRT_COM_ERROR;
     }
 
@@ -104,7 +108,7 @@ static OPERATE_RET __kv_set(const char *key, const uint8_t *value, size_t length
         return OPRT_INVALID_PARM;
     }
     if (FALSE == s_kv_opened) {
-        PR_ERR("kv not init, set %s rejected", key);
+        PORT_LOG_ERR("kv not init, set %s rejected", key);
         return OPRT_COM_ERROR;
     }
 
@@ -112,13 +116,13 @@ static OPERATE_RET __kv_set(const char *key, const uint8_t *value, size_t length
 
     esp_err_t err = nvs_set_blob(s_kv_handle, nvs_key, value, length);
     if (ESP_OK != err) {
-        PR_ERR("kv set %s failed: %d", key, err);
+        PORT_LOG_ERR("kv set %s failed: %d", key, err);
         return OPRT_COM_ERROR;
     }
 
     err = nvs_commit(s_kv_handle);
     if (ESP_OK != err) {
-        PR_ERR("kv set %s commit failed: %d", key, err);
+        PORT_LOG_ERR("kv set %s commit failed: %d", key, err);
         return OPRT_COM_ERROR;
     }
 
@@ -143,7 +147,7 @@ static OPERATE_RET __kv_get(const char *key, uint8_t **value, size_t *length)
         return OPRT_INVALID_PARM;
     }
     if (FALSE == s_kv_opened) {
-        PR_ERR("kv not init, get %s rejected", key);
+        PORT_LOG_ERR("kv not init, get %s rejected", key);
         return OPRT_COM_ERROR;
     }
 
@@ -154,21 +158,21 @@ static OPERATE_RET __kv_get(const char *key, uint8_t **value, size_t *length)
         return OPRT_NOT_FOUND;
     }
     if (ESP_OK != err) {
-        PR_ERR("kv get %s failed: %d", key, err);
+        PORT_LOG_ERR("kv get %s failed: %d", key, err);
         return OPRT_COM_ERROR;
     }
 
-    /* 契约：返回缓冲含结尾 '\0'（长度不含 '\0'），调用者 tal_free 释放
-     * （tal_malloc/tal_free 同源：都经 ops 卡分发到本 port 的 memory 实现） */
-    uint8_t *buf = (uint8_t *)tal_malloc(len + 1);
+    /* 契约：返回缓冲含结尾 '\0'（长度不含 '\0'），调用者经卡分发释放
+     * （port_system_malloc 即卡 .free 的实现本体，分配/释放同源配对） */
+    uint8_t *buf = (uint8_t *)port_system_malloc(len + 1);
     if (NULL == buf) {
         return OPRT_MALLOC_FAILED;
     }
 
     err = nvs_get_blob(s_kv_handle, nvs_key, buf, &len);
     if (ESP_OK != err) {
-        PR_ERR("kv get %s read failed: %d", key, err);
-        tal_free(buf);
+        PORT_LOG_ERR("kv get %s read failed: %d", key, err);
+        port_system_free(buf);
         return OPRT_COM_ERROR;
     }
     buf[len] = '\0';
@@ -186,7 +190,7 @@ static OPERATE_RET __kv_del(const char *key)
         return OPRT_INVALID_PARM;
     }
     if (FALSE == s_kv_opened) {
-        PR_ERR("kv not init, del %s rejected", key);
+        PORT_LOG_ERR("kv not init, del %s rejected", key);
         return OPRT_COM_ERROR;
     }
 
@@ -197,13 +201,13 @@ static OPERATE_RET __kv_del(const char *key)
         return OPRT_OK; /* 契约：键不存在视为成功 */
     }
     if (ESP_OK != err) {
-        PR_ERR("kv del %s failed: %d", key, err);
+        PORT_LOG_ERR("kv del %s failed: %d", key, err);
         return OPRT_COM_ERROR;
     }
 
     err = nvs_commit(s_kv_handle);
     if (ESP_OK != err) {
-        PR_ERR("kv del %s commit failed: %d", key, err);
+        PORT_LOG_ERR("kv del %s commit failed: %d", key, err);
         return OPRT_COM_ERROR;
     }
 

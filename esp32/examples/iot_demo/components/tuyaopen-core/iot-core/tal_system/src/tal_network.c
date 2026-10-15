@@ -35,25 +35,25 @@
 #include "tal_network.h"
 #include "dev_evt.h"
 
-/* 标准平台卡（port 的 port_network.c 定义，ops 指向其 port_net_* 实现） */
-extern TAL_NETWORK_CARD_T tal_network_card_platform;
+/* 标准平台 ops 实例（port 的 port_network.c 定义，.ops 指向其 port_net_* 实现） */
+extern TAL_NETWORK_OPS_T tal_network_ops_platform;
 
 /* 活动链路源地址：由链路管理方（应用/port 层）在链路事件时推送 */
 static TUYA_IP_ADDR_T s_active_ipaddr = 0;
 
-TAL_NETWORK_OPS_T *tal_network_get_active_ops(void)
+TAL_NETWORK_SOCKET_OPS_T *tal_network_get_active_ops(void)
 {
-    return &tal_network_card_platform.ops;
+    return &tal_network_ops_platform.ops;
 }
 
-OPERATE_RET tal_network_card_set_active_ip(TUYA_IP_ADDR_T ipaddr)
+OPERATE_RET tal_network_set_active_ip(TUYA_IP_ADDR_T ipaddr)
 {
     s_active_ipaddr = ipaddr;
 
     return OPRT_OK;
 }
 
-TUYA_IP_ADDR_T tal_network_card_get_active_ip(void)
+TUYA_IP_ADDR_T tal_network_get_active_ip(void)
 {
     return s_active_ipaddr;
 }
@@ -68,13 +68,13 @@ TUYA_IP_ADDR_T tal_network_card_get_active_ip(void)
  * This macro simplifies the repetitive pattern of getting network ops,
  * checking if the operation exists, and calling it with parameters.
  *
- * @param op_name: The operation name in TAL_NETWORK_OPS_T struct
+ * @param op_name: The operation name in TAL_NETWORK_SOCKET_OPS_T struct
  * @param default_ret: Default return value if operation is not available
  * @param ...: Parameters to pass to the operation function
  */
 #define TAL_NET_EXEC_OP(op_name, default_ret, ...)                                                                     \
     do {                                                                                                               \
-        TAL_NETWORK_OPS_T *ops = tal_network_get_active_ops();                                                         \
+        TAL_NETWORK_SOCKET_OPS_T *ops = tal_network_get_active_ops();                                                         \
         if (NULL != ops && ops->op_name) {                                                                             \
             return ops->op_name(__VA_ARGS__);                                                                          \
         }                                                                                                              \
@@ -85,12 +85,12 @@ TUYA_IP_ADDR_T tal_network_card_get_active_ip(void)
 /**
  * @brief Macro to execute network operation that returns void
  *
- * @param op_name: The operation name in TAL_NETWORK_OPS_T struct
+ * @param op_name: The operation name in TAL_NETWORK_SOCKET_OPS_T struct
  * @param ...: Parameters to pass to the operation function
  */
 #define TAL_NET_EXEC_OP_VOID(op_name, ...)                                                                             \
     do {                                                                                                               \
-        TAL_NETWORK_OPS_T *ops = tal_network_get_active_ops();                                                         \
+        TAL_NETWORK_SOCKET_OPS_T *ops = tal_network_get_active_ops();                                                         \
         if (NULL != ops && ops->op_name) {                                                                             \
             ops->op_name(__VA_ARGS__);                                                                                 \
         }                                                                                                              \
@@ -337,7 +337,7 @@ TUYA_ERRNO tal_net_connect(const int fd, const TUYA_IP_ADDR_T addr, const uint16
     /* Notify ULP around the TCP connect so it can keep the device awake for the
      * duration (covers TLS/HTTP/MQTT/ATOP socket setup - they all land here). */
     TUYA_ERRNO rt = -1;
-    TAL_NETWORK_OPS_T *ops = tal_network_get_active_ops();
+    TAL_NETWORK_SOCKET_OPS_T *ops = tal_network_get_active_ops();
     if (NULL != ops && ops->connect) {
         tuya_dev_evt_notify(DEV_EVT_TCP_CONNECT, ACTION_BEFORE, NULL);
         rt = ops->connect(fd, addr, port);
@@ -698,7 +698,7 @@ OPERATE_RET tal_net_gethostbyname(const char *domain, TUYA_IP_ADDR_T *addr)
     }
 
     /* Notify ULP around the DNS lookup so it can keep the device awake for it. */
-    TAL_NETWORK_OPS_T *dns_ops = tal_network_get_active_ops();
+    TAL_NETWORK_SOCKET_OPS_T *dns_ops = tal_network_get_active_ops();
     if (NULL != dns_ops && dns_ops->gethostbyname) {
         OPERATE_RET rt = OPRT_OK;
         tuya_dev_evt_notify(DEV_EVT_DNS_LOOKUP, ACTION_BEFORE, NULL);
