@@ -1,5 +1,5 @@
 /**
- * @file port_runtime.c
+ * @file port_api.c
  * @brief tal_api 平台 ops 卡组装 + OS 原语实现单文件收编（linux port）
  *
  * 原分散于 tkl_semaphore.c / tkl_mutex.c / tkl_thread.c / tkl_queue.c /
@@ -29,6 +29,10 @@
  * 2026-10 port 去 tkl 化：tkl_runtime.c → port_runtime.c，tkl_* 函数去前缀；
  * 原 tkl_semaphore/mutex/thread/queue/memory/system 六个头文件删除——它们只有
  * 本文件一个 includer，其类型/宏/声明随之内联到下面"原 tkl_*.h 内联区"。
+ *
+ * 2026-10 后续（C2）：port_runtime.c → port_api.c——本文件是 core 的 tal_api
+ * 模块（契约 tal_api_ops.h）的平台侧，改名与 port_kv.c / port_netif.c /
+ * port_network.c 的 port_<模块>.c 命名线对齐。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  *

@@ -11,7 +11,7 @@ set(PORT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 # 通用工具（tuya_list/queue/ringbuf/slist/tools）已迁至
 # tuyaopen-core/iot-core/tuya_transport/src/utilities（core 共用，平台无关）；
 # 其中 tuya_mem_heap 已不再被 port 使用（port_system_malloc 直映平台 malloc，
-# 见 src/port_runtime.c——分层约束：port 不向上依赖 core）
+# 见 src/port_api.c——分层约束：port 不向上依赖 core）
 set(_port_srcs)
 file(GLOB_RECURSE _port_srcs CONFIGURE_DEPENDS
     "${PORT_ROOT}/include/*.c"
@@ -80,8 +80,8 @@ if(_port_srcs)
 
     # 路径与 src 下文件名耦合：port 去 tkl 化改名后须同步，否则条件为假会
     # 静默丢掉 core transport 头注入（表面能过增量构建）
-    if(EXISTS "${PORT_ROOT}/src/port_network.c" OR EXISTS "${PORT_ROOT}/src/port_runtime.c")
-        # port_network（POSIX 实现 + 网络 ops 实例）/port_runtime（tal_api ops 卡）：
+    if(EXISTS "${PORT_ROOT}/src/port_network.c" OR EXISTS "${PORT_ROOT}/src/port_api.c")
+        # port_network（POSIX 实现 + 网络 ops 实例）/port_api（tal_api ops 卡）：
         # **零 core 依赖**——卡类型取本层 interface/，公共类型取本层 include/common。
         # 刻意不链 tal_system、不注入 core 头路径：一旦有人写回对 core 的 include，
         # 编译立即失败（编译期自证的分层门禁）。
