@@ -4,22 +4,23 @@
  *
  * Implements the port_net_* interface (declared inline below; the former
  * port/include/network/tkl_network.h was removed by the 2026-10 rename)
- * on top of BSD sockets, and assembles the standard network card
- * (tal_network_card_platform) consumed by core's tal_network.c. Porting a new
- * platform means providing this one file (implementation + card) in its port.
+ * on top of BSD sockets, and assembles the standard network ops instance
+ * (tal_network_ops_platform) consumed by core's tal_network.c. Porting a new
+ * platform means providing this one file (implementation + ops instance) in
+ * its port.
  *
  * Ops reached only from one optional module are compiled in under that
  * module's switch (the ENABLE_LOCAL_LINK / ENABLE_TUYA_P2P /
  * ENABLE_AI_COMPONENTS blocks below): with the switch off they are neither
- * defined nor wired into the card, so a new port only has to provide the ops
- * its own configuration actually calls. core's TAL_NET_EXEC_OP checks card
- * members for NULL and reports the op as unavailable at runtime.
+ * defined nor wired into the instance, so a new port only has to provide the
+ * ops its own configuration actually calls. core's TAL_NET_EXEC_OP checks
+ * ops members for NULL and reports the op as unavailable at runtime.
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
 #include "tuya_cloud_types.h"
 #include "tuya_error_code.h"
-#include "tal_network.h"
+#include "tal_network_ops.h"   /* 契约层（port/interface）：网络 ops 类型 */
 
 #define TAL_TO_SYS_FD_SET(fds) ((fd_set *)fds)
 
@@ -1319,14 +1320,14 @@ OPERATE_RET port_net_getpeername(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port)
 #endif /* ENABLE_TUYA_P2P */
 
 /* ---------------------------------------------------------------------------
- * 标准网络卡：由本平台 TKL 实现组装，core 的 tal_network.c 经
+ * 标准网络 ops 实例：由本平台 TKL 实现组装，core 的 tal_network.c 经
  * extern 引用并完成 tal_net_* 分发。移植新平台时在各自 port 的
- * port_network.c 中提供同名卡即可。
- * 卡成员与实现同开关：可选能力（局域网/对端服务、p2p）的 ops 仅在对应宏
+ * port_network.c 中提供同名实例即可。
+ * ops 成员与实现同开关：可选能力（局域网/对端服务、p2p）的 ops 仅在对应宏
  * 定义时才挂载，关掉时成员为 NULL，core 侧 TAL_NET_EXEC_OP 会打印
  * "not available"。
  * --------------------------------------------------------------------------- */
-TAL_NETWORK_CARD_T tal_network_card_platform = {
+TAL_NETWORK_OPS_T tal_network_ops_platform = {
     .name = "tkl",
     .type = TAL_NET_TYPE_PLATFORM,
     .ipaddr = 0,

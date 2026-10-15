@@ -6,7 +6,8 @@
  * （DECODER_OUTPUT_T）直接引用平台音频类型（采样率 / 位宽 / 声道三枚举，
  * 定义在上游各平台 tuyaos_adapter/include/media/ 下的音频适配头中）。本仓
  * 铁律是 core 不出现任何平台层（tkl/tdl/tdd）前缀的类型与接口，故按 BLE 卡
- * 先例（iot-core/tal_system/include/tal_bluetooth_ops.h 的 TAL_BLE_* 镜像）
+ * 先例（port/interface/tal_bluetooth_ops.h 的 TAL_BLE_* 镜像，2026-10 从
+ * core 的 iot-core/tal_system/include/ 迁至契约层）
  * 镜像为 core 自持类型，前缀 TAL_AUDIO_。
  *
  * 约定：

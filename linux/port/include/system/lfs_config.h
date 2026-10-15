@@ -2,14 +2,14 @@
 #define __LFS_CONFIG_H_
 
 // System includes
-#include "tal_log.h"
-#include "tal_memory.h"
+#include "port_log.h"      /* 本层日志：lfs 的 LFS_ERROR/LFS_WARN 映射 */
+#include "port_memory.h"   /* 本层分配器：lfs_malloc/lfs_free 映射 */
 #include <inttypes.h>
 
 #define LFS_NO_ASSERT
 #define LFS_NO_DEBUG
-#define LFS_ERROR PR_ERR
-#define LFS_WARN  PR_WARN
+#define LFS_ERROR PORT_LOG_ERR
+#define LFS_WARN  PORT_LOG_WARN
 
 #ifndef LFS_NO_ASSERT
 #include <assert.h>
@@ -219,7 +219,7 @@ static __attribute__((unused)) uint32_t lfs_crc(uint32_t crc, const void *buffer
 static inline void *lfs_malloc(size_t size)
 {
 #ifndef LFS_NO_MALLOC
-    return tal_malloc(size);
+    return port_system_malloc(size);
 #else
     (void)size;
     return NULL;
@@ -230,7 +230,7 @@ static inline void *lfs_malloc(size_t size)
 static inline void lfs_free(void *p)
 {
 #ifndef LFS_NO_MALLOC
-    tal_free(p);
+    port_system_free(p);
 #else
     (void)p;
 #endif

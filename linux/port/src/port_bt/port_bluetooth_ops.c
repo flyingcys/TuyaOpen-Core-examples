@@ -6,7 +6,8 @@
  * linux TKL 实现（port_bluetooth.c）之间的**纯适配层**，不含任何业务逻辑与
  * 字段转换，只做三件事：
  *
- * 1. 镜像布局强转：卡的成员签名用 core 自持镜像类型（TAL_BLE_*），TKL 侧用
+ * 1. 镜像布局强转：卡的成员签名用 TAL 自持镜像类型（TAL_BLE_*，定义在契约层
+ *    interface/tal_bluetooth_ops.h），TKL 侧用
  *    TKL_BLE_*，两套类型**逐字段镜像、布局逐字节一致**（见下方编译期断言），
  *    故带结构体参数的成员直接"指针强转"转发，回调注册直接"函数指针强转"
  *    （回调参数同一内存同一指针，桥接无需 memcpy）；基础类型参数（含出参
@@ -29,7 +30,7 @@
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
-#include "tal_bluetooth_ops.h"   /* core：卡契约 + TAL_BLE_* 镜像类型 */
+#include "tal_bluetooth_ops.h"   /* 契约层（interface）：卡契约 + TAL_BLE_* 镜像类型 */
 #include "port_bluetooth.h"       /* port：本平台 TKL BLE 接口 + TKL_BLE_* 类型 */
 
 #include <stddef.h>

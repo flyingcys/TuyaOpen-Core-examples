@@ -15,7 +15,8 @@
 #include <stdio.h>
 
 //#include "tuya_bluez_api.h"
-#include "tal_log.h"
+/* 原 include "tal_log.h"（core）已移除：本文件日志全走 printf，
+ * 分层约束 port 不向上 include core（见 port/CMakeLists.txt 的 port_bt 块）。 */
 
 // Forward declarations for functions defined in bt_dbus_api.c
 void bluez_inc_init(TKL_BLE_GAP_EVT_FUNC_CB gap_evt_cb, TKL_BLE_GATT_EVT_FUNC_CB gatt_evt_cb);

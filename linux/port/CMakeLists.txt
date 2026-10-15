@@ -33,7 +33,8 @@ if(EXISTS "${PORT_ROOT}/littlefs/lfs.c")
         "${PORT_ROOT}/littlefs/lfs.c"
     )
     # lfs_util.h 经 LFS_CONFIG 展开 lfs_config.h（在 include/system/ 下，见下面的
-    # _port_incs 注入）；其 lfs_malloc / LFS_ERROR 依赖 tal_malloc / PR_ERR
+    # _port_incs 注入）；其 lfs_malloc / LFS_ERROR 依赖本层 port_system_malloc /
+    # PORT_LOG_ERR（分层：不取 core 的 tal_malloc / PR_ERR）
     set(_port_lfs_defs LFS_CONFIG=lfs_config.h)
 endif()
 
@@ -47,6 +48,7 @@ set(_port_incs)
 file(GLOB_RECURSE _port_hdrs CONFIGURE_DEPENDS
     "${PORT_ROOT}/include/*.h"
     "${PORT_ROOT}/src/*.h"
+    "${PORT_ROOT}/interface/*.h"
 )
 if(_port_hdrs)
     list(FILTER _port_hdrs EXCLUDE REGEX "/CMakeFiles/")
@@ -77,15 +79,12 @@ if(_port_srcs)
     endif()
 
     # 路径与 src 下文件名耦合：port 去 tkl 化改名后须同步，否则条件为假会
-    # 静默丢掉 tal_system 链接与 core transport 头注入（表面能过增量构建）
+    # 静默丢掉 core transport 头注入（表面能过增量构建）
     if(EXISTS "${PORT_ROOT}/src/port_network.c" OR EXISTS "${PORT_ROOT}/src/port_runtime.c")
-        # port_network（POSIX 实现）/port_runtime（tal_api ops 卡）：include tal_api.h（tal_system 公共头）与
-        # core 的 tal_network.h/tal_api_ops.h（卡与 ops 类型），符号在最终链接组解析
-        if(TARGET tal_system)
-            target_link_libraries(tuyaopen-port PRIVATE tal_system)
-        endif()
-        target_include_directories(tuyaopen-port PRIVATE
-            "${PORT_ROOT}/../tuyaopen-core/iot-core/tuya_transport/include/transport")
+        # port_network（POSIX 实现 + 网络 ops 实例）/port_runtime（tal_api ops 卡）：
+        # **零 core 依赖**——卡类型取本层 interface/，公共类型取本层 include/common。
+        # 刻意不链 tal_system、不注入 core 头路径：一旦有人写回对 core 的 include，
+        # 编译立即失败（编译期自证的分层门禁）。
     endif()
 
     # 模块级隔离（独立于上面的条件块）：仅 p2p 使用的适配由 ENABLE_TUYA_P2P 门控
@@ -123,26 +122,18 @@ if(_port_srcs)
 
     # 路径与 src 下文件名/目录名耦合：port 去 tkl 化改名后须同步
     if(EXISTS "${PORT_ROOT}/src/port_kv.c")
-        # port_kv（littlefs + 内联 AES/SHA，OpenSSL libcrypto 后端）：**不再调用 core 的
-        # tal_security**（分层约束：port 只向下依赖，core 只向下经卡调 port）。
-        # tal_log/tal_memory/tal_mutex 的使用仍待收口（见 porting 方案第 1/2/4 项）
+        # port_kv（littlefs + 内联 AES/SHA，OpenSSL libcrypto 后端）：**零 core 依赖**
+        # ——卡类型取本层 interface/tal_kv_ops.h，密码学在本层（OpenSSL）。
+        # 刻意不链 tal_system：对 core 的任何 include 都会编译失败（分层门禁）
         find_package(OpenSSL REQUIRED)
         target_link_libraries(tuyaopen-port PRIVATE OpenSSL::Crypto)
-        if(TARGET tal_system)
-            target_link_libraries(tuyaopen-port PRIVATE tal_system)
-        endif()
     endif()
 
     if(EXISTS "${PORT_ROOT}/src/port_bt" AND CONFIG_ENABLE_BLUETOOTH)
-        # port_bt sources include tal_log.h（tal_system 公共头），符号在最终链接组解析
-        if(TARGET tal_system)
-            target_link_libraries(tuyaopen-port PRIVATE tal_system)
-        endif()
-        # tal_bluetooth_ops.c（TAL BLE 卡适配层）include core 的
-        # tal_bluetooth_ops.h（tal_system/include），该头内嵌 include
-        # "tal_bluetooth_def.h"（在 core 的 ble/ 下），需把 ble/ 补进包含路径
-        target_include_directories(tuyaopen-port PRIVATE
-            "${PORT_ROOT}/../tuyaopen-core/iot-core/ble")
+        # port_bt（bluez 后端 + TAL BLE 卡适配层 port_bluetooth_ops.c）：**零 core 依赖**
+        # ——卡契约与 TAL_BLE_* 镜像类型取本层 interface/（tal_bluetooth_ops.h +
+        # tal_bluetooth_def.h），日志走 printf。刻意不链 tal_system、不注入 core 的
+        # ble/ 头路径：对 core 的任何 include 都会编译失败（编译期自证的分层门禁）
         find_package(PkgConfig QUIET)
         if(PkgConfig_FOUND)
             pkg_check_modules(GIO gio-2.0 QUIET)
