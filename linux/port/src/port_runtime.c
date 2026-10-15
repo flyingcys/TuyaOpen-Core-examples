@@ -1202,4 +1202,9 @@ TAL_API_OPS_T tal_api_ops_platform = {
     .queue_post = __queue_post,
     .queue_fetch = __queue_fetch,
     .queue_free = __queue_free,
+#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+    //! ex ram（Linux 无独立外部 RAM：退化为普通内存）
+    .ex_ram_malloc = port_system_malloc,
+    .ex_ram_free = port_system_free,
+#endif
 };
