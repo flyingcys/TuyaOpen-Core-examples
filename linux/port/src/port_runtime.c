@@ -7,14 +7,15 @@
  * 被分发/调用的接口（OTA 为 core 回调注入，不经 port）：
  * - log output / semaphore / thread / queue 实现为 ops 卡私有（static），
  *   适配面收敛到一张卡；
- * - memory 的 malloc/free 转 static（主卡 .malloc/.free/.ex_ram_* 的实现本体 +
- *   本文件内部使用；2026-10 收口后已无跨文件调用方——esp32 侧 kv 改为
- *   tal_malloc/tal_free 同源配对）；
+ * - memory 的 malloc/free 为**port 内部接口**（主卡 .malloc/.free/.ex_ram_* 的实现
+ *   本体 + port_kv.c 跨文件使用；声明见 include/system/port_memory.h）
+ *   ——core 侧只经卡分发，不直调本层符号；
  *   calloc 由 core 的 tal_calloc 用 tal_malloc+memset 实现，卡不再要求适配；
  * - system 的 sleep/reset/get_millisecond/get_random 仅 tal 层经卡分发，转 static；
  *   enter/exit_critical 与 TKL_ENTER/EXIT_CRITICAL 宏均已删（tal 层无消费者）；
- * - mutex 转 static（主卡 .mutex_* 的实现本体 + 本文件内部（mutex 管理器）使用；
- *   2026-10 收口后两侧 port 均无跨文件调用方）；
+ * - mutex 的 create_init/lock/unlock/release 为**port 内部接口**（主卡 .mutex_* 的
+ *   实现本体 + port_kv.c 的存储读写锁；声明见 include/system/port_mutex.h）
+ *   ——core 侧只经卡分发，不直调本层符号；
  * - 无调用方的接口已删除（tkl_mutex_trylock、
  *   tkl_system_memset/memcpy、tkl_log_close/open、
  *   tkl_cpu_sleep_mode_set、tkl_system_realloc、tkl_system_get_tick_count、
@@ -33,7 +34,6 @@
  *
  */
 
-#include "tuya_mem_heap.h"
 #include "tuya_error_code.h"
 #include "tuya_cloud_types.h"
 
@@ -48,9 +48,10 @@
  * --------------------------------------------------------------------------- */
 
 /* 原 tkl_memory.h：malloc/free 是主卡 TAL_API_OPS_T 的 .malloc/.free/.ex_ram_*
- * 实现本体，收口后转 static（本文件内部前置声明；两侧 port 已无跨文件调用方）。 */
-static void *__memory_malloc(SIZE_T size);
-static void  __memory_free(void *ptr);
+ * 实现本体。**port 内部接口**（port_kv.c 跨文件用，声明见
+ * src/port_memory.h）——core 侧只经卡分发，不直调本层符号。 */
+#include "port_memory.h"
+#include "port_mutex.h"
 
 /* 原 tkl_semaphore.h */
 typedef void *TKL_SEM_HANDLE;
@@ -105,38 +106,12 @@ static void __log_output(const char *str, ...)
 
 /* ---------------------------------------------------------------------------
  * memory 实现（原 tkl_memory.c）：malloc/free 为卡 .malloc/.free/.ex_ram_* 的
- * 实现本体，收口后转 static（无跨文件调用方）。calloc 不再走卡：core 的
- * tal_calloc 用 tal_malloc+memset 实现（含乘法溢出检查）。
- * memset/memcpy、无调用方的 realloc/get_free_heap_size 已删；
- * 外部 RAM 分配家族已删除：p2p-core 的 tuya_ipc_skill.c 改用
- * tal_malloc/tal_free（分配/释放成对同源）。
+ * 实现本体，**port 内部接口**（port_kv.c 跨文件用，声明见 include/system/port_memory.h）。
+ * 直接映射平台堆（Linux 即 libc malloc/free）——不再使用 core 的 tuya_mem_heap
+ * 自管大堆（分层约束：port 不向上依赖 core；代价是失去原 512MB 上限与堆统计）。
+ * calloc 不再走卡：core 的 tal_calloc 用 tal_malloc+memset 实现（含乘法溢出检查）。
+ * memset/memcpy、无调用方的 realloc/get_free_heap_size 已删。
  * --------------------------------------------------------------------------- */
-#define MAX_HEAP_SIZE (512 * 1024 * 1024)
-
-static pthread_mutex_t s_heap_mutex = PTHREAD_MUTEX_INITIALIZER;
-static HEAP_HANDLE s_heap_handle = NULL;
-
-static void __heap_lock(void)
-{
-    pthread_mutex_lock(&s_heap_mutex);
-}
-
-static void __heap_unlock(void)
-{
-    pthread_mutex_unlock(&s_heap_mutex);
-}
-
-static void __heap_init(void)
-{
-    heap_context_t ctx = {0};
-    ctx.dbg_output = (void (*)(char *, ...))printf;
-    ctx.enter_critical = __heap_lock;
-    ctx.exit_critical = __heap_unlock;
-
-    char *buf = malloc(MAX_HEAP_SIZE);
-    tuya_mem_heap_init(&ctx);
-    tuya_mem_heap_create(buf, MAX_HEAP_SIZE, &s_heap_handle);
-}
 
 /**
 * @brief Alloc memory of system
@@ -147,13 +122,9 @@ static void __heap_init(void)
 *
 * @return the memory address malloced
 */
-static void *__memory_malloc(const SIZE_T size)
+void *port_system_malloc(const SIZE_T size)
 {
-    if (!s_heap_handle) {
-        __heap_init();
-    }
-
-    return tuya_mem_heap_malloc(s_heap_handle, size);
+    return malloc(size);
 }
 
 /**
@@ -165,10 +136,10 @@ static void *__memory_malloc(const SIZE_T size)
 *
 * @return void
 */
-static void __memory_free(void *ptr)
+void port_system_free(void *ptr)
 {
     if (ptr) {
-        tuya_mem_heap_free(s_heap_handle, ptr);
+        free(ptr);
     }
 }
 
@@ -324,7 +295,7 @@ static OPERATE_RET __semaphore_create_init(TKL_SEM_HANDLE *handle, const uint32_
     }
 
     P_TKL_SEM_MANAGE sem_manage;
-    sem_manage = (P_TKL_SEM_MANAGE)__memory_malloc(sizeof(TKL_SEM_MANAGE));
+    sem_manage = (P_TKL_SEM_MANAGE)port_system_malloc(sizeof(TKL_SEM_MANAGE));
     if (sem_manage == NULL) {
         return OPRT_MALLOC_FAILED;
     }
@@ -332,7 +303,7 @@ static OPERATE_RET __semaphore_create_init(TKL_SEM_HANDLE *handle, const uint32_
     int ret;
     ret = sem_init(&sem_manage->sem, 0, sem_cnt);
     if (ret != 0) {
-        __memory_free(sem_manage);
+        port_system_free(sem_manage);
         *handle = NULL;
         return ret;
     }
@@ -433,7 +404,7 @@ static OPERATE_RET __semaphore_release(const TKL_SEM_HANDLE handle)
 
     int ret;
     ret = sem_destroy(&(sem_manage->sem));
-    __memory_free(handle); // 释放信号量管理结构
+    port_system_free(handle); // 释放信号量管理结构
     if (ret != 0) {
         return OPRT_OS_ADAPTER_SEM_RELEASE_FAILED;
     }
@@ -442,9 +413,9 @@ static OPERATE_RET __semaphore_release(const TKL_SEM_HANDLE handle)
 }
 
 /* ---------------------------------------------------------------------------
- * mutex 实现（原 tkl_mutex.c）：收口后转 static（卡 .mutex_* 的实现本体 +
- * 本文件内部（mutex 管理器）使用）。core 侧（tuya_queue 等）经 tal_mutex_*
- * 走主卡分发，不再直调本层符号
+ * mutex 实现（原 tkl_mutex.c）：**port 内部接口**（卡 .mutex_* 的实现本体 +
+ * port_kv.c 的存储读写锁，声明见 include/system/port_mutex.h）。core 侧
+ * （tuya_queue 等）经 tal_mutex_* 走主卡分发，不直调本层符号
  * --------------------------------------------------------------------------- */
 typedef pthread_mutex_t TKL_THRD_MUTEX;
 typedef struct
@@ -461,13 +432,13 @@ typedef struct
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-static OPERATE_RET __mutex_create_init(TKL_MUTEX_HANDLE *handle)
+OPERATE_RET port_mutex_create_init(TKL_MUTEX_HANDLE *handle)
 {
     if (!handle)
         return OPRT_INVALID_PARM;
 
     P_TKL_MUTEX_MANAGE mutex_manage;
-    mutex_manage = (P_TKL_MUTEX_MANAGE)__memory_malloc(sizeof(TKL_MUTEX_MANAGE));
+    mutex_manage = (P_TKL_MUTEX_MANAGE)port_system_malloc(sizeof(TKL_MUTEX_MANAGE));
     if (!(mutex_manage))
         return OPRT_MALLOC_FAILED;
 
@@ -508,7 +479,7 @@ static OPERATE_RET __mutex_create_init(TKL_MUTEX_HANDLE *handle)
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-static OPERATE_RET __mutex_lock(const TKL_MUTEX_HANDLE handle)
+OPERATE_RET port_mutex_lock(const TKL_MUTEX_HANDLE handle)
 {
     if (!handle) {
         return OPRT_INVALID_PARM;
@@ -535,7 +506,7 @@ static OPERATE_RET __mutex_lock(const TKL_MUTEX_HANDLE handle)
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-static OPERATE_RET __mutex_unlock(const TKL_MUTEX_HANDLE handle)
+OPERATE_RET port_mutex_unlock(const TKL_MUTEX_HANDLE handle)
 {
     if (!handle) {
         return OPRT_INVALID_PARM;
@@ -562,7 +533,7 @@ static OPERATE_RET __mutex_unlock(const TKL_MUTEX_HANDLE handle)
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-static OPERATE_RET __mutex_release(const TKL_MUTEX_HANDLE handle)
+OPERATE_RET port_mutex_release(const TKL_MUTEX_HANDLE handle)
 {
     if (!handle) {
         return OPRT_INVALID_PARM;
@@ -577,7 +548,7 @@ static OPERATE_RET __mutex_release(const TKL_MUTEX_HANDLE handle)
         return OPRT_OS_ADAPTER_MUTEX_RELEASE_FAILED;
     }
 
-    __memory_free(handle);
+    port_system_free(handle);
     return OPRT_OK;
 }
 
@@ -622,7 +593,7 @@ static OPERATE_RET __thread_create(TKL_THREAD_HANDLE *thread, const char *name, 
     }
 
     int ret = 0;
-    THREAD_DATA *thread_data = (THREAD_DATA *)__memory_malloc(sizeof(THREAD_DATA));
+    THREAD_DATA *thread_data = (THREAD_DATA *)port_system_malloc(sizeof(THREAD_DATA));
     if (thread_data == NULL) {
         return OPRT_MALLOC_FAILED;
     }
@@ -661,7 +632,7 @@ static OPERATE_RET __thread_release(const TKL_THREAD_HANDLE thread)
     }
 
     THREAD_DATA *thread_data = (THREAD_DATA *)thread;
-    __memory_free(thread_data);
+    port_system_free(thread_data);
 
     return OPRT_OK;
 }
@@ -1173,8 +1144,8 @@ TAL_API_OPS_T tal_api_ops_platform = {
     //! log output
     .log_output = __log_output,
     //! memory
-    .malloc = __memory_malloc,
-    .free = __memory_free,
+    .malloc = port_system_malloc,
+    .free = port_system_free,
     //! system
     .sleep = __system_sleep,
     .reset = __system_reset,
@@ -1186,10 +1157,10 @@ TAL_API_OPS_T tal_api_ops_platform = {
     .semaphore_post = __semaphore_post,
     .semaphore_release = __semaphore_release,
     //! mutex
-    .mutex_create_init = __mutex_create_init,
-    .mutex_lock = __mutex_lock,
-    .mutex_unlock = __mutex_unlock,
-    .mutex_release = __mutex_release,
+    .mutex_create_init = port_mutex_create_init,
+    .mutex_lock = port_mutex_lock,
+    .mutex_unlock = port_mutex_unlock,
+    .mutex_release = port_mutex_release,
     //! thread
     .thread_create = __thread_create,
     .thread_release = __thread_release,
@@ -1203,7 +1174,7 @@ TAL_API_OPS_T tal_api_ops_platform = {
     .queue_free = __queue_free,
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
     //! ex ram（Linux 无独立外部 RAM：退化为普通内存）
-    .ex_ram_malloc = __memory_malloc,
-    .ex_ram_free = __memory_free,
+    .ex_ram_malloc = port_system_malloc,
+    .ex_ram_free = port_system_free,
 #endif
 };

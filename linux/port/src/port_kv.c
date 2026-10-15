@@ -9,13 +9,18 @@
  * 介质：flash 模拟（本文件内联，标准 C IO 读写 ./tuyadb/tuyadb，不依赖 port_fs）
  * 的 UF 分区挂 littlefs；每条记录 = 明文经 AES-128-CBC 加密后的密文，IV/密钥在
  * init 时由 seed/key 各经 SHA256 派生 16 字节，读回时逐字节校验 PKCS7 填充。
- * 写/读/删全程持 s_kv_mutex（tal_mutex），加解密在锁外做。
+ * 写/读/删全程持 s_kv_mutex（本层 port_mutex_*），加解密在锁外做。
  *
  * 平台 ops 卡：tal_kv_ops_platform 由本文件组装，core 的 tal_kv.c 经 extern 引用。
  * 移植其它平台时替换本文件（NVS 类平台直接映射芯片 KV 即可）。
  *
+ * 密码学（AES-128-CBC / SHA-256）**在本文件内联实现**（OpenSSL libcrypto 后端，见
+ * 下方"本文件内联的密码学原语"段）：分层约束要求 port 只向下依赖，旧实现调 core 的
+ * tal_security 属向上调用，已改本层实现（字节兼容，既有 kv 数据可直接解）。
+ *
  * 注意：lfs_util.h 经 -DLFS_CONFIG=lfs_config.h（CMake 注入）取 lfs_config.h，
- * 内存/日志走 tal_malloc / PR_ERR。
+ * 内存/互斥/日志全走本层（port_system_malloc / port_mutex_* / PORT_LOG_ERR），
+ * **不调用 core**（分层约束：port 只向下依赖，core 只向下经卡调 port）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
@@ -28,10 +33,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "tal_log.h"
-#include "tal_memory.h"
-#include "tal_mutex.h"
-#include "tal_security.h"
+#include <openssl/evp.h>
+#include <openssl/sha.h>
+
+#include "port_log.h"
+#include "port_memory.h"
+#include "port_mutex.h"
 
 #include "lfs.h"
 
@@ -63,7 +70,7 @@ static FILE *s_flash_file;
 /* 首次创建时预填 0xFF（模拟擦除态；littlefs 依赖未写区域为 0xFF） */
 static OPERATE_RET __flash_file_prefill(void)
 {
-    char *data = tal_malloc(FLASH_PARTITION_SZ);
+    char *data = port_system_malloc(FLASH_PARTITION_SZ);
     if (NULL == data) {
         return OPRT_MALLOC_FAILED;
     }
@@ -72,14 +79,14 @@ static OPERATE_RET __flash_file_prefill(void)
     for (uint32_t offset = 0; offset < FLASH_FILE_SIZE; offset += FLASH_PARTITION_SZ) {
         if (FLASH_PARTITION_SZ != fwrite(data, 1, FLASH_PARTITION_SZ, s_flash_file)) {
             /* ENOSPC 是最常见原因：首次预填要写满 FLASH_FILE_SIZE（256MB） */
-            PR_ERR("flash prefill failed at offset %u/%u: %s（磁盘空间不足？首次需 %u MB）", offset,
+            PORT_LOG_ERR("flash prefill failed at offset %u/%u: %s（磁盘空间不足？首次需 %u MB）", offset,
                    (unsigned int)FLASH_FILE_SIZE, strerror(errno),
                    (unsigned int)(FLASH_FILE_SIZE / (1024 * 1024)));
-            tal_free(data);
+            port_system_free(data);
             return OPRT_FILE_WRITE_FAILED;
         }
     }
-    tal_free(data);
+    port_system_free(data);
 
     fflush(s_flash_file);
     int fd = fileno(s_flash_file);
@@ -99,12 +106,12 @@ static OPERATE_RET __flash_open(void)
     if (0 != access(FLASH_FILE_NAME, F_OK)) {
         /* 首次：建目录 + 创建 + 预填 */
         if (0 != access(FLASH_FILE_PATH, F_OK) && 0 != mkdir(FLASH_FILE_PATH, 0755) && EEXIST != errno) {
-            PR_ERR("flash dir create failed: %s: %s", FLASH_FILE_PATH, strerror(errno));
+            PORT_LOG_ERR("flash dir create failed: %s: %s", FLASH_FILE_PATH, strerror(errno));
             return OPRT_FILE_OPEN_FAILED;
         }
         s_flash_file = fopen(FLASH_FILE_NAME, "wb+");
         if (NULL == s_flash_file) {
-            PR_ERR("flash file create failed: %s: %s", FLASH_FILE_NAME, strerror(errno));
+            PORT_LOG_ERR("flash file create failed: %s: %s", FLASH_FILE_NAME, strerror(errno));
             return OPRT_FILE_OPEN_FAILED;
         }
         if (OPRT_OK != __flash_file_prefill()) {
@@ -116,7 +123,7 @@ static OPERATE_RET __flash_open(void)
     } else {
         s_flash_file = fopen(FLASH_FILE_NAME, "rb+");
         if (NULL == s_flash_file) {
-            PR_ERR("flash file open failed: %s", FLASH_FILE_NAME);
+            PORT_LOG_ERR("flash file open failed: %s", FLASH_FILE_NAME);
             return OPRT_FILE_OPEN_FAILED;
         }
     }
@@ -174,7 +181,7 @@ static lfs_t s_lfs;
 static lfs_size_t s_lfs_flash_addr;
 
 static tal_kv_cfg_t s_lfs_kv_cfg;
-static MUTEX_HANDLE s_lfs_mutex;
+static PORT_MUTEX_HANDLE s_lfs_mutex;
 static BOOL_T s_lfs_mounted = FALSE;
 
 static int user_provided_block_device_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, void *buffer,
@@ -251,7 +258,7 @@ static OPERATE_RET kv_storage_write(const char *key, const uint8_t *data, uint32
 
     result = lfs_file_open(&s_lfs, &file, key, LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC);
     if (LFS_ERR_OK != result) {
-        PR_ERR("lfs open %s failed: %d", key, result);
+        PORT_LOG_ERR("lfs open %s failed: %d", key, result);
         return OPRT_FILE_OPEN_FAILED;
     }
 
@@ -259,7 +266,7 @@ static OPERATE_RET kv_storage_write(const char *key, const uint8_t *data, uint32
     sync_result = lfs_file_sync(&s_lfs, &file);
     close_result = lfs_file_close(&s_lfs, &file);
     if (result != (int)length || LFS_ERR_OK != sync_result || LFS_ERR_OK != close_result) {
-        PR_ERR("kv write failed write:%d sync:%d close:%d", result, sync_result, close_result);
+        PORT_LOG_ERR("kv write failed write:%d sync:%d close:%d", result, sync_result, close_result);
         return OPRT_KVS_WR_FAIL;
     }
 
@@ -288,12 +295,12 @@ static OPERATE_RET kv_storage_read(const char *key, uint8_t **data, uint32_t *le
         return OPRT_NOT_FOUND;
     }
     if (stored_length % 16 != 0) {
-        PR_ERR("invalid encrypted KV length %d for %s", (int)stored_length, key);
+        PORT_LOG_ERR("invalid encrypted KV length %d for %s", (int)stored_length, key);
         lfs_file_close(&s_lfs, &file);
         return OPRT_KVS_RD_FAIL;
     }
 
-    *data = tal_malloc((size_t)stored_length + 1U);
+    *data = port_system_malloc((size_t)stored_length + 1U);
     if (NULL == *data) {
         lfs_file_close(&s_lfs, &file);
         return OPRT_MALLOC_FAILED;
@@ -302,8 +309,8 @@ static OPERATE_RET kv_storage_read(const char *key, uint8_t **data, uint32_t *le
     result = lfs_file_read(&s_lfs, &file, *data, (lfs_size_t)stored_length);
     close_result = lfs_file_close(&s_lfs, &file);
     if (result != (int)stored_length || LFS_ERR_OK != close_result) {
-        PR_ERR("kv read failed read:%d close:%d", result, close_result);
-        tal_free(*data);
+        PORT_LOG_ERR("kv read failed read:%d close:%d", result, close_result);
+        port_system_free(*data);
         *data = NULL;
         return OPRT_KVS_RD_FAIL;
     }
@@ -320,6 +327,116 @@ static OPERATE_RET kv_storage_remove(const char *key)
     return (LFS_ERR_OK == result || LFS_ERR_NOENT == result) ? OPRT_OK : OPRT_COM_ERROR;
 }
 
+/* ===== 本文件内联的密码学原语（AES-128-CBC / SHA-256，OpenSSL libcrypto 后端）
+ *
+ * 分层约束：port 只向下依赖（platform / 第三方库），不得调用 tuyaopen-core。旧实现
+ * 直接调 core 的 tal_aes128_cbc_encode/decode、tal_sha256_ret（向上调用），此处按
+ * 同一语义在本层实现，**字节兼容**（换实现后仍能解既有 kv 数据，已实测比对）：
+ *  - encode：分配 len+16 → PKCS#7 填充（len%16==0 补整块）→ CBC 原地加密；
+ *  - decode：分配 len+1 → CBC 原地解密 → 末尾补 '\0'（去填充由调用方做）；
+ *  - sha256：标准 SHA-256。
+ * 分配走 port 自己的分配器（与卡 .malloc/.free 同源，调用方 port_system_free 可释放）。
+ * =========================================================================== */
+
+#define KV_AES_BLOCK_LEN 16
+
+/* PKCS#7 填充：返回填充后长度（len%16==0 时补整块 16） */
+static uint32_t __add_pkcs(uint8_t *p, uint32_t len)
+{
+    uint32_t cz = KV_AES_BLOCK_LEN - (len % KV_AES_BLOCK_LEN);
+
+    memset(p + len, (int)cz, cz);
+    return len + cz;
+}
+
+/* 单次 AES-128-CBC（原地；不启用 EVP 自带填充，填充语义由调用方控制） */
+static OPERATE_RET __aes128_cbc(uint8_t *buf, uint32_t len, const uint8_t *key, uint8_t *iv, int enc)
+{
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    int outl = 0;
+    int tmpl = 0;
+    OPERATE_RET ret = OPRT_COM_ERROR;
+
+    if (NULL == ctx) {
+        return OPRT_MALLOC_FAILED;
+    }
+    if (1 != EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv, enc)) {
+        goto exit;
+    }
+    if (1 != EVP_CIPHER_CTX_set_padding(ctx, 0)) {
+        goto exit;
+    }
+    if (1 != EVP_CipherUpdate(ctx, buf, &outl, buf, (int)len)) {
+        goto exit;
+    }
+    if (1 != EVP_CipherFinal_ex(ctx, buf + outl, &tmpl)) {
+        goto exit;
+    }
+    ret = OPRT_OK;
+
+exit:
+    EVP_CIPHER_CTX_free(ctx);
+    return ret;
+}
+
+static OPERATE_RET __sha256_ret(const uint8_t *input, size_t ilen, uint8_t output[32])
+{
+    if (NULL == input || NULL == output) {
+        return OPRT_INVALID_PARM;
+    }
+
+    if (NULL == SHA256(input, ilen, output)) {
+        return OPRT_COM_ERROR;
+    }
+    return OPRT_OK;
+}
+
+static OPERATE_RET __aes128_cbc_encode(uint8_t *data, uint32_t len, uint8_t *key, uint8_t *iv, uint8_t **ec_data,
+                                       uint32_t *ec_len)
+{
+    if (NULL == data || 0 == len || NULL == key || NULL == iv || NULL == ec_data || NULL == ec_len) {
+        return OPRT_INVALID_PARM;
+    }
+
+    *ec_data = (uint8_t *)port_system_malloc((SIZE_T)len + KV_AES_BLOCK_LEN);
+    if (NULL == *ec_data) {
+        return OPRT_MALLOC_FAILED;
+    }
+    memcpy(*ec_data, data, len);
+    *ec_len = __add_pkcs(*ec_data, len);
+
+    if (OPRT_OK != __aes128_cbc(*ec_data, *ec_len, key, iv, 1)) {
+        port_system_free(*ec_data);
+        *ec_data = NULL;
+        return OPRT_COM_ERROR;
+    }
+    return OPRT_OK;
+}
+
+static OPERATE_RET __aes128_cbc_decode(uint8_t *data, uint32_t len, uint8_t *key, uint8_t *iv, uint8_t **dec_data,
+                                       uint32_t *dec_len)
+{
+    if (NULL == data || 0 == len || NULL == key || NULL == iv || NULL == dec_data || NULL == dec_len) {
+        return OPRT_INVALID_PARM;
+    }
+
+    *dec_len = len;
+    *dec_data = (uint8_t *)port_system_malloc((SIZE_T)len + 1);
+    if (NULL == *dec_data) {
+        return OPRT_MALLOC_FAILED;
+    }
+    memcpy(*dec_data, data, len);
+    (*dec_data)[len] = 0;
+
+    if (OPRT_OK != __aes128_cbc(*dec_data, len, key, iv, 0)) {
+        port_system_free(*dec_data);
+        *dec_data = NULL;
+        return OPRT_COM_ERROR;
+    }
+    (*dec_data)[len] = 0;
+    return OPRT_OK;
+}
+
 static OPERATE_RET kv_encrypt(const uint8_t *value, size_t length, uint8_t **encrypted, uint32_t *encrypted_length)
 {
     uint8_t iv[16];
@@ -329,7 +446,7 @@ static OPERATE_RET kv_encrypt(const uint8_t *value, size_t length, uint8_t **enc
     }
 
     memcpy(iv, s_lfs_kv_cfg.seed, sizeof(iv));
-    return tal_aes128_cbc_encode((uint8_t *)value, (uint32_t)length, (uint8_t *)s_lfs_kv_cfg.key, iv, encrypted,
+    return __aes128_cbc_encode((uint8_t *)value, (uint32_t)length, (uint8_t *)s_lfs_kv_cfg.key, iv, encrypted,
                                  encrypted_length);
 }
 
@@ -347,25 +464,25 @@ static OPERATE_RET kv_decrypt(uint8_t *encrypted, uint32_t encrypted_length, uin
     }
 
     memcpy(iv, s_lfs_kv_cfg.seed, sizeof(iv));
-    result = tal_aes128_cbc_decode(encrypted, encrypted_length, (uint8_t *)s_lfs_kv_cfg.key, iv, &decrypted,
+    result = __aes128_cbc_decode(encrypted, encrypted_length, (uint8_t *)s_lfs_kv_cfg.key, iv, &decrypted,
                                    &decrypted_length);
     if (OPRT_OK != result) {
         return result;
     }
 
     if (0 == decrypted_length || decrypted_length % 16U != 0U) {
-        tal_aes_free_data(decrypted);
+        port_system_free(decrypted);
         return OPRT_KVS_RD_FAIL;
     }
 
     padding_length = decrypted[decrypted_length - 1U];
     if (0 == padding_length || padding_length > 16U || padding_length >= decrypted_length) {
-        tal_aes_free_data(decrypted);
+        port_system_free(decrypted);
         return OPRT_KVS_RD_FAIL;
     }
     for (i = 0; i < padding_length; ++i) {
         if (decrypted[decrypted_length - 1U - i] != padding_length) {
-            tal_aes_free_data(decrypted);
+            port_system_free(decrypted);
             return OPRT_KVS_RD_FAIL;
         }
     }
@@ -387,13 +504,13 @@ static OPERATE_RET __kv_init(tal_kv_cfg_t *kv_cfg)
 
     /* 密钥派生：每次 init 都按传入配置刷新（旧实现语义） */
     memset(&s_lfs_kv_cfg, 0, sizeof(s_lfs_kv_cfg));
-    tal_sha256_ret((const uint8_t *)kv_cfg->seed, TAL_LV_KEY_LEN, sha256_ret, 0);
+    __sha256_ret((const uint8_t *)kv_cfg->seed, TAL_LV_KEY_LEN, sha256_ret);
     memcpy(s_lfs_kv_cfg.seed, sha256_ret, TAL_LV_KEY_LEN);
-    tal_sha256_ret((const uint8_t *)kv_cfg->key, TAL_LV_KEY_LEN, sha256_ret, 0);
+    __sha256_ret((const uint8_t *)kv_cfg->key, TAL_LV_KEY_LEN, sha256_ret);
     memcpy(s_lfs_kv_cfg.key, sha256_ret, TAL_LV_KEY_LEN);
 
     if (NULL == s_lfs_mutex) {
-        result = tal_mutex_create_init(&s_lfs_mutex);
+        result = port_mutex_create_init(&s_lfs_mutex);
         if (OPRT_OK != result) {
             return result;
         }
@@ -425,21 +542,21 @@ static OPERATE_RET __kv_set(const char *key, const uint8_t *value, size_t length
     }
     /* 未 init（介质未挂载）时不得触碰 lfs：lfs->cfg 为空会崩 */
     if (FALSE == s_lfs_mounted) {
-        PR_ERR("kv not mounted, set %s rejected", key);
+        PORT_LOG_ERR("kv not mounted, set %s rejected", key);
         return OPRT_COM_ERROR;
     }
 
-    PR_DEBUG("key:%s, len %u", key, (unsigned int)length);
+    PORT_LOG_DEBUG("key:%s, len %u", key, (unsigned int)length);
     result = kv_encrypt(value, length, &encrypted, &encrypted_length);
     if (OPRT_OK != result) {
-        PR_ERR("key %s encrypt failed: %d", key, result);
+        PORT_LOG_ERR("key %s encrypt failed: %d", key, result);
         return result;
     }
 
-    tal_mutex_lock(s_lfs_mutex);
+    port_mutex_lock(s_lfs_mutex);
     result = kv_storage_write(key, encrypted, encrypted_length);
-    tal_mutex_unlock(s_lfs_mutex);
-    tal_aes_free_data(encrypted);
+    port_mutex_unlock(s_lfs_mutex);
+    port_system_free(encrypted);
     return result;
 }
 
@@ -463,23 +580,23 @@ static OPERATE_RET __kv_get(const char *key, uint8_t **value, size_t *length)
     }
     /* 未 init（介质未挂载）时不得触碰 lfs：lfs->cfg 为空会崩 */
     if (FALSE == s_lfs_mounted) {
-        PR_ERR("kv not mounted, get %s rejected", key);
+        PORT_LOG_ERR("kv not mounted, get %s rejected", key);
         return OPRT_COM_ERROR;
     }
 
-    tal_mutex_lock(s_lfs_mutex);
+    port_mutex_lock(s_lfs_mutex);
     result = kv_storage_read(key, &encrypted, &encrypted_length);
-    tal_mutex_unlock(s_lfs_mutex);
+    port_mutex_unlock(s_lfs_mutex);
     if (OPRT_OK != result) {
         return result;
     }
 
-    /* kv_decrypt 内部 tal_malloc 的明文缓冲（末尾已补 '\0'）直接交给调用者，
-     * 由调用者 tal_free 释放（tal_aes_free_data 即 tal_free） */
+    /* kv_decrypt 内部 port_system_malloc 的明文缓冲（末尾已补 '\0'）直接交给调用者，
+     * 由调用者 port_system_free 释放（port_system_free 即 port_system_free） */
     result = kv_decrypt(encrypted, encrypted_length, value, length);
-    tal_free(encrypted);
+    port_system_free(encrypted);
     if (OPRT_OK != result) {
-        PR_ERR("key %s decrypt failed: %d", key, result);
+        PORT_LOG_ERR("key %s decrypt failed: %d", key, result);
     }
 
     return result;
@@ -494,13 +611,13 @@ static OPERATE_RET __kv_del(const char *key)
     }
     /* 未 init（介质未挂载）时不得触碰 lfs：lfs->cfg 为空会崩 */
     if (FALSE == s_lfs_mounted) {
-        PR_ERR("kv not mounted, del %s rejected", key);
+        PORT_LOG_ERR("kv not mounted, del %s rejected", key);
         return OPRT_COM_ERROR;
     }
 
-    tal_mutex_lock(s_lfs_mutex);
+    port_mutex_lock(s_lfs_mutex);
     result = kv_storage_remove(key);
-    tal_mutex_unlock(s_lfs_mutex);
+    port_mutex_unlock(s_lfs_mutex);
     return result;
 }
 

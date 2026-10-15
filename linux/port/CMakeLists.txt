@@ -8,8 +8,10 @@ endif()
 set(PORT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # adapter 布局：include/（头）+ src/（TKL 实现，含 port_bt）；
-# 通用工具（tuya_list/queue/mem_heap/ringbuf/slist/tools）已迁至
-# tuyaopen-core/iot-core/tuya_transport/src/utilities（core 共用，平台无关）
+# 通用工具（tuya_list/queue/ringbuf/slist/tools）已迁至
+# tuyaopen-core/iot-core/tuya_transport/src/utilities（core 共用，平台无关）；
+# 其中 tuya_mem_heap 已不再被 port 使用（port_system_malloc 直映平台 malloc，
+# 见 src/port_runtime.c——分层约束：port 不向上依赖 core）
 set(_port_srcs)
 file(GLOB_RECURSE _port_srcs CONFIGURE_DEPENDS
     "${PORT_ROOT}/include/*.c"
@@ -121,8 +123,11 @@ if(_port_srcs)
 
     # 路径与 src 下文件名/目录名耦合：port 去 tkl 化改名后须同步
     if(EXISTS "${PORT_ROOT}/src/port_kv.c")
-        # port_kv（littlefs + AES）：include tal_log/tal_memory/tal_mutex（tal_system）
-        # 与 tal_security（tuya_transport，随 tal_system 的 PUBLIC 依赖传播）
+        # port_kv（littlefs + 内联 AES/SHA，OpenSSL libcrypto 后端）：**不再调用 core 的
+        # tal_security**（分层约束：port 只向下依赖，core 只向下经卡调 port）。
+        # tal_log/tal_memory/tal_mutex 的使用仍待收口（见 porting 方案第 1/2/4 项）
+        find_package(OpenSSL REQUIRED)
+        target_link_libraries(tuyaopen-port PRIVATE OpenSSL::Crypto)
         if(TARGET tal_system)
             target_link_libraries(tuyaopen-port PRIVATE tal_system)
         endif()

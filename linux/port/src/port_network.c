@@ -17,7 +17,8 @@
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
-#include "tal_api.h"
+#include "tuya_cloud_types.h"
+#include "tuya_error_code.h"
 #include "tal_network.h"
 
 #define TAL_TO_SYS_FD_SET(fds) ((fd_set *)fds)
@@ -749,7 +750,7 @@ TUYA_ERRNO port_net_recv(const int fd, void *buf, const uint32_t nbytes)
     ret = recv(fd, buf, nbytes, 0);
     if (ret <= 0) {
         if ((UNW_EINTR == port_net_get_errno()) || (UNW_EAGAIN == port_net_get_errno())) {
-            tal_system_sleep(10);
+            usleep(10 * 1000); /* 10ms（原 tal_system_sleep(10)） */
             ret = recv(fd, buf, nbytes, 0);
         }
     }
@@ -1148,7 +1149,7 @@ int port_net_recv_nd_size(const int fd, void *buf, const uint32_t buf_size, cons
         if (ret <= 0) {
             if (UNW_EWOULDBLOCK == port_net_get_errno() || UNW_EINTR == port_net_get_errno() ||
                 UNW_EAGAIN == port_net_get_errno()) {
-                tal_system_sleep(10);
+                usleep(10 * 1000); /* 10ms（原 tal_system_sleep(10)） */
                 continue;
             }
             break;
