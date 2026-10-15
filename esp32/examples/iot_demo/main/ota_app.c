@@ -84,7 +84,7 @@ static void __ota_fail_cleanup(void)
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-static OPERATE_RET ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path)
+OPERATE_RET ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path)
 {
     (void)type;
     (void)path;
@@ -144,7 +144,7 @@ static OPERATE_RET ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, T
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-static OPERATE_RET ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_len)
+OPERATE_RET ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_len)
 {
     if (NULL == pack || NULL == remain_len) {
         ESP_LOGE(DBG_TAG, "%s: input invalid params", __func__);
@@ -198,7 +198,7 @@ static OPERATE_RET ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_len)
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-static OPERATE_RET ota_end_notify(BOOL_T reset)
+OPERATE_RET ota_end_notify(BOOL_T reset)
 {
     /* 注：core 的失败路径不调用本接口——全 core 唯一调用点是成功路径的
      * end_notify(TRUE)（tuya_ota.c:118），DL_EVENT_FAULT / hmac 校验失败
@@ -236,21 +236,4 @@ static OPERATE_RET ota_end_notify(BOOL_T reset)
 err_exit:
     __ota_fail_cleanup();
     return OPRT_COM_ERROR;
-}
-
-/* ---------------------------------------------------------------------------
- * OTA 回调注册：应用层（本 demo）经 tal_ota_register_cbs 注入 core；
- * 不调用 ota_app_register() 的应用即不支持 OTA（tal_ota_* 返回
- * OPRT_NOT_SUPPORTED），无需任何空实现桩。
- * --------------------------------------------------------------------------- */
-static const TAL_OTA_CBS_T s_ota_cbs = {
-    .start_notify = ota_start_notify,
-    .data_process = ota_data_process,
-    .end_notify = ota_end_notify,
-};
-
-void ota_app_register(void)
-{
-    tal_ota_register_cbs(&s_ota_cbs);
-    ESP_LOGI(DBG_TAG, "ota callbacks registered (esp_ota)");
 }

@@ -14,19 +14,40 @@ extern "C" {
 #endif
 
 /**
- * @brief 注册 OTA 回调到 core（tal_ota_register_cbs）
- *
- * 需要 OTA 的应用在初始化时调用（云连接建立前）；不调用即不支持 OTA
- * （tal_ota_* 返回 OPRT_NOT_SUPPORTED）。
- *
- * @note 不注册时云端仍会上报"升级完成"而设备未实际应用——core 的云端
- *       OTA 流程不检查 tal_ota_* 返回值（详见 tal_ota.h 的
- *       tal_ota_register_cbs @note）；不打算支持 OTA 的应用需确保云端
- *       不下发升级任务。
- *
- * @return none
- */
-void ota_app_register(void);
+* @brief ota start notify（注册回调：TAL_OTA_CBS_T.start_notify）
+*
+* @param[in] image_size:  image size
+* @param[in] type:        ota type
+* @param[in] path:        ota path
+*
+* @note This API is used for ota start notify
+*
+* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
+*/
+OPERATE_RET ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path);
+
+/**
+* @brief ota data process（注册回调：TAL_OTA_CBS_T.data_process）
+*
+* @param[in] pack:       point to ota pack
+* @param[out] remain_len: ota pack remain len
+*
+* @note This API is used for ota data process
+*
+* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
+*/
+OPERATE_RET ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_len);
+
+/**
+* @brief ota end notify（注册回调：TAL_OTA_CBS_T.end_notify）
+*
+* @param[in] reset:  ota reset
+*
+* @note This API is used for ota end notify
+*
+* @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
+*/
+OPERATE_RET ota_end_notify(BOOL_T reset);
 
 #ifdef __cplusplus
 }

@@ -249,6 +249,17 @@ bool user_network_check(void)
     return s_link_up;
 }
 
+/* ---------------------------------------------------------------------------
+ * OTA 回调注册：应用层（本 demo）经 tal_ota_register_cbs 注入 core；
+ * 不调用 ota_app_register() 的应用即不支持 OTA（tal_ota_* 返回
+ * OPRT_NOT_SUPPORTED），无需任何空实现桩。
+ * --------------------------------------------------------------------------- */
+static const TAL_OTA_CBS_T s_ota_cbs = {
+    .start_notify = ota_start_notify,
+    .data_process = ota_data_process,
+    .end_notify = ota_end_notify,
+};
+
 void user_main(void)
 {
     int rt = OPRT_OK;
@@ -279,10 +290,7 @@ void user_main(void)
     tal_sw_timer_init();
     tal_workq_init();
 
-    /* OTA 回调注入（应用层 esp_ota 实现，见 ota_app.c）：须在云连接建立前
-     * 注册，云端升级指令经 core 的 tuya_ota 流程分发到注册的回调；
-     * 不注册的应用即不支持 OTA（tal_ota_* 返回 OPRT_NOT_SUPPORTED） */
-    ota_app_register();
+    tal_ota_register_cbs(&s_ota_cbs);
 
     reset_netconfig_start();
 

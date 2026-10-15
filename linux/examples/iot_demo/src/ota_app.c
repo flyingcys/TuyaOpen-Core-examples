@@ -35,7 +35,7 @@ static FILE *s_upgrade_fd = NULL;
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-static OPERATE_RET ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path)
+OPERATE_RET ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path)
 {
     (void)image_size;
     (void)type;
@@ -70,7 +70,7 @@ static OPERATE_RET ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, T
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-static OPERATE_RET ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_len)
+OPERATE_RET ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_len)
 {
     printf("Rev File Data Total_len %d, Offset:%u Len:%u\r\n", pack->total_len, pack->offset, pack->len);
     FILE *p_upgrade_fd = (FILE *)s_upgrade_fd;
@@ -104,7 +104,7 @@ static OPERATE_RET ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_len)
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-static OPERATE_RET ota_end_notify(BOOL_T reset)
+OPERATE_RET ota_end_notify(BOOL_T reset)
 {
     FILE *p_upgrade_fd = (FILE *)s_upgrade_fd;
 
@@ -129,21 +129,4 @@ static OPERATE_RET ota_end_notify(BOOL_T reset)
     }
 
     return OPRT_OK;
-}
-
-/* ---------------------------------------------------------------------------
- * OTA 回调注册：应用层（本 demo）经 tal_ota_register_cbs 注入 core；
- * 不调用 ota_app_register() 的应用即不支持 OTA（tal_ota_* 返回
- * OPRT_NOT_SUPPORTED），无需任何空实现桩。
- * --------------------------------------------------------------------------- */
-static const TAL_OTA_CBS_T s_ota_cbs = {
-    .start_notify = ota_start_notify,
-    .data_process = ota_data_process,
-    .end_notify = ota_end_notify,
-};
-
-void ota_app_register(void)
-{
-    tal_ota_register_cbs(&s_ota_cbs);
-    PR_NOTICE("ota callbacks registered (write to ./tuyadb/ota)");
 }
