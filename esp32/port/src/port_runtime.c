@@ -5,16 +5,14 @@
  * 与 linux port 的 port_runtime.c 同构：log output / memory / system /
  * semaphore / mutex / thread / queue 七组实现收编于本文件，只保留实际被
  * 分发/调用的接口（OTA 为 core 回调注入，实现由应用层提供）：
- * - log output / semaphore / system / thread / queue 实现为 ops 卡私有
- *   （static），适配面收敛到一张卡；
- * - memory 只保留 malloc/free 对外符号（主卡 .malloc/.free 的实现本体 + port
- *   内部使用；2026-10 解耦后 core 不再直调，声明保留在 port_memory.h）；
+ * - log output / semaphore / memory / mutex / system / thread / queue 实现为
+ *   ops 卡私有（static），适配面收敛到一张卡；memory/mutex 于 2026-10 收口
+ *   转 static（port_kv.c 改用 tal_malloc/tal_free，不再跨文件调用）；
  *   calloc 由 core 的 tal_calloc 用 tal_malloc+memset 实现，卡不再要求适配；
- * - mutex 保持对外符号（主卡 .mutex_* 的实现本体 + port 内部（mutex 管理器）
- *   使用；2026-10 解耦后 core 不再直调，声明随头删除内联）；
- * - port_thread_get_id 为 ops 卡成员（无条件提供；p2p-core 的 pjproject 经
- *   tal_thread_get_id 分发使用）；原外部 RAM 分配家族已删除
- *   （p2p-core 的 tuya_ipc_skill.c 改用 tal_malloc/tal_free）。
+ * - thread_get_id 为 ops 卡成员（无条件提供；p2p-core 的 pjproject 经
+ *   tal_thread_get_id 分发使用），收口后与 thread 家族一致转 static；
+ *   原外部 RAM 分配家族已删除（p2p-core 的 tuya_ipc_skill.c 改用
+ *   tal_malloc/tal_free）。
  *
  * 实现平台差异（对照 linux 版）：
  * - memory：直接映射 esp-idf 系统堆（多区域堆，不用 linux 的
@@ -26,10 +24,11 @@
  * - thread：xTaskCreate 字节计栈，句柄即 TaskHandle_t。
  *
  * 2026-10 port 去 tkl 化：tkl_runtime.c → port_runtime.c，tkl_* 函数去
- * tkl_ 前缀（static 者改 __ 前缀，对外符号改 port_ 前缀）；原
- * tkl_semaphore/mutex/thread/queue/system 五个头文件删除（只有本文件一个
- * includer），其有效声明（类型/超时宏）随之内联到下面"原 tkl_*.h 内联区"；
- * tkl_memory.h 另改名保留为 port_memory.h（port_kv.c 也要 include 它）。
+ * tkl_ 前缀（static 者改 __ 前缀）；原 tkl_semaphore/mutex/thread/queue/
+ * system 五个头文件删除（只有本文件一个 includer），其有效声明（类型/超时宏）
+ * 随之内联到下面"原 tkl_*.h 内联区"；tkl_memory.h 一度改名保留为
+ * port_memory.h，2026-10 收口后 kv 改用 tal_malloc/tal_free，该头随之删除
+ * （与 linux port 的布局对齐）。
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  *
@@ -44,18 +43,10 @@
  * 原 tkl_{semaphore,mutex,thread,queue,memory,system}.h 内联区
  *
  * 那六个头文件只有本文件一个 includer（2026-10 去 tkl 化时删除），此处保留其
- * 全部有效内容：句柄类型 + 两个超时宏 + 两个仍需对外可见的符号声明
- * （malloc/free，esp32 侧由 port_kv.c 跨文件调用）。
- * 各头的函数声明（mutex 四件 + thread_get_id）随实现一并在本文件下方给出
- * （static 者本就不需前置声明）。
+ * 全部有效内容：句柄类型 + 两个超时宏。
+ * 各头的函数声明（memory 两件 + mutex 四件 + thread_get_id）随实现一并在本
+ * 文件下方给出（static 者本就不需前置声明）。
  * --------------------------------------------------------------------------- */
-
-/* 原 tkl_memory.h：malloc/free 是主卡 TAL_API_OPS_T 的 .malloc/.free 实现
- * 本体，保持对外符号——core 已不直调（改经 tal_malloc/tal_free 分发），但
- * esp32 侧 port 的 kv 实现（port_kv.c）跨文件调用同族符号，故声明保留在
- * port_memory.h（单一来源，本文件与 port_kv.c 都经 include 获取——避免
- * "内联声明 + 头"双来源漂移）。 */
-#include "port_memory.h"
 
 /* 原 tkl_semaphore.h */
 typedef void *TKL_SEM_HANDLE;
@@ -86,6 +77,7 @@ typedef void (*THREAD_FUNC_T)(void *);
 #include "esp_random.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -110,10 +102,10 @@ static void __log_output(const char *str, ...)
 }
 
 /* ---------------------------------------------------------------------------
- * memory 实现：只保留 malloc/free 对外符号（core 的 tuya_transport mbedtls_*
- * 与 utilities 直调，声明见 port_memory.h）。直接映射 esp-idf 系统堆
- * （malloc/free 线程安全；esp32 的堆为多区域分块管理，不适用 linux 的
- * tuya_mem_heap 大块自管堆方案）。
+ * memory 实现：malloc/free 为卡 .malloc/.free/.ex_ram_* 的实现本体，收口后
+ * 转 static（无跨文件调用方）。直接映射 esp-idf 系统堆（malloc/free 线程
+ * 安全；esp32 的堆为多区域分块管理，不适用 linux 的 tuya_mem_heap 大块
+ * 自管堆方案）。
  * --------------------------------------------------------------------------- */
 /**
 * @brief Alloc memory of system
@@ -124,7 +116,7 @@ static void __log_output(const char *str, ...)
 *
 * @return the memory address malloced
 */
-void *port_system_malloc(const SIZE_T size)
+static void *__memory_malloc(const SIZE_T size)
 {
     return malloc(size);
 }
@@ -138,12 +130,31 @@ void *port_system_malloc(const SIZE_T size)
 *
 * @return void
 */
-void port_system_free(void *ptr)
+static void __memory_free(void *ptr)
 {
     if (ptr) {
         free(ptr);
     }
 }
+
+#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+/* ---------------------------------------------------------------------------
+ * ex ram（外部 RAM，如 PSRAM）：参照平台 ESP32 实现
+ * （tuyaopen/platform/ESP32 …/tkl_memory.c 的 tkl_system_psram_malloc：
+ * heap_caps_malloc(MALLOC_CAP_SPIRAM) / free）。宏隔离：ENABLE_EXT_RAM 默认关
+ * （Kconfig 默认 n），且需 sdkconfig 开 CONFIG_SPIRAM 且有 PSRAM 硬件——
+ * 否则 heap_caps_malloc 无 SPIRAM 能力可用、恒返回 NULL。
+ * --------------------------------------------------------------------------- */
+static void *__ex_ram_malloc(const SIZE_T size)
+{
+    return heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+}
+
+static void __ex_ram_free(void *ptr)
+{
+    free(ptr);
+}
+#endif
 
 /* ---------------------------------------------------------------------------
  * system 实现：sleep/reset/get_millisecond/get_random 仅 tal 层经卡分发，
@@ -340,9 +351,9 @@ static OPERATE_RET __semaphore_release(const TKL_SEM_HANDLE handle)
 }
 
 /* ---------------------------------------------------------------------------
- * mutex 实现：保持对外符号（core 的 tuya_queue.c 经宏直调，原 tkl_mutex.h 的
- * 声明已删除、函数体随实现保留在本文件）。递归互斥（对齐 linux 版的
- * PTHREAD_MUTEX_RECURSIVE）。
+ * mutex 实现：收口后转 static（卡 .mutex_* 的实现本体 + 本文件内部使用）。
+ * core 侧（tuya_queue 等）经 tal_mutex_* 走主卡分发，不再直调本层符号。
+ * 递归互斥（对齐 linux 版的 PTHREAD_MUTEX_RECURSIVE）。
  * --------------------------------------------------------------------------- */
 /**
 * @brief Create mutex
@@ -353,7 +364,7 @@ static OPERATE_RET __semaphore_release(const TKL_SEM_HANDLE handle)
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET port_mutex_create_init(TKL_MUTEX_HANDLE *handle)
+static OPERATE_RET __mutex_create_init(TKL_MUTEX_HANDLE *handle)
 {
     if (!handle) {
         return OPRT_INVALID_PARM;
@@ -380,7 +391,7 @@ OPERATE_RET port_mutex_create_init(TKL_MUTEX_HANDLE *handle)
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET port_mutex_lock(const TKL_MUTEX_HANDLE handle)
+static OPERATE_RET __mutex_lock(const TKL_MUTEX_HANDLE handle)
 {
     BaseType_t ret;
 
@@ -409,7 +420,7 @@ OPERATE_RET port_mutex_lock(const TKL_MUTEX_HANDLE handle)
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET port_mutex_unlock(const TKL_MUTEX_HANDLE handle)
+static OPERATE_RET __mutex_unlock(const TKL_MUTEX_HANDLE handle)
 {
     BaseType_t ret;
 
@@ -438,7 +449,7 @@ OPERATE_RET port_mutex_unlock(const TKL_MUTEX_HANDLE handle)
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET port_mutex_release(const TKL_MUTEX_HANDLE handle)
+static OPERATE_RET __mutex_release(const TKL_MUTEX_HANDLE handle)
 {
     if (!handle) {
         return OPRT_INVALID_PARM;
@@ -560,7 +571,7 @@ static OPERATE_RET __thread_is_self(const TKL_THREAD_HANDLE thread, BOOL_T *is_s
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET port_thread_get_id(TKL_THREAD_HANDLE *thread)
+static OPERATE_RET __thread_get_id(TKL_THREAD_HANDLE *thread)
 {
     if (NULL == thread) {
         return OPRT_INVALID_PARM;
@@ -699,8 +710,13 @@ TAL_API_OPS_T tal_api_ops_platform = {
     //! log output
     .log_output = __log_output,
     //! memory
-    .malloc = port_system_malloc,
-    .free = port_system_free,
+    .malloc = __memory_malloc,
+    .free = __memory_free,
+#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+    //! ex ram（外部 RAM，如 PSRAM；宏隔离，默认关）
+    .ex_ram_malloc = __ex_ram_malloc,
+    .ex_ram_free = __ex_ram_free,
+#endif
     //! system
     .sleep = __system_sleep,
     .reset = __system_reset,
@@ -712,16 +728,16 @@ TAL_API_OPS_T tal_api_ops_platform = {
     .semaphore_post = __semaphore_post,
     .semaphore_release = __semaphore_release,
     //! mutex
-    .mutex_create_init = port_mutex_create_init,
-    .mutex_lock = port_mutex_lock,
-    .mutex_unlock = port_mutex_unlock,
-    .mutex_release = port_mutex_release,
+    .mutex_create_init = __mutex_create_init,
+    .mutex_lock = __mutex_lock,
+    .mutex_unlock = __mutex_unlock,
+    .mutex_release = __mutex_release,
     //! thread
     .thread_create = __thread_create,
     .thread_release = __thread_release,
     .thread_set_self_name = __thread_set_self_name,
     .thread_is_self = __thread_is_self,
-    .thread_get_id = port_thread_get_id,
+    .thread_get_id = __thread_get_id,
     //! queue
     .queue_create_init = __queue_create_init,
     .queue_post = __queue_post,

@@ -82,6 +82,23 @@ void tal_free(void *ptr);
  */
 void *tal_calloc(size_t nitems, size_t size);
 
+#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+/**
+ * @brief 外部 RAM（如 PSRAM）分配/释放。
+ *
+ * 实现由 port 经 TAL_API_OPS_T 的 ex_ram_* 成员提供（宏隔离：未开启
+ * ENABLE_EXT_RAM 时无此接口）。只提供 malloc/free——需要清零的调用方
+ * 自行 memset。
+ *
+ * @param[in] size: memory size（tal_ex_ram_malloc）
+ * @param[in] ptr:  memory point（tal_ex_ram_free）
+ *
+ * @return 外部 RAM 地址，或 NULL（分配失败）
+ */
+void *tal_ex_ram_malloc(size_t size);
+void tal_ex_ram_free(void *ptr);
+#endif
+
 
 #ifdef __cplusplus
 }

@@ -171,11 +171,11 @@ port 侧 `tuya_cloud_types.h` 的两个类型枚举（`TUYA_QSPI_TYPE_PSRAM`/`TY
 ### 2.4 port 接口头与 core 的关系
 
 - 平台接口头**全部在 port 里**（2026-10 去 tkl 化后：linux 为
-  `port/include/{common,bluetooth,media,system}/`，esp32 为 `common/` + `system/`），
+  `port/include/{common,bluetooth,system}/`，esp32 为 `common/`），
   core 内没有任何平台接口头。linux port 原 `tkl_*.h` 已全部删除/内联进对应 `.c`
-  （现存 `port_bluetooth*.h` / `port_ai_demo.h` / `port_ai_player_consumer.h` 与
-  `system/lfs_config.h`）；esp32 port 只剩 `system/port_memory.h` 一个 port 私有头
-  （`port_kv.c` 跨文件调用 `port_runtime.c` 的 malloc/free）。
+  （现存 `port_bluetooth*.h` 与 `system/lfs_config.h`）；esp32 port 的
+  `system/port_memory.h` 已于 2026-10 收口时删除
+  （`port_kv.c` 改用 `tal_malloc/tal_free`，memory/mutex 转 static），两侧 port 结构对齐。
 - **core 在编代码零 TKL 头依赖**（2026-10 解耦后）：曾用于直调声明与 mbedtls 适配的
   `tkl_memory.h`/`tkl_hash.h`/`tkl_symmetry.h`/`tkl_asymmetrical.h`/`tkl_mutex.h` 均已清除
   （见 §2.3）；仅门控代码（ble / agent-core AI，当前构建不编译）仍 include 平台头。

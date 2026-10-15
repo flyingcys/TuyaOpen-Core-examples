@@ -17,13 +17,22 @@
 > `tal_ota.h`），esp32 实现由应用层提供（`examples/iot_demo/main/ota_app.c`），
 > 不注册的应用即不支持 OTA（`tal_ota_*` 返回 `OPRT_NOT_SUPPORTED`）。
 
+> 主卡还带**宏隔离**的 ex-RAM 成员（`.ex_ram_malloc/.ex_ram_free`）：参照平台
+> ESP32 的 `tkl_system_psram_malloc`（`heap_caps_malloc(MALLOC_CAP_SPIRAM)`）。
+> 开关 `CONFIG_ENABLE_EXT_RAM`（`components/tuyaopen-core/Kconfig`，**默认 n**，
+> 与 linux 侧同名同门控）；开启需 sdkconfig 开 `CONFIG_SPIRAM` 且有 PSRAM 硬件
+> ——否则 `heap_caps_malloc` 无 SPIRAM 能力、恒返回 NULL。不开时卡结构与 linux
+> 侧一致（成员不存在，零开销）。
+
 `include/` 原为核心接口域头（common/system/network/security）。2026-10 port 去 tkl 化后
-只剩 `common/`（4 个跨目标公共类型头）+ `system/port_memory.h`：
+只剩 `common/`（4 个跨目标公共类型头）：
 - `security/` 三件套（tkl_hash/tkl_symmetry/tkl_asymmetrical）已删——零 includer，
   哈希/对称/非对称原语由 core 的 mbedtls_* 实现；
 - `system/` 的 mutex/queue/semaphore/thread/system/memory/fs 与 `network/` 的头均已删除，
-  类型与声明内联进对应 .c（它们各只有单文件 includer）；`tkl_memory.h` 改名保留为
-  `port_memory.h`（port_kv.c 跨文件调用 port_runtime.c 的 malloc/free）。
+  类型与声明内联进对应 .c（它们各只有单文件 includer）；`tkl_memory.h` 一度改名保留为
+  `port_memory.h`（port_kv.c 跨文件调用 port_runtime.c 的 malloc/free），2026-10 收口后
+  port_kv.c 改用 tal_malloc/tal_free、memory/mutex 转 static，该头随之删除——两侧 port
+  布局对齐（linux 侧同步转 static）。
 
 暂未适配（需要时补，与 linux port 的门控一致）：
 

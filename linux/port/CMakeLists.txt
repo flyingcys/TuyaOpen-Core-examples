@@ -105,6 +105,13 @@ if(_port_srcs)
         target_compile_definitions(tuyaopen-port PRIVATE ENABLE_AI_COMPONENTS=1)
     endif()
 
+    # 外部 RAM（PSRAM）分配卡成员（.ex_ram_malloc/.ex_ram_free）的挂载条件：
+    # 与 core 的 ENABLE_EXT_RAM 同名同开关（默认关；见 core Kconfig 的
+    # ENABLE_EXT_RAM）。Linux 无独立外部 RAM，实现退化为普通堆。
+    if(CONFIG_ENABLE_EXT_RAM)
+        target_compile_definitions(tuyaopen-port PRIVATE ENABLE_EXT_RAM=1)
+    endif()
+
     # （原 AI 播放器消费端（port_ai_player_consumer.c）与文件系统卡
     # （port_fs.c）已下沉应用层：前者 → examples/agent_demo/src/，
     # 后者 → examples/p2p_demo/src/（2026-10-13 分层修正）。port 内已无

@@ -179,3 +179,16 @@ void tal_queue_free(QUEUE_HANDLE queue)
 {
     TAL_API_EXEC_OP_VOID(queue_free, queue);
 }
+
+#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+//! ex ram（外部 RAM，如 PSRAM；宏隔离，port 经 TAL_API_OPS_T 的 ex_ram_* 成员提供实现）
+void *tal_ex_ram_malloc(size_t size)
+{
+    TAL_API_EXEC_OP(ex_ram_malloc, NULL, size);
+}
+
+void tal_ex_ram_free(void *ptr)
+{
+    TAL_API_EXEC_OP_VOID(ex_ram_free, ptr);
+}
+#endif

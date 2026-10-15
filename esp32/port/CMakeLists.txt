@@ -75,6 +75,12 @@ if(_port_srcs)
     if(CONFIG_ENABLE_AI_COMPONENTS)
         target_compile_definitions(tuyaopen-port PRIVATE ENABLE_AI_COMPONENTS=1)
     endif()
+
+    # 外部 RAM（PSRAM）分配卡成员（.ex_ram_malloc/.ex_ram_free）的挂载条件：
+    # 与 core 的 ENABLE_EXT_RAM 同名同开关（默认关；见 Kconfig 的 ENABLE_EXT_RAM）。
+    if(CONFIG_ENABLE_EXT_RAM)
+        target_compile_definitions(tuyaopen-port PRIVATE ENABLE_EXT_RAM=1)
+    endif()
 else()
     add_library(tuyaopen-port INTERFACE)
     if(_port_incs)

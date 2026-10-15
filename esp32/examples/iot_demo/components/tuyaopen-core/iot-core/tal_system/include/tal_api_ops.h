@@ -72,6 +72,11 @@ typedef struct {
     OPERATE_RET (*queue_post)(const QUEUE_HANDLE queue, void *data, uint32_t timeout);
     OPERATE_RET (*queue_fetch)(const QUEUE_HANDLE queue, void *msg, uint32_t timeout);
     void (*queue_free)(const QUEUE_HANDLE queue);
+#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+    //! ex ram（外部 RAM，如 PSRAM；宏隔离：未开启时卡不含这些成员，零开销）
+    void *(*ex_ram_malloc)(size_t size);
+    void (*ex_ram_free)(void *ptr);
+#endif
 } TAL_API_OPS_T;
 
 /**

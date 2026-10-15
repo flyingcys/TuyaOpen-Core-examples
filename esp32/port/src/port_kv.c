@@ -29,8 +29,7 @@
 #include <string.h>
 
 #include "tal_log.h"
-
-#include "port_memory.h"
+#include "tal_memory.h"
 
 #define KV_NVS_NAMESPACE "tuya_kv"
 /* NVS key 上限 15 字符（不含结尾 '\0'，见 nvs_flash 文档） */
@@ -160,8 +159,8 @@ static OPERATE_RET __kv_get(const char *key, uint8_t **value, size_t *length)
     }
 
     /* 契约：返回缓冲含结尾 '\0'（长度不含 '\0'），调用者 tal_free 释放
-     * （tal_free = 卡的 free，故必须用 port_system_malloc 分配） */
-    uint8_t *buf = (uint8_t *)port_system_malloc(len + 1);
+     * （tal_malloc/tal_free 同源：都经 ops 卡分发到本 port 的 memory 实现） */
+    uint8_t *buf = (uint8_t *)tal_malloc(len + 1);
     if (NULL == buf) {
         return OPRT_MALLOC_FAILED;
     }
@@ -169,7 +168,7 @@ static OPERATE_RET __kv_get(const char *key, uint8_t **value, size_t *length)
     err = nvs_get_blob(s_kv_handle, nvs_key, buf, &len);
     if (ESP_OK != err) {
         PR_ERR("kv get %s read failed: %d", key, err);
-        port_system_free(buf);
+        tal_free(buf);
         return OPRT_COM_ERROR;
     }
     buf[len] = '\0';

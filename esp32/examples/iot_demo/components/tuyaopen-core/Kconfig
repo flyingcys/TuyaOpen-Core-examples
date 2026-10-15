@@ -42,6 +42,19 @@ menu "tuyaopen-core"
             NimBLE host stack bundle switch, kept for parity with the
             CONFIG_ENABLE_NIMBLE option in TuyaOpenOptions.cmake.
 
+    config ENABLE_EXT_RAM
+        bool "ENABLE_EXT_RAM: external RAM (PSRAM) allocation"
+        default n
+        help
+            Mount the ex-RAM ops members (.ex_ram_malloc/.ex_ram_free) on the
+            port card and build core's tal_ex_ram_malloc/tal_ex_ram_free.
+            Maps to CONFIG_ENABLE_EXT_RAM.
+
+            OFF by default. Requires CONFIG_SPIRAM (sdkconfig) and real PSRAM
+            hardware: without the SPIRAM capability heap_caps_malloc returns
+            NULL for every ex-RAM allocation. Linux port keeps the same
+            members behind the same macro.
+
     config LITTLE_END
         bool "LITTLE_END: target is little-endian"
         default y
