@@ -99,11 +99,11 @@ include(${TUYAOPEN_CORE_DIR}/tuyaopen-core.cmake)
 # 2) port：自包含子目录（自建 tuyaopen-port 并把头注入 tuyaopen-headers）
 add_subdirectory(${TUYAOPEN_PORT_DIR} ${CMAKE_BINARY_DIR}/tuyaopen-port)
 
-# 3) 公共组件：qrcode（examples/qrcode，iot/agent/p2p 三 demo 共用一份，随 CONFIG_ENABLE_QRCODE 门控）
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../qrcode/CMakeLists.txt")
-    message(FATAL_ERROR "agent_demo 需在 examples 树内构建（复用公共 qrcode 组件）：找不到 ${CMAKE_CURRENT_SOURCE_DIR}/../qrcode/CMakeLists.txt")
+# 3) 公共组件：qrcode（examples/components/qrcode，iot/agent/p2p 三 demo 共用一份，随 CONFIG_ENABLE_QRCODE 门控）
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../components/qrcode/CMakeLists.txt")
+    message(FATAL_ERROR "agent_demo 需在 examples 树内构建（复用公共 qrcode 组件）：找不到 ${CMAKE_CURRENT_SOURCE_DIR}/../components/qrcode/CMakeLists.txt")
 endif()
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../qrcode ${CMAKE_BINARY_DIR}/qrcode)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../components/qrcode ${CMAKE_BINARY_DIR}/qrcode)
 
 # 4) 应用侧 AI 组件（自 core agent-core 下沉，见 src/components/）：utility（事件总线）/
 #    audio_player（播放器核心）/ai_audio（TTS/音乐编排）/ai_agent（应用封装）/

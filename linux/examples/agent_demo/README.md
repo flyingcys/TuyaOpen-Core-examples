@@ -23,7 +23,7 @@ cmake --build build -j$(nproc)
 cd build && env -u DISPLAY ./agent_demo
 ```
 
-> 构建必须在本仓库树内进行：agent_demo 复用 examples 公共组件 `../qrcode`（不复制副本），
+> 构建必须在本仓库树内进行：agent_demo 复用 examples 公共组件 `../components/qrcode`（不复制副本），
 > 单独拷贝本目录会因找不到 qrcode 而 configure 失败（CMake 会给出明确提示）。
 
 > **运行注意：用 `env -u DISPLAY` 启动**（Linux 桌面/虚拟机环境）。本 demo 启动时会打开

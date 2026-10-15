@@ -62,9 +62,9 @@ include(${TUYAOPEN_CORE_DIR}/tuyaopen-core.cmake)
 # 2) port：自包含子目录（自建 tuyaopen-port 并把头注入 tuyaopen-headers）
 add_subdirectory(${TUYAOPEN_PORT_DIR} ${CMAKE_BINARY_DIR}/tuyaopen-port)
 
-# 3) 公共组件：qrcode（examples/qrcode，iot/agent/p2p 三 demo 共用，CONFIG_ENABLE_QRCODE 门控）
+# 3) 公共组件：qrcode（examples/components/qrcode，iot/agent/p2p 三 demo 共用，CONFIG_ENABLE_QRCODE 门控）
 # 树外源目录：必须显式指定 binary dir（与 agent/p2p 的写法一致）
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../qrcode ${CMAKE_BINARY_DIR}/qrcode)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../components/qrcode ${CMAKE_BINARY_DIR}/qrcode)
 
 # tal_netif / tal_bluetooth 已随 core 自包含回归，不再是应用组件：
 #   tal_netif    → tuyaopen-core/iot-core/tal_system（编入 tal_system）
